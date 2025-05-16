@@ -1,0 +1,10 @@
+[build]
+dist = "./dist"
+
+[[hooks]]
+stage = "pre_build"
+command = "npm"
+command_arguments = ["run", "build:css"]
+
+[serve]
+fallback = "index.html"

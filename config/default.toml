@@ -1,0 +1,27 @@
+# Default CMDB server configuration
+# You can override any setting here. If a setting is missing, the default value will be used.
+
+# Server settings
+# host = "0.0.0.0"
+# port = 8080
+# log_level = "info"
+# enable_tls = false
+# tls_cert = "config/cert.pem"
+# tls_key = "config/key.pem"
+# jwt_secret = "change_me_in_production"
+
+# Client management
+# poll_interval = 300  # Poll interval in seconds (5 minutes)
+# client_timeout = 3600  # Client timeout in seconds (1 hour)
+
+# component_missing_grace_period_hours = 24 # Component missing grace period (in hours)
+
+# Database settings
+[database]
+db_type = "rocksdb"
+path = "data/cmdb.db"
+
+# Message queue settings
+# [queue]
+# queue_type = "flume"
+# capacity = 1000

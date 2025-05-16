@@ -1,0 +1,24 @@
+client_id = "a0b5d9e8-e52f-46ab-a9ca-6f3cb5acf769"
+
+[server]
+url = "http://localhost:8080/api/v1"
+verify_tls = true
+
+[report]
+service_mode = false
+push_enabled = true
+push_interval = 300
+pull_enabled = true
+components = [
+    "sys",
+    "os",
+    "cpu",
+    "ram",
+    "disk",
+    "nic",
+    "gpu",
+    "ipmi",
+]
+
+[logging]
+level = "info"

@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = [
+    "client",
+    "common",
+    "front",
+    "server",
+]
+
+[profile.release]
+lto = "thin"
+codegen-units = 16
+strip = true

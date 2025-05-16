@@ -1,0 +1,58 @@
+[package]
+name = "front"
+version = "0.1.0"
+edition = "2021"
+description = "CMDB Frontend using Yew"
+readme = "README.md"
+repository = "https://github.com/yewstack/yew-trunk-minimal-template"
+license = "MIT OR Apache-2.0"
+keywords = ["yew", "trunk"]
+categories = ["gui", "wasm", "web-programming"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+yew = { version = "0.21", features = ["csr"] }
+yew-router = "0.18"
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+wasm-logger = "0.2"
+log = "0.4.27"
+gloo = "0.11.0"
+gloo-net = "0.6.0"
+gloo-timers = "0.3.0"
+gloo-storage = "0.3.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["wasmbind", "serde"] }
+web-sys = { version = "0.3", features = [
+    "HtmlInputElement",
+    "HtmlSelectElement",
+    "HtmlTextAreaElement",
+    "Storage",
+    "Element",
+    "HtmlElement",
+    "CssStyleDeclaration",
+    "DomTokenList",
+    "Window",
+    "Document",
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+    "HtmlAnchorElement",
+    "Location",
+    "FileReader",
+    "File",
+    "FileList",
+    "Event",
+    "EventTarget"
+]}
+wasm-bindgen-futures = "0.4"
+common = { path = "../common" }
+uuid = { version = "1.4", features = ["serde", "v4", "js"] }
+yewdux = "0.11.0"
+urlencoding = "2.1"
+rust_xlsxwriter = { version = "0.64.0", features = ["wasm"] }
+calamine = { version = "0.24.0", features = ["dates"] }
+lucide-yew = { version = "2.44.0", features = ["all-icons"] }

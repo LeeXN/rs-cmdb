@@ -1,0 +1,33 @@
+/target
+.cargo
+
+binaries/
+# Rust
+Cargo.lock
+
+# IDEs
+.idea/
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+dist/
+*.tar
+*.gz
+data/
+front/node_modules/
+front/dist
+script/*.json
+*.json
+# Secrets / Config (if applicable - adjust as needed)
+# config.toml
+# .env
+
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target

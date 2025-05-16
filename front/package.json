@@ -1,0 +1,19 @@
+{
+  "name": "front",
+  "version": "1.0.0",
+  "description": "This is a fairly minimal template for a Yew app that's built with [Trunk].",
+  "main": "index.js",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.17",
+    "daisyui": "^5.5.5",
+    "tailwindcss": "^4.1.17"
+  },
+  "scripts": {
+    "build:css": "tailwindcss -i input.css -o assets/css/app.css",
+    "watch:css": "tailwindcss -i input.css -o assets/css/app.css --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

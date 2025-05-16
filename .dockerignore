@@ -1,0 +1,5 @@
+*.md
+data/
+script/
+target/
+.cargo/

@@ -1,0 +1,13 @@
+pub mod home;
+pub mod clients;
+pub mod client_detail;
+pub mod client_setup;
+pub mod analytics;
+pub mod not_found;
+pub mod login;
+pub mod persons;
+pub mod projects;
+pub mod components;
+pub mod dictionaries;
+pub mod racks;
+pub mod settings;

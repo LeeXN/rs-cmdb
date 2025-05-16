@@ -1,0 +1,35 @@
+# rs-cmdb 客户端配置
+
+# 客户端标识
+# 如果不指定，将自动生成
+# client_id = "unique-client-id"
+
+# 覆盖主机名（默认使用系统主机名）
+# hostname = "custom-hostname"
+
+# 服务器设置
+[server]
+# 服务器地址
+url = "http://localhost:8080/api/v1"
+# 是否验证 TLS 证书（用于自签名证书）
+verify_tls = true
+
+# 报告设置
+[report]
+# 是否启用服务模式
+service_mode = true
+# 是否启用推送模式（主动向服务器推送数据）
+push_enabled = true
+# 推送间隔（秒）
+push_interval = 300
+# 是否启用拉取模式（响应服务器请求）
+pull_enabled = true
+# 收集的硬件组件
+components = ["sys", "os", "cpu", "ram", "disk", "nic", "gpu", "ipmi"]
+
+# 日志设置
+[logging]
+# 日志级别: debug, info, warn, error
+level = "info"
+# 日志文件路径（可选，不指定则输出到控制台）
+# file = "/var/log/rs-cmdb-client.log" 

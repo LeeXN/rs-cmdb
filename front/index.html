@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="description" content="CMDB - Configuration Management Database" />
+    <title>CMDB 管理系统</title>
+    
+    <link rel="icon" href="/assets/img/favicon.ico" type="image/x-icon">
+
+    <!-- Trunk asset management -->
+    <link data-trunk rel="copy-dir" href="assets" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="/assets/css/app.css">
+    
+    <style>
+      /* Custom Scrollbar for Dark Theme */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #020617; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1e293b; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155; 
+      }
+    </style>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <link data-trunk rel="rust" data-wasm-opt="2" data-wasm-opt-params="--enable-bulk-memory --enable-threads --enable-nontrapping-float-to-int" />
+    <base data-trunk-public-url />
+  </head>
+  <body class="bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary font-mono">
+    <!-- The main app container -->
+    <div id="app"></div>
+  </body>
+</html>
