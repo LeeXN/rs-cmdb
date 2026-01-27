@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use uuid::Uuid;
 use crate::entity::hardware::Hardware;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 fn default_uuid() -> String {
     Uuid::new_v4().to_string()
@@ -47,7 +47,10 @@ pub struct PullResponse {
 
 /// API response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ApiResponse<T> where T: PartialEq {
+pub struct ApiResponse<T>
+where
+    T: PartialEq,
+{
     /// Status code
     pub status: u16,
     /// Status message
@@ -81,9 +84,8 @@ pub struct Client {
     pub registered_at: Option<String>,
     /// Optional comment for the client
     pub comment: Option<String>,
-    
+
     // --- New Fields for CMDB Enhancement ---
-    
     /// Physical location (Data Center / Room)
     pub location: Option<String>,
     /// Rack identifier
@@ -92,24 +94,24 @@ pub struct Client {
     pub unit_position: Option<String>,
     /// Height in U (default 1)
     pub u_height: Option<u32>,
-    
+
     /// Associated Project ID
     pub project_id: Option<String>,
     /// Responsible Person ID (Owner)
     pub owner_id: Option<String>,
-    
+
     /// Operational Status
     pub status: Option<ClientStatus>,
     /// Deployment Environment
     pub environment: Option<Environment>,
-    
+
     /// Asset Tag (Fixed Asset Number)
     pub asset_tag: Option<String>,
     /// Warranty Expiration Date
     pub warranty_expiration: Option<String>,
     /// Supplier / Vendor
     pub supplier: Option<String>,
-    
+
     /// Power Consumption (Watts) - Manual setting
     pub power_consumption: Option<u32>,
 }
@@ -254,7 +256,7 @@ impl Client {
             power_consumption: None,
         }
     }
-    
+
     pub fn update_last_seen(&mut self) {
         self.last_seen = Some(chrono::Utc::now().to_rfc3339());
     }
@@ -494,30 +496,30 @@ pub struct ClientHardwareExport {
     pub serial_number: String,
     pub last_seen: String,
     pub registered_at: String,
-    
+
     // CPU信息
     pub cpu_vendor: String,
     pub cpu_model: String,
     pub cpu_cores: u32,
     pub cpu_threads: u32,
     pub cpu_frequency: String,
-    
+
     // 内存信息
     pub memory_total: String,
     pub memory_vendor: String,
     pub memory_speed: String,
     pub memory_modules: u32,
-    
+
     // GPU信息
     pub gpu_count: u32,
     pub gpu_models: String,
     pub gpu_vendors: String,
-    
+
     // 存储信息
     pub storage_count: u32,
     pub storage_total: String,
     pub storage_types: String,
-    
+
     // 网络信息
     pub network_count: u32,
     pub network_types: String,
@@ -533,16 +535,16 @@ pub struct Component {
     pub vendor: Option<String>,
     pub component_type: ComponentType,
     pub status: ComponentStatus,
-    
+
     // Associations
-    pub client_id: Option<String>, // If installed in a server
+    pub client_id: Option<String>,       // If installed in a server
     pub client_hostname: Option<String>, // Hostname of the client
-    pub location: Option<String>,  // If in stock
-    
+    pub location: Option<String>,        // If in stock
+
     // Financial/Asset
     pub purchase_date: Option<String>,
     pub warranty_expiration: Option<String>,
-    
+
     // Flapping control
     pub missing_since: Option<String>,
 
@@ -606,6 +608,19 @@ pub struct ComponentQuery {
     pub client_id: Option<String>,
 }
 
+impl Default for ComponentQuery {
+    fn default() -> Self {
+        Self {
+            page: None,
+            page_size: None,
+            status: None,
+            component_type: None,
+            search: None,
+            client_id: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientQuery {
     pub page: Option<usize>,
@@ -613,6 +628,18 @@ pub struct ClientQuery {
     pub search: Option<String>,
     pub os: Option<String>,
     pub status: Option<String>,
+}
+
+impl Default for ClientQuery {
+    fn default() -> Self {
+        Self {
+            page: None,
+            page_size: None,
+            search: None,
+            os: None,
+            status: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -623,6 +650,17 @@ pub struct RackQuery {
     pub location: Option<String>,
 }
 
+impl Default for RackQuery {
+    fn default() -> Self {
+        Self {
+            page: None,
+            page_size: None,
+            search: None,
+            location: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersonQuery {
     pub page: Option<usize>,
@@ -631,12 +669,34 @@ pub struct PersonQuery {
     pub department: Option<String>,
 }
 
+impl Default for PersonQuery {
+    fn default() -> Self {
+        Self {
+            page: None,
+            page_size: None,
+            search: None,
+            department: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectQuery {
     pub page: Option<usize>,
     pub page_size: Option<usize>,
     pub search: Option<String>,
     pub department: Option<String>,
+}
+
+impl Default for ProjectQuery {
+    fn default() -> Self {
+        Self {
+            page: None,
+            page_size: None,
+            search: None,
+            department: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -654,7 +714,7 @@ pub struct Rack {
     pub id: String,
     pub name: String,
     pub location: Option<String>, // Data Center / Room
-    pub height_u: u32, // Total U height (e.g. 42)
+    pub height_u: u32,            // Total U height (e.g. 42)
     pub power_limit: Option<u32>, // Power limit in Watts
     pub description: Option<String>,
     #[serde(default = "default_now")]

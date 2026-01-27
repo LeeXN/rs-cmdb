@@ -3,6 +3,13 @@ name = "server"
 version = "0.1.0"
 edition = "2024"
 
+[dev-dependencies]
+tokio-test = "0.4"
+wiremock = "0.6"
+mockall = "0.13"
+cargo-llvm-cov = "0.6"
+rand = "0.8"
+
 [dependencies]
 common = { path = "../common" }
 tokio = { version = "1.45.0", features = ["full"] }
@@ -31,6 +38,7 @@ anyhow = "1.0.100"
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 argon2 = "0.5.3"
 axum-extra = { version = "0.12.2", features = ["typed-header"] }
+futures = "0.3"
 
 [[bin]]
 name = "rs-cmdb-server"
