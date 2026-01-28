@@ -243,7 +243,7 @@ fn is_display_controller(path: &Path) -> bool {
     }
 
     let vendor_id = if let Some(vendor_id_str) = read_sysfs_value(&path.join("vendor")) {
-        u16::from_str_radix(&vendor_id_str[2..], 16).unwrap()
+        u16::from_str_radix(&vendor_id_str[2..], 16).unwrap_or(0)
     } else {
         0
     };
@@ -263,7 +263,7 @@ fn is_display_controller(path: &Path) -> bool {
 // 修改 get_gpu_sn 函数使用缓存
 fn get_gpu_sn(gpu_vendor_name: &str, original_pci_bus_id: &str) -> Option<String> {
     let cache = get_cache();
-    let output = match cache.lock().unwrap().get_smi_output(gpu_vendor_name) {
+    let output = match cache.lock().ok()?.get_smi_output(gpu_vendor_name) {
         Some(output) => output.clone(),
         None => return None,
     };
@@ -310,7 +310,7 @@ fn get_gpu_sn(gpu_vendor_name: &str, original_pci_bus_id: &str) -> Option<String
 // 修改 get_driver_version 函数使用缓存
 fn get_driver_version(gpu_vendor_name: &str) -> Option<String> {
     let cache = get_cache();
-    let output = match cache.lock().unwrap().get_driver_output(gpu_vendor_name) {
+    let output = match cache.lock().ok()?.get_driver_output(gpu_vendor_name) {
         Some(output) => output.clone(),
         None => return None,
     };
@@ -365,7 +365,10 @@ pub fn collect_gpus() -> Vec<GPU> {
                             .to_string_lossy()
                             .split("/")
                             .nth(5)
-                            .unwrap()
+                            .unwrap_or_else(|| {
+                                tracing::warn!("Failed to parse PCI bus ID from path: {:?}", path);
+                                "unknown"
+                            })
                             .to_string();
                         let sn = get_gpu_sn(&vendor_name, &pci_bus_id);
                         let driver_version = get_driver_version(&vendor_name).unwrap_or_default();

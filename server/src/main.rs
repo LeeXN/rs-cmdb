@@ -1,11 +1,14 @@
 mod api;
+mod cache;
 mod config;
 mod constants;
+mod dao;
 mod db;
 mod middleware;
 mod queue;
 mod repository;
 mod service;
+mod validation;
 #[cfg(test)]
 mod tests;
 
@@ -29,10 +32,12 @@ use crate::repository::{
 };
 use crate::service::{
     auth_service::{AuthService, validate_password_complexity},
+    client_filter_service::ClientFilterService,
     client_service::ClientService,
     component_service::ComponentService,
     hardware_service::HardwareService,
     message_processor::MessageProcessor,
+    stats_service::StatsService,
     validation_service::ValidationService,
 };
 use chrono::Utc;
@@ -230,7 +235,7 @@ async fn main() -> Result<()> {
     let message_queue = MessageQueueFactory::create_flume_queue();
 
     // Initialize services
-    let client_service = Arc::new(ClientService::new(
+    let client_service = Arc::new(ClientService::from_repositories(
         client_repo.clone(),
         hardware_repo.clone(),
         rack_repo.clone(),
@@ -247,6 +252,14 @@ async fn main() -> Result<()> {
         project_repo.clone(),
         rack_repo.clone(),
         person_repo.clone(),
+    ));
+    let stats_service = Arc::new(StatsService::new(
+        client_repo.clone(),
+        hardware_repo.clone(),
+    ));
+    let client_filter_service = Arc::new(ClientFilterService::new(
+        client_repo.clone(),
+        hardware_repo.clone(),
     ));
 
     // Initialize message processor
@@ -300,6 +313,8 @@ async fn main() -> Result<()> {
         client_service,
         auth_service,
         validation_service,
+        stats_service,
+        client_filter_service,
         Arc::new(config.clone()),
     );
 

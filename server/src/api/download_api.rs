@@ -96,19 +96,24 @@ pub async fn download_client(
     match fs::read(&file_path).await {
         Ok(content) => {
             let mut headers = HeaderMap::new();
-            headers.insert(CONTENT_TYPE, "application/octet-stream".parse().unwrap());
+            headers.insert(
+                CONTENT_TYPE,
+                "application/octet-stream"
+                    .parse()
+                    .expect("CONTENT_TYPE header value should be valid"),
+            );
             headers.insert(
                 CONTENT_DISPOSITION,
                 format!("attachment; filename=\"{}\"", binary_name)
                     .parse()
-                    .unwrap(),
+                    .expect("CONTENT_DISPOSITION header value should be valid"),
             );
 
             info!("Client binary downloaded: {}", file_path);
             Ok(Response::builder()
                 .status(StatusCode::OK)
                 .body(content.into())
-                .unwrap())
+                .expect("Response builder with known content should be valid"))
         }
         Err(e) => {
             error!("Failed to read client binary: {}", e);
@@ -144,7 +149,7 @@ pub async fn get_install_script(
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, "text/x-shellscript")
         .body(script.into())
-        .unwrap())
+        .expect("Response builder with known content should be valid"))
 }
 
 fn generate_install_script(server_url: &str, platform: &str, arch: &str) -> String {

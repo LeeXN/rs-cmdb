@@ -24,7 +24,9 @@ use crate::repository::{
     rack_repository::RackRepository, user_repository::UserRepository,
 };
 use crate::service::{
-    auth_service::AuthService, client_service::ClientService, validation_service::ValidationService,
+    auth_service::AuthService, client_service::ClientService,
+    client_filter_service::ClientFilterService,
+    stats_service::StatsService, validation_service::ValidationService,
 };
 use axum::{
     Router,
@@ -68,6 +70,8 @@ pub fn create_router(
     client_service: Arc<ClientService>,
     auth_service: Arc<AuthService>,
     validation_service: Arc<ValidationService>,
+    stats_service: Arc<StatsService>,
+    client_filter_service: Arc<ClientFilterService>,
     config: Arc<ServerConfig>,
 ) -> Router {
     // Create the CORS layer
@@ -249,5 +253,7 @@ pub fn create_router(
         .layer(Extension(client_service))
         .layer(Extension(auth_service))
         .layer(Extension(validation_service))
+        .layer(Extension(stats_service))
+        .layer(Extension(client_filter_service))
         .layer(Extension(config))
 }

@@ -61,6 +61,7 @@ where
 
 /// Client base model
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct Client {
     /// Unique client identifier
     pub id: String,
@@ -416,6 +417,7 @@ pub struct ClientHardwareExport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct Component {
     #[serde(default = "default_uuid")]
     pub id: String,

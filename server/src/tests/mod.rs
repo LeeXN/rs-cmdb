@@ -4,4 +4,5 @@
 
 pub mod error_tests;
 pub mod fixtures;
-// pub mod api_tests; // API integration tests need refactoring
+pub mod integration_tests;
+// pub mod api_tests; // Legacy API tests, replaced by integration_tests

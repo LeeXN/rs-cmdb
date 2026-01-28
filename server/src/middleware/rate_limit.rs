@@ -86,6 +86,15 @@ impl From<RateLimitResponse> for Response {
             builder = builder.header("Retry-After", retry_after.to_string());
         }
 
-        builder.body(axum::body::Body::from(val.body)).unwrap()
+        builder
+            .body(axum::body::Body::from(val.body))
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to build rate limit response: {}", e);
+                // Return a minimal fallback response
+                Response::builder()
+                    .status(StatusCode::TOO_MANY_REQUESTS)
+                    .body(axum::body::Body::from("Rate limit exceeded"))
+                    .expect("Fallback response should always be valid")
+            })
     }
 }

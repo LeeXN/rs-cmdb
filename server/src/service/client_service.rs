@@ -1,7 +1,11 @@
-use crate::repository::{
-    client_repository::ClientRepository, hardware_repository::HardwareRepository,
-    rack_repository::RackRepository,
-};
+//! Client service for client business logic
+//!
+//! This service uses DAO layer for data access, reducing coupling
+//! and simplifying business logic.
+
+use crate::dao::{ClientDao, RackDao};
+use crate::repository::hardware_repository::HardwareRepository;
+use crate::validation::validate_ip_address;
 use common::error::{CmdbError, CmdbResult};
 use common::models::Client;
 use std::sync::Arc;
@@ -12,22 +16,35 @@ use crate::tests::fixtures::*;
 
 /// Service for client operations
 pub struct ClientService {
-    client_repo: Arc<ClientRepository>,
+    client_dao: Arc<ClientDao>,
+    rack_dao: Arc<RackDao>,
     hardware_repo: Arc<HardwareRepository>,
-    rack_repo: Arc<RackRepository>,
 }
 
 impl ClientService {
-    /// Create a new client service
+    /// Create a new client service using DAO layer
     pub fn new(
-        client_repo: Arc<ClientRepository>,
+        client_dao: Arc<ClientDao>,
+        rack_dao: Arc<RackDao>,
         hardware_repo: Arc<HardwareRepository>,
-        rack_repo: Arc<RackRepository>,
     ) -> Self {
         Self {
-            client_repo,
+            client_dao,
+            rack_dao,
             hardware_repo,
-            rack_repo,
+        }
+    }
+
+    /// Create a new client service from repositories (backward compatibility)
+    pub fn from_repositories(
+        client_repo: Arc<crate::repository::client_repository::ClientRepository>,
+        hardware_repo: Arc<HardwareRepository>,
+        rack_repo: Arc<crate::repository::rack_repository::RackRepository>,
+    ) -> Self {
+        Self {
+            client_dao: Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone())),
+            rack_dao: Arc::new(RackDao::new(rack_repo, client_repo)),
+            hardware_repo,
         }
     }
 
@@ -36,73 +53,38 @@ impl ClientService {
     pub async fn import_clients(&self, clients: Vec<Client>) -> CmdbResult<usize> {
         let mut count = 0;
         for client in clients {
-            // Validate Rack Assignment
+            // Validate Rack Assignment using DAO
             if let Some(rack_id) = &client.rack
                 && !rack_id.is_empty()
             {
-                // Check if rack exists
-                let rack = self.rack_repo.get(rack_id).await?;
-                if rack.is_none() {
+                // First, check if rack exists
+                if self.rack_dao.get(rack_id).await?.is_none() {
                     return Err(CmdbError::Validation(format!(
                         "Rack {} not found for client {}",
                         rack_id, client.hostname
                     )));
                 }
-                let rack = rack.unwrap();
 
-                // Check if unit position is valid
+                // Validate position using DAO if unit_position is set
                 if let Some(pos_str) = &client.unit_position
                     && let Ok(pos) = pos_str.parse::<u32>()
                 {
                     let height = client.u_height.unwrap_or(1);
-                    if pos + height - 1 > rack.height_u {
-                        return Err(CmdbError::Validation(format!(
-                            "Client {} exceeds rack height",
-                            client.hostname
-                        )));
-                    }
-
-                    // Check for overlap with existing clients
-                    // This is expensive, we should optimize it in a real system
-                    let all_clients = self.client_repo.list_all().await?;
-                    for other in all_clients {
-                        if other.id == client.id {
-                            continue;
-                        } // Skip self
-                        if other.rack.as_ref() == Some(rack_id)
-                            && let Some(other_pos_str) = &other.unit_position
-                            && let Ok(other_pos) = other_pos_str.parse::<u32>()
-                        {
-                            let other_height = other.u_height.unwrap_or(1);
-                            // Check overlap
-                            let start1 = pos;
-                            let end1 = pos + height - 1;
-                            let start2 = other_pos;
-                            let end2 = other_pos + other_height - 1;
-
-                            if std::cmp::max(start1, start2) <= std::cmp::min(end1, end2) {
-                                return Err(CmdbError::Validation(format!(
-                                    "Rack position overlap: {} overlaps with {}",
-                                    client.hostname, other.hostname
-                                )));
-                            }
-                        }
-                    }
+                    self.rack_dao
+                        .validate_position(rack_id, pos, height, Some(&client.id))
+                        .await?;
                 }
             }
 
             // Save or Update
-            if self.client_repo.exists(&client.id).await.unwrap_or(false) {
-                self.client_repo.save(&client).await?;
+            if self.client_dao.get(&client.id).await?.is_some() {
+                self.client_dao.save(&client).await?;
             } else {
-                // If ID is empty, generate one? Or assume import has IDs?
-                // If import has no ID, we treat it as new?
-                // For now, assume ID is present or we generate one if empty
                 let mut new_client = client.clone();
                 if new_client.id.is_empty() {
                     new_client.id = uuid::Uuid::new_v4().to_string();
                 }
-                self.client_repo.save(&new_client).await?;
+                self.client_dao.save(&new_client).await?;
             }
             count += 1;
         }
@@ -142,7 +124,13 @@ impl ClientService {
             client.id = id;
         } else {
             // Try to find existing client by serial number if client_id is not provided
-            if let Ok(Some(existing)) = self.client_repo.find_by_serial(serial_number).await {
+            // Note: This uses the underlying repo since find_by_serial is repo-specific
+            // In a full refactor, this would also be in the DAO
+            if let Ok(Some(existing)) = self
+                .client_dao
+                .get_by_serial(serial_number)
+                .await
+            {
                 info!(
                     "Found existing client by serial number: {} -> {}",
                     serial_number, existing.id
@@ -152,9 +140,9 @@ impl ClientService {
         }
 
         // Check if client already exists
-        if let Ok(true) = self.client_repo.exists(&client.id).await {
+        if self.client_dao.get(&client.id).await?.is_some() {
             // Update the client information
-            if let Ok(Some(mut existing_client)) = self.client_repo.get(&client.id).await {
+            if let Some(mut existing_client) = self.client_dao.get(&client.id).await? {
                 existing_client.hostname = hostname.to_string();
                 existing_client.ip_address = ip_address.to_string();
                 existing_client.sys_vendor = Some(sys_vendor.to_string());
@@ -163,7 +151,7 @@ impl ClientService {
                 existing_client.os = Some(os.to_string());
                 existing_client.update_last_seen();
 
-                self.client_repo.save(&existing_client).await?;
+                self.client_dao.save(&existing_client).await?;
                 info!(
                     "Client updated: {} ({})",
                     existing_client.hostname, existing_client.id
@@ -173,7 +161,7 @@ impl ClientService {
         }
 
         // Save the new client
-        self.client_repo.save(&client).await?;
+        self.client_dao.save(&client).await?;
         info!("New client registered: {} ({})", client.hostname, client.id);
 
         Ok(client)
@@ -184,15 +172,9 @@ impl ClientService {
     #[instrument(skip(self))]
     pub async fn delete_client(&self, client_id: &str) -> CmdbResult<()> {
         // Get client information first
-        let client = match self.client_repo.get(client_id).await? {
-            Some(client) => client,
-            None => {
-                return Err(CmdbError::NotFound(format!(
-                    "Client {} not found",
-                    client_id
-                )));
-            }
-        };
+        let client = self.client_dao.get(client_id).await?.ok_or_else(|| {
+            CmdbError::NotFound(format!("Client {} not found", client_id))
+        })?;
 
         info!(
             "Deleting client: {} ({})",
@@ -205,7 +187,6 @@ impl ClientService {
                 "Failed to stop client service for {}: {}",
                 client.hostname, e
             );
-            // Continue with deletion even if we can't stop the service
         }
 
         // Delete hardware data
@@ -218,7 +199,7 @@ impl ClientService {
         }
 
         // Delete client from database
-        self.client_repo.delete(client_id).await?;
+        self.client_dao.delete(client_id).await?;
         info!("Client {} deleted successfully from database", client_id);
 
         Ok(())
@@ -256,39 +237,38 @@ impl ClientService {
 
     /// Stop Linux service via SSH (if configured)
     async fn stop_linux_service(&self, client: &Client) -> CmdbResult<()> {
-        // This implementation uses secure SSH configuration
-        // Host key verification is enabled - hosts must be in known_hosts file
+        // Validate IP address before using it in SSH command
+        let validated_ip = validate_ip_address(&client.ip_address)?;
+        info!("Validated IP address for SSH: {}", validated_ip);
 
         let commands = vec![
             "systemctl stop rs-cmdb-client",
             "systemctl disable rs-cmdb-client",
         ];
 
-        // Get SSH known_hosts file path from config
         let config = crate::config::get_config();
         let known_hosts_file = config.ssh_known_hosts_file.as_deref();
 
         for cmd in commands {
             info!("Executing on {}: {}", client.hostname, cmd);
 
-            // Build SSH command with security options
             let mut ssh_cmd = tokio::process::Command::new("ssh");
             ssh_cmd
                 .arg("-o")
-                .arg("ConnectTimeout=30") // Increased timeout to 30 seconds
+                .arg("ConnectTimeout=30")
                 .arg("-o")
-                .arg("BatchMode=yes") // Never ask for passwords
+                .arg("BatchMode=yes")
                 .arg("-o")
-                .arg("StrictHostKeyChecking=yes"); // Enable host key verification
+                .arg("StrictHostKeyChecking=yes");
 
-            // Add known_hosts file path if configured
             if let Some(known_hosts) = known_hosts_file {
                 ssh_cmd
                     .arg("-o")
                     .arg(format!("UserKnownHostsFile={}", known_hosts));
             }
 
-            ssh_cmd.arg(&client.ip_address).arg(cmd);
+            // Use validated IP address
+            ssh_cmd.arg(&validated_ip).arg(cmd);
 
             let output = ssh_cmd.output().await;
 
@@ -300,7 +280,6 @@ impl ClientService {
                         let stderr = String::from_utf8_lossy(&result.stderr);
                         warn!("Command failed on {}: {}", client.hostname, stderr);
 
-                        // Check if this is a host key verification error
                         if stderr.contains("Host key verification failed")
                             || stderr.contains("Could not resolve hostname")
                         {
@@ -315,7 +294,6 @@ impl ClientService {
                     let error_msg = format!("SSH connection failed to {}: {}", client.hostname, e);
                     warn!("{}", error_msg);
 
-                    // Provide helpful error message
                     if e.kind() == std::io::ErrorKind::NotFound {
                         return Err(CmdbError::Validation("SSH command not found. Please ensure OpenSSH client is installed to manage remote services.".to_string()));
                     }
@@ -330,32 +308,44 @@ impl ClientService {
     /// Stop Windows service via PowerShell remoting (if configured)
     async fn stop_windows_service(&self, client: &Client) -> CmdbResult<()> {
         info!("Attempting to stop Windows service on {}", client.hostname);
-
-        // This would require PowerShell remoting to be configured
-        // For now, just log that we attempted it
         warn!(
             "Windows service stopping not implemented yet for {}",
             client.hostname
         );
-
         Ok(())
     }
 
     /// Get a client by ID
     #[allow(dead_code)]
     pub async fn get_client(&self, client_id: &str) -> CmdbResult<Option<Client>> {
-        self.client_repo.get(client_id).await
+        self.client_dao.get(client_id).await
     }
 
     /// List all clients
     #[allow(dead_code)]
     pub async fn list_clients(&self) -> CmdbResult<Vec<Client>> {
-        self.client_repo.list_all().await
+        self.client_dao.list_all().await
     }
 
     /// Update client last seen timestamp
     pub async fn update_last_seen(&self, client_id: &str) -> CmdbResult<()> {
-        self.client_repo.update_last_seen(client_id).await
+        // This uses the underlying repo for now - could be added to DAO
+        if let Some(mut client) = self.client_dao.get(client_id).await? {
+            client.update_last_seen();
+            self.client_dao.save(&client).await?;
+        }
+        Ok(())
+    }
+}
+
+// Extension methods for ClientDao to support existing functionality
+impl ClientDao {
+    /// Find client by serial number
+    pub async fn get_by_serial(&self, serial: &str) -> CmdbResult<Option<Client>> {
+        let all_clients = self.list_all().await?;
+        Ok(all_clients
+            .into_iter()
+            .find(|c| c.serial_number.as_deref() == Some(serial)))
     }
 }
 
@@ -368,32 +358,30 @@ mod tests {
     };
     use std::sync::Arc;
 
+    fn create_service(
+        db: Arc<dyn crate::db::Database>,
+    ) -> ClientService {
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+        let rack_repo = Arc::new(RackRepository::new(db.clone()));
+        ClientService::from_repositories(client_repo, hardware_repo, rack_repo)
+    }
+
     #[tokio::test]
     async fn test_client_service_creation() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let _service = ClientService::new(client_repo, hardware_repo, rack_repo);
+        let _service = create_service(db_arc);
     }
 
     #[tokio::test]
     async fn test_import_clients_with_valid_data() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(
-            client_repo.clone(),
-            hardware_repo.clone(),
-            rack_repo.clone(),
-        );
+        let service = create_service(db_arc.clone());
 
         let rack = create_test_rack("rack-1");
+        let rack_repo = RackRepository::new(db_arc);
         rack_repo.save(&rack).await.unwrap();
 
         let client = create_test_client("client-1");
@@ -407,11 +395,7 @@ mod tests {
     async fn test_import_clients_with_nonexistent_rack() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo, hardware_repo, rack_repo);
+        let service = create_service(db_arc);
 
         let mut client = create_test_client("client-1");
         client.rack = Some("nonexistent-rack".to_string());
@@ -425,14 +409,11 @@ mod tests {
     async fn test_import_clients_with_valid_unit_position() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo.clone());
+        let service = create_service(db_arc.clone());
 
         let mut rack = create_test_rack("rack-1");
         rack.height_u = 10;
+        let rack_repo = RackRepository::new(db_arc.clone());
         rack_repo.save(&rack).await.unwrap();
 
         let mut client = create_test_client("client-1");
@@ -449,13 +430,10 @@ mod tests {
     async fn test_import_clients_with_invalid_unit_position() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo.clone());
+        let service = create_service(db_arc.clone());
 
         let rack = create_test_rack("rack-1");
+        let rack_repo = RackRepository::new(db_arc.clone());
         rack_repo.save(&rack).await.unwrap();
 
         let mut client = create_test_client("client-1");
@@ -472,13 +450,10 @@ mod tests {
     async fn test_import_clients_with_overlapping_positions() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo.clone());
+        let service = create_service(db_arc.clone());
 
         let rack = create_test_rack("rack-1");
+        let rack_repo = RackRepository::new(db_arc.clone());
         rack_repo.save(&rack).await.unwrap();
 
         let mut client1 = create_test_client("client-1");
@@ -491,6 +466,7 @@ mod tests {
         client2.unit_position = Some("2".to_string());
         client2.u_height = Some(2);
 
+        let client_repo = ClientRepository::new(db_arc);
         client_repo.save(&client1).await.unwrap();
 
         let result = service.import_clients(vec![client2]).await;
@@ -502,11 +478,7 @@ mod tests {
     async fn test_register_new_client() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+        let service = create_service(db_arc);
 
         let client = service
             .register_client(
@@ -530,11 +502,7 @@ mod tests {
     async fn test_register_client_with_provided_id() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+        let service = create_service(db_arc);
 
         let custom_id = "custom-client-id-123".to_string();
         let client = service
@@ -557,14 +525,11 @@ mod tests {
     async fn test_register_existing_client_by_serial() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+        let service = create_service(db_arc.clone());
 
         let mut client = create_test_client("test-client");
         client.serial_number = Some("SN12345".to_string());
+        let client_repo = ClientRepository::new(db_arc.clone());
         client_repo.save(&client).await.unwrap();
 
         let result = service
@@ -589,13 +554,10 @@ mod tests {
     async fn test_get_client() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+        let service = create_service(db_arc.clone());
 
         let client = create_test_client("test-client");
+        let client_repo = ClientRepository::new(db_arc);
         client_repo.save(&client).await.unwrap();
 
         let result = service.get_client("test-client").await;
@@ -610,14 +572,11 @@ mod tests {
     async fn test_list_clients() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+        let service = create_service(db_arc.clone());
 
         let client1 = create_test_client("client-1");
         let client2 = create_test_client("client-2");
+        let client_repo = ClientRepository::new(db_arc);
         client_repo.save(&client1).await.unwrap();
         client_repo.save(&client2).await.unwrap();
 
@@ -632,13 +591,10 @@ mod tests {
     async fn test_update_last_seen() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+        let service = create_service(db_arc.clone());
 
         let client = create_test_client("test-client");
+        let client_repo = ClientRepository::new(db_arc.clone());
         client_repo.save(&client).await.unwrap();
 
         let initial_client = client_repo.get("test-client").await.unwrap().unwrap();
@@ -658,13 +614,10 @@ mod tests {
     async fn test_delete_client() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo.clone(), rack_repo);
+        let service = create_service(db_arc.clone());
 
         let client = create_test_client("test-client");
+        let client_repo = ClientRepository::new(db_arc.clone());
         client_repo.save(&client).await.unwrap();
 
         let result = service.delete_client("test-client").await;
@@ -677,11 +630,7 @@ mod tests {
     async fn test_delete_nonexistent_client() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo.clone(), rack_repo);
+        let service = create_service(db_arc);
 
         let result = service.delete_client("nonexistent-client").await;
 
@@ -692,16 +641,14 @@ mod tests {
     async fn test_delete_client_removes_hardware() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo.clone(), hardware_repo.clone(), rack_repo);
+        let service = create_service(db_arc.clone());
 
         let client = create_test_client("test-client");
+        let client_repo = ClientRepository::new(db_arc.clone());
         client_repo.save(&client).await.unwrap();
 
         let hardware = create_test_hardware_info("test-client");
+        let hardware_repo = HardwareRepository::new(db_arc);
         hardware_repo
             .save_hardware("test-client", &hardware, true)
             .await
@@ -717,11 +664,7 @@ mod tests {
     async fn test_import_empty_clients_list() {
         let db = setup_test_db().unwrap();
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
-        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
-        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
-
-        let service = ClientService::new(client_repo, hardware_repo, rack_repo);
+        let service = create_service(db_arc);
 
         let result = service.import_clients(vec![]).await;
 

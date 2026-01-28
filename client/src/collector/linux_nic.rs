@@ -745,12 +745,17 @@ pub fn get_dns_servers() -> Vec<String> {
 }
 
 pub fn get_ip_address() -> String {
-    let output = Command::new("hostname").arg("-I").output().unwrap();
-    String::from_utf8_lossy(&output.stdout)
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_string()
+    match Command::new("hostname").arg("-I").output() {
+        Ok(output) => String::from_utf8_lossy(&output.stdout)
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_string(),
+        Err(_) => {
+            tracing::warn!("Failed to get IP address via hostname command");
+            "Unknown".to_string()
+        }
+    }
 }
 
 pub fn get_pci_slot(iface: &str) -> String {

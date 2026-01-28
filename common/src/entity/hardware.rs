@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum StorageType {
     SSD,
+    #[default]
+    Unknown,
     HDD,
     NVMe,
-    Unknown,
 }
 
 impl fmt::Display for StorageType {
@@ -20,14 +21,15 @@ impl fmt::Display for StorageType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum NICStatus {
     Up,
     Down,
+    #[default]
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum NICType {
     Ethernet,
     WiFi,
@@ -38,6 +40,7 @@ pub enum NICType {
     RoCEv2,
     IWarp,
     VLAN,
+    #[default]
     Unknown,
 }
 
@@ -58,7 +61,8 @@ impl fmt::Display for NICType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct SystemInfo {
     pub sys_vendor: String,
     pub product_name: String,
@@ -66,6 +70,7 @@ pub struct SystemInfo {
     pub serial_number: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct OS {
     pub name: String,         // Linux, Windows, etc.
     pub version: String,      // 5.10.0-11-amd64, 10.0.19041, etc.
@@ -76,7 +81,8 @@ pub struct OS {
     pub ip_address: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct CPU {
     pub vendor_id: String,  //GenuineIntel
     pub model_name: String, // Intel(R) Xeon(R) Gold 5218 CPU @ 2.30GHz"
@@ -87,7 +93,8 @@ pub struct CPU {
     pub speed: u32, // Speed in MHz
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct GPU {
     pub vendor: String,         // NVIDIA, AMD, etc.
     pub model: String,          // GTX 1080, RX 5700 XT, etc.
@@ -96,7 +103,8 @@ pub struct GPU {
     pub driver_version: String, // Driver version
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct RAM {
     pub vendor: String,          // 制造商
     pub model: String,           // 型号
@@ -108,7 +116,8 @@ pub struct RAM {
     pub modules: Vec<RAMModule>, // 内存模块列表
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct RAMModule {
     pub slot: String,          // 插槽标识
     pub vendor: String,        // 制造商
@@ -121,14 +130,16 @@ pub struct RAMModule {
     pub locator: String,       // 内存位置，如 "DIMM_A1"
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct Partition {
     pub name: String,      // /dev/sda1, /dev/sda2, etc.
     pub size: String,      // Formatted size string (e.g., "120.5", "800.0")
     pub size_unit: String, // Unit (e.g., "GB", "MB", "KB", "B")
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct Disk {
     pub vendor: String,            // Samsung, Seagate, WD, etc.
     pub size: String,              // Formatted size string (e.g., "480.0", "1000.5")
@@ -141,7 +152,8 @@ pub struct Disk {
     pub partitions: Vec<Partition>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct NIC {
     pub name: String,                // eth0, wlan0, etc.
     pub vendor: String,              // Intel, Broadcom, etc.
@@ -164,10 +176,10 @@ pub struct NIC {
     pub driver: String,           // Driver
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct Hardware {
     pub system: Option<SystemInfo>,
-    #[serde(default)]
     pub os: OS,
     pub cpu: CPU,
     pub gpus: Vec<GPU>,
@@ -177,7 +189,8 @@ pub struct Hardware {
     pub ipmi: Option<IpmiInfo>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct IpmiInfo {
     pub ip_address: Option<String>,
     pub mac_address: Option<String>,
@@ -191,7 +204,8 @@ pub struct IpmiInfo {
     pub status: IpmiStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct IpmiUser {
     pub user_id: u8,
     pub username: String,
@@ -206,6 +220,12 @@ pub enum IpmiStatus {
     NotAvailable,
     AccessDenied,
     Error(String),
+}
+
+impl Default for IpmiStatus {
+    fn default() -> Self {
+        IpmiStatus::NotAvailable
+    }
 }
 
 impl Hardware {
