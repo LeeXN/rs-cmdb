@@ -1,11 +1,11 @@
-use yew::prelude::*;
+use crate::components::ui::badge::{Badge, BadgeVariant};
+use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
+use crate::components::ui::table::{Table, TableBody, TableCell, TableRow};
+use crate::hooks::use_trans::use_trans;
 use crate::types::Client;
 use crate::utils::format::format_time_ago;
-use crate::components::ui::card::{Card, CardHeader, CardTitle, CardDescription, CardContent};
-use crate::components::ui::table::{Table, TableBody, TableRow, TableCell};
-use crate::components::ui::badge::{Badge, BadgeVariant};
-use crate::hooks::use_trans::use_trans;
 use lucide_yew::{Monitor, Server};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct RecentClientsCardProps {

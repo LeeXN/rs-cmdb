@@ -1,5 +1,5 @@
+use lucide_yew::{CircleCheck, CircleX, Info, TriangleAlert, X};
 use yew::prelude::*;
-use lucide_yew::{CircleCheck, TriangleAlert, CircleX, Info, X};
 
 #[derive(Clone, PartialEq, Debug)]
 #[allow(dead_code)]
@@ -39,37 +39,35 @@ pub struct NotificationProps {
 #[function_component(Notification)]
 pub fn notification(props: &NotificationProps) -> Html {
     let show = use_state(|| props.show);
-    
+
     // 自动关闭逻辑
     {
         let show = show.clone();
         let auto_close = props.auto_close.unwrap_or(true);
         let duration = props.duration.unwrap_or(5000);
         let on_close = props.on_close.clone();
-        
-        use_effect_with(
-            props.show,
-            move |&is_show| {
-                if is_show && auto_close {
-                    let show_clone = show.clone();
-                    let on_close_clone = on_close.clone();
-                    
-                    gloo::timers::callback::Timeout::new(duration, move || {
-                        show_clone.set(false);
-                        if let Some(callback) = on_close_clone {
-                            callback.emit(());
-                        }
-                    }).forget();
-                }
-                || ()
+
+        use_effect_with(props.show, move |&is_show| {
+            if is_show && auto_close {
+                let show_clone = show.clone();
+                let on_close_clone = on_close.clone();
+
+                gloo::timers::callback::Timeout::new(duration, move || {
+                    show_clone.set(false);
+                    if let Some(callback) = on_close_clone {
+                        callback.emit(());
+                    }
+                })
+                .forget();
             }
-        );
+            || ()
+        });
     }
 
     let on_close_click = {
         let show = show.clone();
         let on_close = props.on_close.clone();
-        
+
         Callback::from(move |_: MouseEvent| {
             show.set(false);
             if let Some(callback) = &on_close {
@@ -82,15 +80,32 @@ pub fn notification(props: &NotificationProps) -> Html {
         return html! {};
     }
 
-    let title = props.title.as_ref()
-        .map(|t| t.clone())
+    let title = props
+        .title
+        .clone()
         .unwrap_or_else(|| props.notification_type.to_title().to_string());
 
     let (icon, color_class, border_class) = match props.notification_type {
-        NotificationType::Success => (html!{<CircleCheck class="h-5 w-5" />}, "text-green-400 bg-green-500/20", "border-green-500/40"),
-        NotificationType::Warning => (html!{<TriangleAlert class="h-5 w-5" />}, "text-amber-400 bg-amber-500/20", "border-amber-500/40"),
-        NotificationType::Error => (html!{<CircleX class="h-5 w-5" />}, "text-red-400 bg-red-500/20", "border-red-500/40"),
-        NotificationType::Info => (html!{<Info class="h-5 w-5" />}, "text-blue-400 bg-blue-500/20", "border-blue-500/40"),
+        NotificationType::Success => (
+            html! {<CircleCheck class="h-5 w-5" />},
+            "text-green-400 bg-green-500/20",
+            "border-green-500/40",
+        ),
+        NotificationType::Warning => (
+            html! {<TriangleAlert class="h-5 w-5" />},
+            "text-amber-400 bg-amber-500/20",
+            "border-amber-500/40",
+        ),
+        NotificationType::Error => (
+            html! {<CircleX class="h-5 w-5" />},
+            "text-red-400 bg-red-500/20",
+            "border-red-500/40",
+        ),
+        NotificationType::Info => (
+            html! {<Info class="h-5 w-5" />},
+            "text-blue-400 bg-blue-500/20",
+            "border-blue-500/40",
+        ),
     };
 
     html! {
@@ -102,7 +117,7 @@ pub fn notification(props: &NotificationProps) -> Html {
                     <div class="text-sm opacity-90">{&props.message}</div>
                 </div>
                 if props.on_close.is_some() {
-                    <button 
+                    <button
                         class="absolute right-4 top-4 rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                         onclick={on_close_click}
                     >
@@ -125,12 +140,28 @@ pub struct SimpleNotificationProps {
 #[function_component(SimpleNotification)]
 pub fn simple_notification(props: &SimpleNotificationProps) -> Html {
     let title = props.notification_type.to_title();
-    
+
     let (icon, color_class, border_class) = match props.notification_type {
-        NotificationType::Success => (html!{<CircleCheck class="h-5 w-5" />}, "text-green-400 bg-green-500/20", "border-green-500/40"),
-        NotificationType::Warning => (html!{<TriangleAlert class="h-5 w-5" />}, "text-amber-400 bg-amber-500/20", "border-amber-500/40"),
-        NotificationType::Error => (html!{<CircleX class="h-5 w-5" />}, "text-red-400 bg-red-500/20", "border-red-500/40"),
-        NotificationType::Info => (html!{<Info class="h-5 w-5" />}, "text-blue-400 bg-blue-500/20", "border-blue-500/40"),
+        NotificationType::Success => (
+            html! {<CircleCheck class="h-5 w-5" />},
+            "text-green-400 bg-green-500/20",
+            "border-green-500/40",
+        ),
+        NotificationType::Warning => (
+            html! {<TriangleAlert class="h-5 w-5" />},
+            "text-amber-400 bg-amber-500/20",
+            "border-amber-500/40",
+        ),
+        NotificationType::Error => (
+            html! {<CircleX class="h-5 w-5" />},
+            "text-red-400 bg-red-500/20",
+            "border-red-500/40",
+        ),
+        NotificationType::Info => (
+            html! {<Info class="h-5 w-5" />},
+            "text-blue-400 bg-blue-500/20",
+            "border-blue-500/40",
+        ),
     };
 
     html! {
@@ -144,4 +175,4 @@ pub fn simple_notification(props: &SimpleNotificationProps) -> Html {
             </div>
         </div>
     }
-} 
+}

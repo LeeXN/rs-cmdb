@@ -1,11 +1,11 @@
-use yew::prelude::*;
-use crate::types::{Hardware, NICStatus, StorageType};
-use common::entity::hardware::IpmiStatus;
-use crate::utils::format::{format_number, format_frequency};
-use crate::components::ui::card::{Card, CardHeader, CardContent, CardTitle, CardDescription};
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
 use crate::components::ui::badge::{Badge, BadgeVariant};
-use lucide_yew::{Cpu, Monitor, Zap, HardDrive, Wifi, Server};
+use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::types::{Hardware, NICStatus, StorageType};
+use crate::utils::format::{format_frequency, format_number};
+use common::entity::hardware::IpmiStatus;
+use lucide_yew::{Cpu, HardDrive, Monitor, Server, Wifi, Zap};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct HardwareInfoProps {
@@ -192,7 +192,7 @@ fn render_storage_card(hardware: &Hardware) -> Html {
             </CardHeader>
             <CardContent class="space-y-4">
                 {
-                    hardware.disks.iter().enumerate().map(|(_index, disk)| {
+                    hardware.disks.iter().map(|disk| {
                         let storage_type_badge = match disk.storage_type {
                             StorageType::SSD => html! { <Badge variant={BadgeVariant::Success}>{"SSD"}</Badge> },
                             StorageType::HDD => html! { <Badge variant={BadgeVariant::Secondary}>{"HDD"}</Badge> },
@@ -225,7 +225,7 @@ fn render_storage_card(hardware: &Hardware) -> Html {
                                                 <p class="text-sm font-medium">{&disk.firmware_version}</p>
                                             </div>
                                         </div>
-                                        
+
                                         if disk.parted && !disk.partitions.is_empty() {
                                             <div class="mt-4">
                                                 <h6 class="text-xs font-semibold uppercase text-muted-foreground mb-2">{"分区信息"}</h6>
@@ -266,7 +266,7 @@ fn render_network_card(hardware: &Hardware) -> Html {
             </CardHeader>
             <CardContent class="space-y-4">
                 {
-                    hardware.nics.iter().enumerate().map(|(_index, nic)| {
+                    hardware.nics.iter().map(|nic| {
                         let status_badge = match nic.status {
                             NICStatus::Up => html! { <Badge variant={BadgeVariant::Success}>{"在线"}</Badge> },
                             NICStatus::Down => html! { <Badge variant={BadgeVariant::Secondary}>{"离线"}</Badge> },
@@ -310,19 +310,19 @@ fn render_network_card(hardware: &Hardware) -> Html {
                                             <div class="space-y-1"><span class="text-xs text-muted-foreground">{"状态"}</span><div class="mt-1">{status_badge}</div></div>
                                             <div class="space-y-1"><span class="text-xs text-muted-foreground">{"驱动"}</span><p class="text-sm font-medium">{&nic.driver}</p></div>
                                             <div class="space-y-1"><span class="text-xs text-muted-foreground">{"固件版本"}</span><p class="text-sm font-medium">{&nic.firmware_version}</p></div>
-                                            if nic.ib_node_type != "Unknown" && nic.ib_node_type != "" {
+                                            if nic.ib_node_type != "Unknown" && !nic.ib_node_type.is_empty() {
                                                 <div class="space-y-1"><span class="text-xs text-muted-foreground">{"IB Node Type"}</span><p class="text-sm font-medium">{&nic.ib_node_type}</p></div>
                                             }
                                         </div>
-                                        
+
                                         <div class="border-t my-4"></div>
                                         <h6 class="text-xs font-semibold uppercase text-muted-foreground mb-3">{"网络配置"}</h6>
-                                        
+
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                             <div class="space-y-1"><span class="text-xs text-muted-foreground">{"MAC地址"}</span><p class="text-sm font-medium">{&nic.mac_address}</p></div>
                                             <div class="space-y-1"><span class="text-xs text-muted-foreground">{"DHCP"}</span><div class="mt-1">{dhcp_badge}</div></div>
                                         </div>
-                                        
+
                                         <h6 class="text-xs font-semibold uppercase text-muted-foreground mb-2">{"IPv4 配置"}</h6>
                                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                             <div class="space-y-1"><span class="text-xs text-muted-foreground">{"IP地址"}</span><p class="text-sm font-medium">{&nic.ipv4_address}</p></div>
@@ -394,7 +394,7 @@ fn render_ipmi_card(hardware: &Hardware) -> Html {
                                                 } else {
                                                     html! { <Badge variant={BadgeVariant::Secondary}>{"禁用"}</Badge> }
                                                 };
-                                                
+
                                                 let privilege_text = match user.privilege_level {
                                                     1 => "回调",
                                                     2 => "用户",
@@ -403,7 +403,7 @@ fn render_ipmi_card(hardware: &Hardware) -> Html {
                                                     15 => "无访问权限",
                                                     _ => "未知",
                                                 };
-                                                
+
                                                 html! {
                                                     <TableRow>
                                                         <TableCell>{user.user_id.to_string()}</TableCell>
@@ -423,42 +423,55 @@ fn render_ipmi_card(hardware: &Hardware) -> Html {
                     html! {}
                 };
 
-                ("可用".to_string(), html! {
-                    <>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="space-y-1"><span class="text-sm text-muted-foreground">{"IP地址"}</span><p class="font-medium">{ipmi.ip_address.as_ref().unwrap_or(&"未知".to_string())}</p></div>
-                            <div class="space-y-1"><span class="text-sm text-muted-foreground">{"MAC地址"}</span><p class="font-medium">{ipmi.mac_address.as_ref().unwrap_or(&"未知".to_string())}</p></div>
-                            <div class="space-y-1"><span class="text-sm text-muted-foreground">{"子网掩码"}</span><p class="font-medium">{ipmi.subnet_mask.as_ref().unwrap_or(&"未知".to_string())}</p></div>
-                            <div class="space-y-1"><span class="text-sm text-muted-foreground">{"网关"}</span><p class="font-medium">{ipmi.gateway.as_ref().unwrap_or(&"未知".to_string())}</p></div>
-                            <div class="space-y-1"><span class="text-sm text-muted-foreground">{"通道"}</span><p class="font-medium">{ipmi.channel.to_string()}</p></div>
-                            <div class="space-y-1"><span class="text-sm text-muted-foreground">{"固件版本"}</span><p class="font-medium">{ipmi.firmware_version.as_ref().unwrap_or(&"未知".to_string())}</p></div>
-                        </div>
-                        {users_section}
-                    </>
-                })
-            },
-            IpmiStatus::Error(msg) => {
-                ("错误".to_string(), html! {
+                (
+                    "可用".to_string(),
+                    html! {
+                        <>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-1"><span class="text-sm text-muted-foreground">{"IP地址"}</span><p class="font-medium">{ipmi.ip_address.as_ref().unwrap_or(&"未知".to_string())}</p></div>
+                                <div class="space-y-1"><span class="text-sm text-muted-foreground">{"MAC地址"}</span><p class="font-medium">{ipmi.mac_address.as_ref().unwrap_or(&"未知".to_string())}</p></div>
+                                <div class="space-y-1"><span class="text-sm text-muted-foreground">{"子网掩码"}</span><p class="font-medium">{ipmi.subnet_mask.as_ref().unwrap_or(&"未知".to_string())}</p></div>
+                                <div class="space-y-1"><span class="text-sm text-muted-foreground">{"网关"}</span><p class="font-medium">{ipmi.gateway.as_ref().unwrap_or(&"未知".to_string())}</p></div>
+                                <div class="space-y-1"><span class="text-sm text-muted-foreground">{"通道"}</span><p class="font-medium">{ipmi.channel.to_string()}</p></div>
+                                <div class="space-y-1"><span class="text-sm text-muted-foreground">{"固件版本"}</span><p class="font-medium">{ipmi.firmware_version.as_ref().unwrap_or(&"未知".to_string())}</p></div>
+                            </div>
+                            {users_section}
+                        </>
+                    },
+                )
+            }
+            IpmiStatus::Error(msg) => (
+                "错误".to_string(),
+                html! {
                     <div class="rounded-md bg-yellow-500/10 p-4 text-yellow-500 border border-yellow-500/20">
                         <strong>{"错误: "}</strong>{msg}
                     </div>
-                })
-            },
-            IpmiStatus::NotConfigured => ("未配置".to_string(), html! {
-                <div class="rounded-md bg-blue-500/10 p-4 text-blue-500 border border-blue-500/20">
-                    {"IPMI/BMC 功能未配置"}
-                </div>
-            }),
-            IpmiStatus::NotAvailable => ("不可用".to_string(), html! {
-                <div class="rounded-md bg-blue-500/10 p-4 text-blue-500 border border-blue-500/20">
-                    {"IPMI/BMC 功能不可用"}
-                </div>
-            }),
-            IpmiStatus::AccessDenied => ("访问被拒绝".to_string(), html! {
-                <div class="rounded-md bg-yellow-500/10 p-4 text-yellow-500 border border-yellow-500/20">
-                    {"IPMI/BMC 访问被拒绝"}
-                </div>
-            }),
+                },
+            ),
+            IpmiStatus::NotConfigured => (
+                "未配置".to_string(),
+                html! {
+                    <div class="rounded-md bg-blue-500/10 p-4 text-blue-500 border border-blue-500/20">
+                        {"IPMI/BMC 功能未配置"}
+                    </div>
+                },
+            ),
+            IpmiStatus::NotAvailable => (
+                "不可用".to_string(),
+                html! {
+                    <div class="rounded-md bg-blue-500/10 p-4 text-blue-500 border border-blue-500/20">
+                        {"IPMI/BMC 功能不可用"}
+                    </div>
+                },
+            ),
+            IpmiStatus::AccessDenied => (
+                "访问被拒绝".to_string(),
+                html! {
+                    <div class="rounded-md bg-yellow-500/10 p-4 text-yellow-500 border border-yellow-500/20">
+                        {"IPMI/BMC 访问被拒绝"}
+                    </div>
+                },
+            ),
         };
 
         html! {

@@ -1,15 +1,15 @@
-use std::sync::Arc;
+use crate::repository::client_repository::ClientRepository;
+use crate::repository::project_repository::ProjectRepository;
+use crate::service::validation_service::ValidationService;
 use axum::{
-    extract::{Path, Extension, Json, Query},
+    extract::{Extension, Json, Path, Query},
     http::StatusCode,
     response::IntoResponse,
 };
-use common::models::{Project, ApiResponse, ProjectQuery, PaginatedResult};
-use crate::repository::project_repository::ProjectRepository;
-use crate::repository::client_repository::ClientRepository;
-use crate::service::validation_service::ValidationService;
-use uuid::Uuid;
 use chrono::Utc;
+use common::models::{ApiResponse, PaginatedResult, Project, ProjectQuery};
+use std::sync::Arc;
+use uuid::Uuid;
 
 /// List all projects
 pub async fn list_projects(
@@ -22,17 +22,21 @@ pub async fn list_projects(
             if let Some(ref search) = query.search {
                 let search_lower = search.to_lowercase();
                 projects.retain(|p| {
-                    p.name.to_lowercase().contains(&search_lower) ||
-                    p.code.as_ref().map_or(false, |c| c.to_lowercase().contains(&search_lower)) ||
-                    p.department.as_ref().map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                    p.name.to_lowercase().contains(&search_lower)
+                        || p.code
+                            .as_ref()
+                            .is_some_and(|c| c.to_lowercase().contains(&search_lower))
+                        || p.department
+                            .as_ref()
+                            .is_some_and(|d| d.to_lowercase().contains(&search_lower))
                 });
             }
 
             // Filter by department
-            if let Some(ref department) = query.department {
-                if !department.is_empty() {
-                    projects.retain(|p| p.department.as_ref().map_or(false, |d| d == department));
-                }
+            if let Some(ref department) = query.department
+                && !department.is_empty()
+            {
+                projects.retain(|p| p.department.as_ref() == Some(department));
             }
 
             // Sort by name
@@ -43,10 +47,10 @@ pub async fn list_projects(
             let page = query.page.unwrap_or(1);
             let page_size = query.page_size.unwrap_or(10);
             let total_pages = (total as f64 / page_size as f64).ceil() as usize;
-            
+
             let start = (page - 1) * page_size;
             let end = std::cmp::min(start + page_size, total);
-            
+
             let items = if start < total {
                 projects[start..end].to_vec()
             } else {
@@ -119,29 +123,32 @@ pub async fn create_project(
     Json(mut project): Json<Project>,
 ) -> impl IntoResponse {
     // Validate manager_id
-    if let Some(manager_id) = &project.manager_id {
-        if !manager_id.is_empty() {
-            if let Err(e) = validation_service.validate_person_exists(manager_id).await {
-                let response = ApiResponse::<Project> {
-                    status: e.status_code(),
-                    message: e.to_string(),
-                    data: None,
-                };
-                return (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::BAD_REQUEST), Json(response)).into_response();
-            }
-        }
+    if let Some(manager_id) = &project.manager_id
+        && !manager_id.is_empty()
+        && let Err(e) = validation_service.validate_person_exists(manager_id).await
+    {
+        let response = ApiResponse::<Project> {
+            status: e.status_code(),
+            message: e.to_string(),
+            data: None,
+        };
+        return (
+            StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::BAD_REQUEST),
+            Json(response),
+        )
+            .into_response();
     }
 
     // Ensure ID is set
     if project.id.is_empty() {
         project.id = Uuid::new_v4().to_string();
     }
-    
+
     // Set timestamps
     let now = Utc::now().to_rfc3339();
     project.created_at = now.clone();
     project.updated_at = now;
-    
+
     match project_repo.save(&project).await {
         Ok(_) => {
             let response = ApiResponse {
@@ -170,17 +177,20 @@ pub async fn update_project(
     Json(mut project): Json<Project>,
 ) -> impl IntoResponse {
     // Validate manager_id
-    if let Some(manager_id) = &project.manager_id {
-        if !manager_id.is_empty() {
-            if let Err(e) = validation_service.validate_person_exists(manager_id).await {
-                let response = ApiResponse::<Project> {
-                    status: e.status_code(),
-                    message: e.to_string(),
-                    data: None,
-                };
-                return (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::BAD_REQUEST), Json(response)).into_response();
-            }
-        }
+    if let Some(manager_id) = &project.manager_id
+        && !manager_id.is_empty()
+        && let Err(e) = validation_service.validate_person_exists(manager_id).await
+    {
+        let response = ApiResponse::<Project> {
+            status: e.status_code(),
+            message: e.to_string(),
+            data: None,
+        };
+        return (
+            StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::BAD_REQUEST),
+            Json(response),
+        )
+            .into_response();
     }
 
     // Check if exists
@@ -192,7 +202,7 @@ pub async fn update_project(
                     project.id = id;
                     project.created_at = existing_project.created_at;
                     project.updated_at = Utc::now().to_rfc3339();
-                    
+
                     match project_repo.save(&project).await {
                         Ok(_) => {
                             let response = ApiResponse {
@@ -213,7 +223,7 @@ pub async fn update_project(
                     }
                 }
                 _ => {
-                     let response = ApiResponse::<Project> {
+                    let response = ApiResponse::<Project> {
                         status: 404,
                         message: "Project not found".to_string(),
                         data: None,
@@ -250,21 +260,24 @@ pub async fn delete_project(
     // Check if any clients are using this project
     match client_repo.count_by_project(&id).await {
         Ok(count) if count > 0 => {
-             let response = ApiResponse::<()> {
+            let response = ApiResponse::<()> {
                 status: 400,
-                message: format!("Cannot delete project: {} clients are still assigned to it", count),
+                message: format!(
+                    "Cannot delete project: {} clients are still assigned to it",
+                    count
+                ),
                 data: None,
             };
             return (StatusCode::BAD_REQUEST, Json(response)).into_response();
-        },
+        }
         Err(e) => {
-             let response = ApiResponse::<()> {
+            let response = ApiResponse::<()> {
                 status: 500,
                 message: format!("Failed to check project usage: {}", e),
                 data: None,
             };
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(response)).into_response();
-        },
+        }
         _ => {}
     }
 

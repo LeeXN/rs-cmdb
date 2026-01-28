@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use common::error::{CmdbResult, CmdbError};
-use common::entity::user::User;
-use serde_json;
 use crate::db::Database;
+use common::entity::user::User;
+use common::error::{CmdbError, CmdbResult};
+use serde_json;
+use std::sync::Arc;
 
 /// Repository for user operations
 pub struct UserRepository {
@@ -18,67 +18,68 @@ impl UserRepository {
             key_prefix: "user:".to_string(),
         }
     }
-    
+
     /// Get user key in database
     fn get_key(&self, user_id: &str) -> String {
         format!("{}{}", self.key_prefix, user_id)
     }
-    
+
     /// Save a user to the database
     pub async fn save(&self, user: &User) -> CmdbResult<()> {
         let user_json = serde_json::to_vec(user)
             .map_err(|e| CmdbError::Serialization(format!("Failed to serialize user: {}", e)))?;
-        
+
         self.db.set(&self.get_key(&user.id), &user_json).await
     }
-    
+
     /// Get a user by ID
     pub async fn get(&self, user_id: &str) -> CmdbResult<Option<User>> {
         let user_data = match self.db.get(&self.get_key(user_id)).await? {
             Some(data) => data,
             None => return Ok(None),
         };
-        
+
         let user = serde_json::from_slice(&user_data)
             .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize user: {}", e)))?;
-            
+
         Ok(Some(user))
     }
-    
+
     /// Find a user by username
     pub async fn find_by_username(&self, username: &str) -> CmdbResult<Option<User>> {
         // Since we don't have a secondary index, we iterate through all users
         // This is acceptable for a small number of users
         let users = self.list_all().await?;
-        
+
         for user in users {
             if user.username == username {
                 return Ok(Some(user));
             }
         }
-        
+
         Ok(None)
     }
-    
+
     /// Check if a user exists
     #[allow(dead_code)]
     pub async fn exists(&self, user_id: &str) -> CmdbResult<bool> {
         self.db.exists(&self.get_key(user_id)).await
     }
-    
+
     /// Delete a user
     pub async fn delete(&self, user_id: &str) -> CmdbResult<()> {
         self.db.delete(&self.get_key(user_id)).await
     }
-    
+
     /// List all users
     pub async fn list_all(&self) -> CmdbResult<Vec<User>> {
         let values = self.db.list_values(&self.key_prefix).await?;
         let mut users = Vec::with_capacity(values.len());
 
         for data in values {
-            let user = serde_json::from_slice(&data)
-                .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize user: {}", e)))?;
+            let user = serde_json::from_slice(&data).map_err(|e| {
+                CmdbError::Serialization(format!("Failed to deserialize user: {}", e))
+            })?;
             users.push(user);
         }
 
@@ -96,8 +97,8 @@ impl UserRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::fixtures::setup_test_db;
     use crate::service::auth_service::AuthService;
+    use crate::tests::fixtures::setup_test_db;
     use common::entity::user::Role;
 
     /// Helper function to create a test user
@@ -139,10 +140,16 @@ mod tests {
         repo.save(&user1).await.unwrap();
         let result = repo.save(&user2).await;
 
-        assert!(result.is_ok(), "Save with same ID should replace existing user");
+        assert!(
+            result.is_ok(),
+            "Save with same ID should replace existing user"
+        );
 
         let retrieved = repo.get("user-001").await.unwrap().unwrap();
-        assert_eq!(retrieved.username, "testuser2", "Username should be updated");
+        assert_eq!(
+            retrieved.username, "testuser2",
+            "Username should be updated"
+        );
         assert_eq!(retrieved.role, Role::Admin, "Role should be updated");
     }
 
@@ -191,7 +198,10 @@ mod tests {
         let retrieved_user = retrieved.unwrap();
         assert_eq!(retrieved_user.username, "testuser3");
         assert_eq!(retrieved_user.id, "user-003");
-        assert_ne!(retrieved_user.password_hash, "password123", "Password should be hashed, not plaintext");
+        assert_ne!(
+            retrieved_user.password_hash, "password123",
+            "Password should be hashed, not plaintext"
+        );
     }
 
     #[tokio::test]
@@ -211,7 +221,11 @@ mod tests {
         let repo = UserRepository::new(std::sync::Arc::new(db));
 
         for i in 1..=5 {
-            let user = create_test_user(&format!("user-00{}", i), &format!("testuser{}", i), Role::User);
+            let user = create_test_user(
+                &format!("user-00{}", i),
+                &format!("testuser{}", i),
+                Role::User,
+            );
             repo.save(&user).await.unwrap();
         }
 
@@ -250,9 +264,19 @@ mod tests {
         assert!(result.is_ok(), "Update should succeed");
 
         let retrieved = repo.get("user-004").await.unwrap().unwrap();
-        assert_eq!(retrieved.username, "updated_user", "Username should be updated");
-        assert_eq!(retrieved.role, Role::Admin, "Role should be changed to Admin");
-        assert_eq!(retrieved.is_active, false, "Active status should be changed to false");
+        assert_eq!(
+            retrieved.username, "updated_user",
+            "Username should be updated"
+        );
+        assert_eq!(
+            retrieved.role,
+            Role::Admin,
+            "Role should be changed to Admin"
+        );
+        assert!(
+            !retrieved.is_active,
+            "Active status should be changed to false"
+        );
     }
 
     #[tokio::test]
@@ -264,7 +288,10 @@ mod tests {
 
         let result = repo.update(&user).await;
 
-        assert!(result.is_ok(), "Update of non-existent user should succeed (create-or-update)");
+        assert!(
+            result.is_ok(),
+            "Update of non-existent user should succeed (create-or-update)"
+        );
 
         let retrieved = repo.get("user-005").await.unwrap();
         assert!(retrieved.is_some(), "User should be created");
@@ -318,6 +345,9 @@ mod tests {
         let result = repo.exists("nonexistent").await;
 
         assert!(result.is_ok(), "Exists should not return error");
-        assert!(!result.unwrap(), "Should return false for non-existent user");
+        assert!(
+            !result.unwrap(),
+            "Should return false for non-existent user"
+        );
     }
 }

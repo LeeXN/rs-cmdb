@@ -1,6 +1,6 @@
-use yew::prelude::*;
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use lucide_yew::{CircleAlert, RefreshCw};
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct ErrorProps {
@@ -28,11 +28,11 @@ pub fn error_display(props: &ErrorProps) -> Html {
                     <div class="flex-1">
                         <h5 class="mb-1 font-medium leading-none tracking-tight">{"出错了"}</h5>
                         <div class="text-sm opacity-90 mb-4">{ &props.message }</div>
-                        
+
                         if props.on_retry.is_some() {
-                            <Button 
-                                variant={ButtonVariant::Destructive} 
-                                size={ButtonSize::Sm} 
+                            <Button
+                                variant={ButtonVariant::Destructive}
+                                size={ButtonSize::Sm}
                                 onclick={on_retry}
                                 class="w-full sm:w-auto"
                             >
@@ -45,4 +45,4 @@ pub fn error_display(props: &ErrorProps) -> Html {
             </div>
         </div>
     }
-} 
+}

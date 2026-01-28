@@ -1,20 +1,20 @@
+use crate::components::change_password_modal::ChangePasswordModal;
+use crate::components::ui::input::Input;
+use crate::hooks::use_trans::use_trans;
+use crate::i18n::Language;
+use crate::routes::Route;
+use crate::stores::auth_store::AuthStore;
+use crate::stores::language_store::LanguageStore;
+use crate::stores::theme::ThemeStore;
+use crate::types::Role;
+use lucide_yew::{
+    Bell, ChartBar, Code, Cpu, Download, Folder, HardDrive, Key, Languages, LayoutDashboard, List,
+    LogOut, Menu, Search, Server, Shield, User, Users,
+};
+use web_sys::window;
 use yew::prelude::*;
 use yew_router::prelude::*;
 use yewdux::prelude::*;
-use web_sys::window;
-use crate::routes::Route;
-use crate::stores::theme::ThemeStore;
-use crate::stores::auth_store::AuthStore;
-use crate::stores::language_store::LanguageStore;
-use crate::i18n::Language;
-use crate::hooks::use_trans::use_trans;
-use crate::types::Role;
-use crate::components::ui::input::Input;
-use crate::components::change_password_modal::ChangePasswordModal;
-use lucide_yew::{
-    LayoutDashboard, Server, HardDrive, Cpu, Users, Folder, ChartBar, Download, 
-    LogOut, Menu, Search, Bell, User, List, Shield, Code, Key, Languages
-};
 
 #[derive(Properties, PartialEq)]
 pub struct LayoutProps {
@@ -58,16 +58,19 @@ pub fn layout(props: &LayoutProps) -> Html {
         let auth_store = auth_store.clone();
         let navigator = navigator.clone();
         let current_route = current_route.clone();
-        use_effect_with((auth_store, current_route), move |(auth_store, current_route)| {
-            if !auth_store.is_authenticated {
-                if let Some(route) = current_route.as_ref() {
-                    if *route != Route::Login {
-                        navigator.push(&Route::Login);
+        use_effect_with(
+            (auth_store, current_route),
+            move |(auth_store, current_route)| {
+                if !auth_store.is_authenticated {
+                    if let Some(route) = current_route.as_ref() {
+                        if *route != Route::Login {
+                            navigator.push(&Route::Login);
+                        }
                     }
                 }
-            }
-            || ()
-        });
+                || ()
+            },
+        );
     }
 
     if let Some(Route::Login) = current_route.as_ref() {
@@ -122,7 +125,7 @@ pub fn layout(props: &LayoutProps) -> Html {
         Callback::from(move |_| change_password_modal_open.set(false))
     };
 
-    let search_query = use_state(|| String::new());
+    let search_query = use_state(String::new);
     let on_search_input = {
         let search_query = search_query.clone();
         Callback::from(move |val: String| {
@@ -135,7 +138,8 @@ pub fn layout(props: &LayoutProps) -> Html {
         Callback::from(move |e: KeyboardEvent| {
             if e.key() == "Enter" {
                 let query = (*search_query).clone();
-                let _ = navigator.push_with_query(&Route::Clients, &serde_json::json!({"q": query}));
+                let _ =
+                    navigator.push_with_query(&Route::Clients, &serde_json::json!({"q": query}));
             }
         })
     };
@@ -143,12 +147,12 @@ pub fn layout(props: &LayoutProps) -> Html {
     // Sidebar Items
     let sidebar_item = |route: Route, icon: Html, label: &str| {
         let is_active = current_route.as_ref() == Some(&route);
-        let active_class = if is_active { 
-            "bg-primary/10 text-primary border-r-2 border-primary shadow-[inset_0_0_10px_rgba(6,182,212,0.1)]" 
-        } else { 
-            "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow-[inset_0_0_10px_rgba(6,182,212,0.05)]" 
+        let active_class = if is_active {
+            "bg-primary/10 text-primary border-r-2 border-primary shadow-[inset_0_0_10px_rgba(6,182,212,0.1)]"
+        } else {
+            "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow-[inset_0_0_10px_rgba(6,182,212,0.05)]"
         };
-        
+
         html! {
             <Link<Route> to={route} classes={classes!("flex", "items-center", "gap-3", "px-3", "py-2", "text-sm", "font-medium", "transition-all", "duration-200", active_class)}>
                 {icon}
@@ -175,11 +179,11 @@ pub fn layout(props: &LayoutProps) -> Html {
                         <span>{"CMDB"}<span class="text-xs text-muted-foreground ml-1">{"PRO"}</span></span>
                     </div>
                 </div>
-                
+
                 <div class="flex-1 overflow-y-auto py-4">
                     <nav class="grid gap-1 px-2">
                         { sidebar_item(Route::Home, html!{ <LayoutDashboard class="h-4 w-4" /> }, &t.t("menu.dashboard")) }
-                        
+
                         <div class="mt-4 mb-2 px-4 text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t.t("menu.assets")}</div>
                         { sidebar_item(Route::Clients, html!{ <Server class="h-4 w-4" /> }, &t.t("menu.clients")) }
                         { sidebar_item(Route::Racks, html!{ <HardDrive class="h-4 w-4" /> }, &t.t("menu.racks")) }
@@ -193,7 +197,7 @@ pub fn layout(props: &LayoutProps) -> Html {
                         { sidebar_item(Route::Analytics, html!{ <ChartBar class="h-4 w-4" /> }, &t.t("menu.analytics")) }
                         { sidebar_item(Route::ClientSetup, html!{ <Download class="h-4 w-4" /> }, &t.t("menu.setup_guide")) }
                         { sidebar_item(Route::BaseData, html!{ <List class="h-4 w-4" /> }, &t.t("menu.base_data")) }
-                        
+
                         if let Some(user) = &auth_store.user {
                             if user.role == Role::Admin {
                                 { sidebar_item(Route::Accounts, html!{ <Shield class="h-4 w-4" /> }, &t.t("menu.accounts")) }
@@ -217,7 +221,7 @@ pub fn layout(props: &LayoutProps) -> Html {
                     <button class="lg:hidden text-muted-foreground hover:text-foreground" onclick={toggle_sidebar}>
                         <Menu class="h-6 w-6" />
                     </button>
-                    
+
                     <div class="w-full flex-1">
                         <div class="relative w-full max-w-sm">
                             <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground z-10" />
@@ -240,7 +244,7 @@ pub fn layout(props: &LayoutProps) -> Html {
                             <Bell class="h-5 w-5" />
                             <span class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary animate-pulse"></span>
                         </button>
-                        
+
                         if auth_store.is_authenticated {
                             <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                                 <User class="h-5 w-5" />
@@ -262,9 +266,9 @@ pub fn layout(props: &LayoutProps) -> Html {
                 </main>
             </div>
 
-            <ChangePasswordModal 
-                is_open={*change_password_modal_open} 
-                on_close={close_change_password_modal} 
+            <ChangePasswordModal
+                is_open={*change_password_modal_open}
+                on_close={close_change_password_modal}
             />
         </div>
     }

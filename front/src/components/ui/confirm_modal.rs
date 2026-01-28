@@ -1,7 +1,7 @@
-use yew::prelude::*;
-use crate::components::ui::modal::Modal;
 use crate::components::ui::button::{Button, ButtonVariant};
+use crate::components::ui::modal::Modal;
 use crate::hooks::use_trans::use_trans;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct ConfirmModalProps {
@@ -46,9 +46,9 @@ pub fn confirm_modal(props: &ConfirmModalProps) -> Html {
     };
 
     html! {
-        <Modal 
-            title={props.title.clone()} 
-            is_open={props.is_open} 
+        <Modal
+            title={props.title.clone()}
+            is_open={props.is_open}
             on_close={on_modal_close}
             footer={footer}
         >

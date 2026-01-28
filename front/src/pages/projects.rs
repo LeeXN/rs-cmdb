@@ -1,23 +1,23 @@
-use yew::prelude::*;
-use common::models::{Project, Person};
-use common::entity::dictionary::Dictionary;
-use crate::services::project::{get_projects, create_project, update_project, delete_project};
-use crate::services::api::{fetch_dictionaries, fetch_persons};
-use crate::components::loading::Loading;
 use crate::components::error::ErrorDisplay;
+use crate::components::loading::Loading;
+use crate::components::notification::{Notification, NotificationType};
 use crate::components::permission_guard::PermissionGuard;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::table_action::TableActions;
-use crate::components::ui::card::{Card, CardHeader, CardBody};
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardBody, CardHeader};
+use crate::components::ui::confirm_modal::ConfirmModal;
 use crate::components::ui::input::Input;
 use crate::components::ui::select::{Select, SelectOption};
-use crate::components::ui::confirm_modal::ConfirmModal;
-use crate::components::notification::{Notification, NotificationType};
-use crate::types::Role;
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::components::ui::table_action::TableActions;
 use crate::hooks::use_trans::use_trans;
-use wasm_bindgen_futures::spawn_local;
+use crate::services::api::{fetch_dictionaries, fetch_persons};
+use crate::services::project::{create_project, delete_project, get_projects, update_project};
+use crate::types::Role;
+use common::entity::dictionary::Dictionary;
+use common::models::{Person, Project};
 use lucide_yew::Plus;
+use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct ProjectFormProps {
@@ -29,15 +29,45 @@ pub struct ProjectFormProps {
 #[function_component(ProjectForm)]
 pub fn project_form(props: &ProjectFormProps) -> Html {
     let t = use_trans();
-    let name = use_state(|| props.project.as_ref().map(|p| p.name.clone()).unwrap_or_default());
-    let code = use_state(|| props.project.as_ref().and_then(|p| p.code.clone()).unwrap_or_default());
-    let department = use_state(|| props.project.as_ref().and_then(|p| p.department.clone()).unwrap_or_default());
-    let cost_center = use_state(|| props.project.as_ref().and_then(|p| p.cost_center.clone()).unwrap_or_default());
-    let manager_id = use_state(|| props.project.as_ref().and_then(|p| p.manager_id.clone()).unwrap_or_default());
+    let name = use_state(|| {
+        props
+            .project
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_default()
+    });
+    let code = use_state(|| {
+        props
+            .project
+            .as_ref()
+            .and_then(|p| p.code.clone())
+            .unwrap_or_default()
+    });
+    let department = use_state(|| {
+        props
+            .project
+            .as_ref()
+            .and_then(|p| p.department.clone())
+            .unwrap_or_default()
+    });
+    let cost_center = use_state(|| {
+        props
+            .project
+            .as_ref()
+            .and_then(|p| p.cost_center.clone())
+            .unwrap_or_default()
+    });
+    let manager_id = use_state(|| {
+        props
+            .project
+            .as_ref()
+            .and_then(|p| p.manager_id.clone())
+            .unwrap_or_default()
+    });
 
-    let departments = use_state(|| Vec::<Dictionary>::new());
-    let cost_centers = use_state(|| Vec::<Dictionary>::new());
-    let persons = use_state(|| Vec::<Person>::new());
+    let departments = use_state(Vec::<Dictionary>::new);
+    let cost_centers = use_state(Vec::<Dictionary>::new);
+    let persons = use_state(Vec::<Person>::new);
 
     {
         let departments = departments.clone();
@@ -79,26 +109,60 @@ pub fn project_form(props: &ProjectFormProps) -> Html {
             e.prevent_default();
             let mut project = props_project.clone().unwrap_or_default();
             project.name = (*name).clone();
-            project.code = if (*code).is_empty() { None } else { Some((*code).clone()) };
-            project.department = if (*department).is_empty() { None } else { Some((*department).clone()) };
-            project.cost_center = if (*cost_center).is_empty() { None } else { Some((*cost_center).clone()) };
-            project.manager_id = if (*manager_id).is_empty() { None } else { Some((*manager_id).clone()) };
-            
+            project.code = if (*code).is_empty() {
+                None
+            } else {
+                Some((*code).clone())
+            };
+            project.department = if (*department).is_empty() {
+                None
+            } else {
+                Some((*department).clone())
+            };
+            project.cost_center = if (*cost_center).is_empty() {
+                None
+            } else {
+                Some((*cost_center).clone())
+            };
+            project.manager_id = if (*manager_id).is_empty() {
+                None
+            } else {
+                Some((*manager_id).clone())
+            };
+
             on_save.emit(project);
         })
     };
 
-    let department_options: Vec<SelectOption> = std::iter::once(SelectOption { value: "".to_string(), label: t.t("persons.select_department") })
-        .chain(departments.iter().map(|d| SelectOption { value: d.value.clone(), label: d.value.clone() }))
-        .collect();
+    let department_options: Vec<SelectOption> = std::iter::once(SelectOption {
+        value: "".to_string(),
+        label: t.t("persons.select_department"),
+    })
+    .chain(departments.iter().map(|d| SelectOption {
+        value: d.value.clone(),
+        label: d.value.clone(),
+    }))
+    .collect();
 
-    let cost_center_options: Vec<SelectOption> = std::iter::once(SelectOption { value: "".to_string(), label: t.t("projects.select_cost_center") })
-        .chain(cost_centers.iter().map(|c| SelectOption { value: c.value.clone(), label: c.value.clone() }))
-        .collect();
+    let cost_center_options: Vec<SelectOption> = std::iter::once(SelectOption {
+        value: "".to_string(),
+        label: t.t("projects.select_cost_center"),
+    })
+    .chain(cost_centers.iter().map(|c| SelectOption {
+        value: c.value.clone(),
+        label: c.value.clone(),
+    }))
+    .collect();
 
-    let manager_options: Vec<SelectOption> = std::iter::once(SelectOption { value: "".to_string(), label: t.t("projects.select_manager") })
-        .chain(persons.iter().map(|p| SelectOption { value: p.id.clone(), label: p.name.clone() }))
-        .collect();
+    let manager_options: Vec<SelectOption> = std::iter::once(SelectOption {
+        value: "".to_string(),
+        label: t.t("projects.select_manager"),
+    })
+    .chain(persons.iter().map(|p| SelectOption {
+        value: p.id.clone(),
+        label: p.name.clone(),
+    }))
+    .collect();
 
     html! {
         <Card class="shadow-xl">
@@ -111,7 +175,7 @@ pub fn project_form(props: &ProjectFormProps) -> Html {
                 <form {onsubmit}>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("projects.name")}</label>
-                        <Input 
+                        <Input
                             value={(*name).clone()}
                             oninput={Callback::from(move |val: String| name.set(val))}
                             required=true
@@ -119,14 +183,14 @@ pub fn project_form(props: &ProjectFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("projects.code")}</label>
-                        <Input 
+                        <Input
                             value={(*code).clone()}
                             oninput={Callback::from(move |val: String| code.set(val))}
                         />
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("projects.department")}</label>
-                        <Select 
+                        <Select
                             options={department_options}
                             value={(*department).clone()}
                             onchange={Callback::from(move |val: String| department.set(val))}
@@ -134,7 +198,7 @@ pub fn project_form(props: &ProjectFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("projects.cost_center")}</label>
-                        <Select 
+                        <Select
                             options={cost_center_options}
                             value={(*cost_center).clone()}
                             onchange={Callback::from(move |val: String| cost_center.set(val))}
@@ -142,7 +206,7 @@ pub fn project_form(props: &ProjectFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("projects.manager")}</label>
-                        <Select 
+                        <Select
                             options={manager_options}
                             value={(*manager_id).clone()}
                             onchange={Callback::from(move |val: String| manager_id.set(val))}
@@ -161,7 +225,7 @@ pub fn project_form(props: &ProjectFormProps) -> Html {
 #[function_component(Projects)]
 pub fn projects() -> Html {
     let t = use_trans();
-    let projects = use_state(|| Vec::<Project>::new());
+    let projects = use_state(Vec::<Project>::new);
     let loading = use_state(|| true);
     let error = use_state(|| None::<String>);
     let show_form = use_state(|| false);
@@ -180,13 +244,15 @@ pub fn projects() -> Html {
             let loading = loading.clone();
             let error = error.clone();
             loading.set(true);
-            get_projects(Callback::from(move |result: Result<Vec<Project>, crate::services::project::ApiError>| {
-                loading.set(false);
-                match result {
-                    Ok(data) => projects.set(data),
-                    Err(err) => error.set(Some(err.message)),
-                }
-            }));
+            get_projects(Callback::from(
+                move |result: Result<Vec<Project>, crate::services::project::ApiError>| {
+                    loading.set(false);
+                    match result {
+                        Ok(data) => projects.set(data),
+                        Err(err) => error.set(Some(err.message)),
+                    }
+                },
+            ));
         })
     };
 
@@ -243,7 +309,7 @@ pub fn projects() -> Html {
             let notification = notification.clone();
             let delete_error = delete_error.clone();
             let t = t.clone();
-            
+
             if let Some(id) = (*project_to_delete).clone() {
                 spawn_local(async move {
                     match delete_project(&id).await {
@@ -251,9 +317,12 @@ pub fn projects() -> Html {
                             delete_modal_open.set(false);
                             project_to_delete.set(None);
                             delete_error.set(None);
-                            notification.set(Some((NotificationType::Success, t.t("common.delete_success"))));
+                            notification.set(Some((
+                                NotificationType::Success,
+                                t.t("common.delete_success"),
+                            )));
                             fetch_data.emit(());
-                        },
+                        }
                         Err(e) => {
                             delete_error.set(Some(e.message));
                         }
@@ -294,12 +363,18 @@ pub fn projects() -> Html {
                 match result {
                     Ok(_) => {
                         show_form.set(false);
-                        notification.set(Some((NotificationType::Success, t.t("common.save_success"))));
+                        notification.set(Some((
+                            NotificationType::Success,
+                            t.t("common.save_success"),
+                        )));
                         fetch_data.emit(());
-                    },
+                    }
                     Err(e) => {
-                        notification.set(Some((NotificationType::Error, t.t("common.save_failed").replace("{}", &e.message))));
-                    },
+                        notification.set(Some((
+                            NotificationType::Error,
+                            t.t("common.save_failed").replace("{}", &e.message),
+                        )));
+                    }
                 }
             });
         })
@@ -334,10 +409,10 @@ pub fn projects() -> Html {
                         <CardBody class="px-0 pb-2">
                             if let Some((type_, msg)) = (*notification).clone() {
                                 <div class="px-4">
-                                    <Notification 
-                                        notification_type={type_} 
-                                        message={msg} 
-                                        show={true} 
+                                    <Notification
+                                        notification_type={type_}
+                                        message={msg}
+                                        show={true}
                                         on_close={close_notification.clone()}
                                     />
                                 </div>
@@ -386,7 +461,7 @@ pub fn projects() -> Html {
                                                             </TableCell>
                                                             <TableCell class="align-middle text-center">
                                                                 <PermissionGuard min_role={Role::User}>
-                                                                    <TableActions 
+                                                                    <TableActions
                                                                         on_edit={
                                                                             let on_edit = on_edit.clone();
                                                                             let p_edit = p_edit.clone();
@@ -412,7 +487,7 @@ pub fn projects() -> Html {
                     </Card>
                 </div>
             </div>
-            <ConfirmModal 
+            <ConfirmModal
                 is_open={*delete_modal_open}
                 title={t.t("common.confirm_delete")}
                 message={t.t("projects.confirm_delete_msg")}

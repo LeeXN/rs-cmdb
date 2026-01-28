@@ -51,4 +51,4 @@ pub const COUNT_NICS: &str = "nics";
 pub const COUNT_NONE: &str = "none";
 
 /// 筛选默认值（替换中文"全部"）
-pub const FILTER_ALL: &str = "all"; 
+pub const FILTER_ALL: &str = "all";

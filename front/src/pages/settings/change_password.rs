@@ -1,16 +1,16 @@
-use yew::prelude::*;
-use wasm_bindgen_futures::spawn_local;
-use web_sys::HtmlInputElement;
+use crate::components::ui::button::{Button, ButtonVariant};
 use crate::services::api;
 use crate::types::ChangePasswordRequest;
-use crate::components::ui::button::{Button, ButtonVariant};
 use crate::utils::i18n_helper::translate_api_message;
+use wasm_bindgen_futures::spawn_local;
+use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[function_component(ChangePassword)]
 pub fn change_password() -> Html {
-    let old_password = use_state(|| String::new());
-    let new_password = use_state(|| String::new());
-    let confirm_password = use_state(|| String::new());
+    let old_password = use_state(String::new);
+    let new_password = use_state(String::new);
+    let confirm_password = use_state(String::new);
     let error_message = use_state(|| Option::<String>::None);
     let success_message = use_state(|| Option::<String>::None);
     let loading = use_state(|| false);
@@ -25,16 +25,16 @@ pub fn change_password() -> Html {
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
-            
+
             let old_pwd = (*old_password).clone();
             let new_pwd = (*new_password).clone();
             let confirm_pwd = (*confirm_password).clone();
-            
+
             if new_pwd != confirm_pwd {
                 error_message.set(Some("New passwords do not match".to_string()));
                 return;
             }
-            
+
             if new_pwd.len() < 6 {
                 error_message.set(Some("Password must be at least 6 characters".to_string()));
                 return;
@@ -46,7 +46,7 @@ pub fn change_password() -> Html {
             let old_password = old_password.clone();
             let new_password = new_password.clone();
             let confirm_password = confirm_password.clone();
-            
+
             loading.set(true);
             error_message.set(None);
             success_message.set(None);
@@ -63,7 +63,7 @@ pub fn change_password() -> Html {
                         old_password.set(String::new());
                         new_password.set(String::new());
                         confirm_password.set(String::new());
-                    },
+                    }
                     Err(err) => {
                         error_message.set(Some(translate_api_message(&err.message)));
                     }
@@ -98,7 +98,7 @@ pub fn change_password() -> Html {
                                 <form {onsubmit}>
                                     <div class="input-group input-group-outline mb-3">
                                         <label class="form-label">{"Current Password"}</label>
-                                        <input type="password" class="form-control" 
+                                        <input type="password" class="form-control"
                                             value={(*old_password).clone()}
                                             oninput={Callback::from(move |e: InputEvent| {
                                                 let input: HtmlInputElement = e.target_unchecked_into();
@@ -109,7 +109,7 @@ pub fn change_password() -> Html {
                                     </div>
                                     <div class="input-group input-group-outline mb-3">
                                         <label class="form-label">{"New Password"}</label>
-                                        <input type="password" class="form-control" 
+                                        <input type="password" class="form-control"
                                             value={(*new_password).clone()}
                                             oninput={Callback::from(move |e: InputEvent| {
                                                 let input: HtmlInputElement = e.target_unchecked_into();
@@ -120,7 +120,7 @@ pub fn change_password() -> Html {
                                     </div>
                                     <div class="input-group input-group-outline mb-3">
                                         <label class="form-label">{"Confirm New Password"}</label>
-                                        <input type="password" class="form-control" 
+                                        <input type="password" class="form-control"
                                             value={(*confirm_password).clone()}
                                             oninput={Callback::from(move |e: InputEvent| {
                                                 let input: HtmlInputElement = e.target_unchecked_into();
@@ -130,10 +130,10 @@ pub fn change_password() -> Html {
                                         />
                                     </div>
                                     <div class="text-center">
-                                        <Button 
-                                            variant={ButtonVariant::Default} 
-                                            type_="submit" 
-                                            class={classes!("w-full", "my-4", "mb-2")} 
+                                        <Button
+                                            variant={ButtonVariant::Default}
+                                            type_="submit"
+                                            class={classes!("w-full", "my-4", "mb-2")}
                                             disabled={*loading}
                                         >
                                             if *loading {

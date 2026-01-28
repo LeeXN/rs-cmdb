@@ -1,6 +1,6 @@
-use yew::prelude::*;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use lucide_yew::{Pencil, Trash2};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct TableActionProps {

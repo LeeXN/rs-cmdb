@@ -2,6 +2,6 @@
 //!
 //! This module provides common test fixtures used across integration tests.
 
-pub mod fixtures;
 pub mod error_tests;
+pub mod fixtures;
 // pub mod api_tests; // API integration tests need refactoring

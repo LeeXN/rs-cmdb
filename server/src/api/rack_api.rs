@@ -1,14 +1,14 @@
-use std::sync::Arc;
+use crate::repository::client_repository::ClientRepository;
+use crate::repository::rack_repository::RackRepository;
 use axum::{
-    extract::{Path, Extension, Json, Query},
+    extract::{Extension, Json, Path, Query},
     http::StatusCode,
     response::IntoResponse,
 };
-use common::models::{Rack, ApiResponse, RackQuery, PaginatedResult};
-use crate::repository::rack_repository::RackRepository;
-use crate::repository::client_repository::ClientRepository;
-use uuid::Uuid;
 use chrono::Utc;
+use common::models::{ApiResponse, PaginatedResult, Rack, RackQuery};
+use std::sync::Arc;
+use uuid::Uuid;
 
 /// List all racks
 pub async fn list_racks(
@@ -21,17 +21,21 @@ pub async fn list_racks(
             if let Some(ref search) = query.search {
                 let search_lower = search.to_lowercase();
                 racks.retain(|r| {
-                    r.name.to_lowercase().contains(&search_lower) ||
-                    r.location.as_ref().map_or(false, |l| l.to_lowercase().contains(&search_lower)) ||
-                    r.description.as_ref().map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                    r.name.to_lowercase().contains(&search_lower)
+                        || r.location
+                            .as_ref()
+                            .is_some_and(|l| l.to_lowercase().contains(&search_lower))
+                        || r.description
+                            .as_ref()
+                            .is_some_and(|d| d.to_lowercase().contains(&search_lower))
                 });
             }
 
             // Filter by location
-            if let Some(ref location) = query.location {
-                if !location.is_empty() {
-                    racks.retain(|r| r.location.as_ref().map_or(false, |l| l == location));
-                }
+            if let Some(ref location) = query.location
+                && !location.is_empty()
+            {
+                racks.retain(|r| r.location.as_ref() == Some(location));
             }
 
             // Sort by name
@@ -42,10 +46,10 @@ pub async fn list_racks(
             let page = query.page.unwrap_or(1);
             let page_size = query.page_size.unwrap_or(10);
             let total_pages = (total as f64 / page_size as f64).ceil() as usize;
-            
+
             let start = (page - 1) * page_size;
             let end = std::cmp::min(start + page_size, total);
-            
+
             let items = if start < total {
                 racks[start..end].to_vec()
             } else {
@@ -66,7 +70,7 @@ pub async fn list_racks(
                 data: Some(result),
             };
             (StatusCode::OK, Json(response)).into_response()
-        },
+        }
         Err(e) => {
             let response = ApiResponse::<PaginatedResult<Rack>> {
                 status: 500,
@@ -91,7 +95,7 @@ pub async fn get_rack(
                 data: Some(rack),
             };
             (StatusCode::OK, Json(response)).into_response()
-        },
+        }
         Ok(None) => {
             let response = ApiResponse::<()> {
                 status: 404,
@@ -99,7 +103,7 @@ pub async fn get_rack(
                 data: None,
             };
             (StatusCode::NOT_FOUND, Json(response)).into_response()
-        },
+        }
         Err(e) => {
             let response = ApiResponse::<()> {
                 status: 500,
@@ -120,12 +124,12 @@ pub async fn create_rack(
     if rack.id.is_empty() {
         rack.id = Uuid::new_v4().to_string();
     }
-    
+
     // Set timestamps
     let now = Utc::now().to_rfc3339();
     rack.created_at = now.clone();
     rack.updated_at = now;
-    
+
     match rack_repo.save(&rack).await {
         Ok(_) => {
             let response = ApiResponse {
@@ -134,7 +138,7 @@ pub async fn create_rack(
                 data: Some(rack),
             };
             (StatusCode::CREATED, Json(response)).into_response()
-        },
+        }
         Err(e) => {
             let response = ApiResponse::<()> {
                 status: 500,
@@ -159,10 +163,10 @@ pub async fn update_rack(
             rack.id = id;
             // Update timestamp
             rack.updated_at = Utc::now().to_rfc3339();
-            
+
             // We should preserve created_at if possible, but for now we trust the client or just overwrite
             // Ideally we fetch first, but for simplicity we just save
-            
+
             match rack_repo.save(&rack).await {
                 Ok(_) => {
                     let response = ApiResponse {
@@ -171,7 +175,7 @@ pub async fn update_rack(
                         data: Some(rack),
                     };
                     (StatusCode::OK, Json(response)).into_response()
-                },
+                }
                 Err(e) => {
                     let response = ApiResponse::<()> {
                         status: 500,
@@ -181,7 +185,7 @@ pub async fn update_rack(
                     (StatusCode::INTERNAL_SERVER_ERROR, Json(response)).into_response()
                 }
             }
-        },
+        }
         Ok(false) => {
             let response = ApiResponse::<()> {
                 status: 404,
@@ -189,7 +193,7 @@ pub async fn update_rack(
                 data: None,
             };
             (StatusCode::NOT_FOUND, Json(response)).into_response()
-        },
+        }
         Err(e) => {
             let response = ApiResponse::<()> {
                 status: 500,
@@ -210,21 +214,24 @@ pub async fn delete_rack(
     // Check if any clients are using this rack
     match client_repo.count_by_rack(&id).await {
         Ok(count) if count > 0 => {
-             let response = ApiResponse::<()> {
+            let response = ApiResponse::<()> {
                 status: 400,
-                message: format!("Cannot delete rack: {} clients are still assigned to it", count),
+                message: format!(
+                    "Cannot delete rack: {} clients are still assigned to it",
+                    count
+                ),
                 data: None,
             };
             return (StatusCode::BAD_REQUEST, Json(response)).into_response();
-        },
+        }
         Err(e) => {
-             let response = ApiResponse::<()> {
+            let response = ApiResponse::<()> {
                 status: 500,
                 message: format!("Failed to check rack usage: {}", e),
                 data: None,
             };
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(response)).into_response();
-        },
+        }
         _ => {}
     }
 
@@ -236,7 +243,7 @@ pub async fn delete_rack(
                 data: None,
             };
             (StatusCode::OK, Json(response)).into_response()
-        },
+        }
         Err(e) => {
             let response = ApiResponse::<()> {
                 status: 500,
@@ -257,7 +264,7 @@ pub async fn delete_rack(
 //             data: None,
 //         }
 //     }
-    
+
 //     pub fn new_error(status: u16, message: String) -> Self {
 //         Self {
 //             status,

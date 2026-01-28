@@ -1,14 +1,14 @@
-use std::io;
-use std::fs;
-use sysinfo::System;
-use tracing::{info, warn};
 use crate::collector::linux_cpu::get_cpu_info;
 use crate::collector::linux_disk::collect_disks;
-use crate::collector::linux_nic::{collect_nics, get_dns_servers, get_ip_address};
 use crate::collector::linux_gpu::collect_gpus;
-use crate::collector::linux_ram::collect_ram;
 use crate::collector::linux_ipmi;
-use common::entity::hardware::{OS, CPU, GPU, RAM, Disk, NIC, Hardware, SystemInfo};
+use crate::collector::linux_nic::{collect_nics, get_dns_servers, get_ip_address};
+use crate::collector::linux_ram::collect_ram;
+use common::entity::hardware::{Disk, Hardware, SystemInfo, CPU, GPU, NIC, OS, RAM};
+use std::fs;
+use std::io;
+use sysinfo::System;
+use tracing::{info, warn};
 
 const DMI_PATH: &str = "/sys/class/dmi/id/";
 
@@ -23,7 +23,7 @@ pub fn collect_os_info() -> OS {
         architecture: System::cpu_arch(),
         hostname: System::host_name().unwrap_or_else(|| "Unknown".to_string()),
         dns: dns_servers.join(", "),
-        ip_address: ip_address,
+        ip_address,
     }
 }
 
@@ -38,8 +38,11 @@ pub fn collect_system_info() -> SystemInfo {
 }
 fn read_dmi_file(file: &str) -> String {
     let path = format!("{}/{}", DMI_PATH, file);
-    let content = fs::read_to_string(path).unwrap_or_else(|_| "Unknown".to_string()).trim().to_string();
-    return content
+    let content = fs::read_to_string(path)
+        .unwrap_or_else(|_| "Unknown".to_string())
+        .trim()
+        .to_string();
+    content
 }
 
 fn get_dmi_info() -> (String, String, String, String) {
@@ -47,13 +50,12 @@ fn get_dmi_info() -> (String, String, String, String) {
     let product_name = read_dmi_file("product_name");
     let product_version = read_dmi_file("product_version");
     let serial_number = read_dmi_file("product_serial");
-    return (sys_vendor, product_name, product_version, serial_number);
+    (sys_vendor, product_name, product_version, serial_number)
 }
 
 // 收集CPU信息
 pub fn collect_cpu_info() -> CPU {
-    let cpu= get_cpu_info();
-    return cpu
+    get_cpu_info()
 }
 
 // 收集磁盘信息
@@ -104,10 +106,8 @@ pub fn collect_ram_info() -> RAM {
 /// 收集指定组件的硬件信息
 pub fn collect_hardware_info(components: &[String]) -> common::entity::hardware::Hardware {
     // 将字符串组件列表转换为小写以便匹配
-    let components: Vec<String> = components.iter()
-        .map(|c| c.to_lowercase())
-        .collect();
-    
+    let components: Vec<String> = components.iter().map(|c| c.to_lowercase()).collect();
+
     // 根据请求的组件收集信息
     let cpu = if components.is_empty() || components.contains(&"cpu".to_string()) {
         collect_cpu_info()
@@ -123,13 +123,13 @@ pub fn collect_hardware_info(components: &[String]) -> common::entity::hardware:
             speed: 0,
         }
     };
-    
+
     let gpus = if components.is_empty() || components.contains(&"gpu".to_string()) {
         collect_gpu_info()
     } else {
         Vec::new()
     };
-    
+
     let ram = if components.is_empty() || components.contains(&"ram".to_string()) {
         collect_ram_info()
     } else {
@@ -144,23 +144,20 @@ pub fn collect_hardware_info(components: &[String]) -> common::entity::hardware:
             modules: Vec::new(),
         }
     };
-    
+
     let disks = if components.is_empty() || components.contains(&"disk".to_string()) {
         collect_disk_info()
     } else {
         Vec::new()
     };
-    
+
     // 网卡信息需要处理可能出现的错误
     let nics = if components.is_empty() || components.contains(&"nic".to_string()) {
-        match collect_nic_info() {
-            Ok(nics) => nics,
-            Err(_) => Vec::new(),
-        }
+        collect_nic_info().unwrap_or_default()
     } else {
         Vec::new()
     };
-    
+
     // IPMI信息采集
     let ipmi = if components.is_empty() || components.contains(&"ipmi".to_string()) {
         match linux_ipmi::collect_ipmi_info() {
@@ -172,14 +169,16 @@ pub fn collect_hardware_info(components: &[String]) -> common::entity::hardware:
                     }
                     info!("IPMI用户数量: {}", ipmi.users.len());
                     for user in &ipmi.users {
-                        info!("  用户: {} (ID: {}, 启用: {}, 权限: {})", 
-                            user.username, user.user_id, user.enabled, user.privilege_level);
+                        info!(
+                            "  用户: {} (ID: {}, 启用: {}, 权限: {})",
+                            user.username, user.user_id, user.enabled, user.privilege_level
+                        );
                     }
                 } else {
                     info!("未检测到IPMI设备");
                 }
                 info
-            },
+            }
             Err(e) => {
                 warn!("IPMI信息采集失败: {}", e);
                 None
@@ -202,7 +201,7 @@ pub fn collect_hardware_info(components: &[String]) -> common::entity::hardware:
     } else {
         None
     };
-    
+
     common::entity::hardware::Hardware {
         system,
         os,

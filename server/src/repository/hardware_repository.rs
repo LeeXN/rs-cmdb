@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use common::error::{CmdbResult, CmdbError};
-use common::entity::hardware::Hardware;
-use serde_json;
 use crate::db::Database;
+use common::entity::hardware::Hardware;
+use common::error::{CmdbError, CmdbResult};
+use serde_json;
+use std::sync::Arc;
 
 /// Repository for hardware information operations
 pub struct HardwareRepository {
@@ -18,22 +18,28 @@ impl HardwareRepository {
             key_prefix: "hardware:".to_string(),
         }
     }
-    
+
     /// Get hardware key in database
     fn get_key(&self, client_id: &str) -> String {
         format!("{}{}", self.key_prefix, client_id)
     }
-    
+
     /// Get history key in database
     fn get_history_key(&self, client_id: &str, timestamp: &str) -> String {
         format!("{}{}:history:{}", self.key_prefix, client_id, timestamp)
     }
-    
+
     /// Save hardware information to the database
-    pub async fn save_hardware(&self, client_id: &str, hardware: &Hardware, save_history: bool) -> CmdbResult<()> {
-        let hardware_json = serde_json::to_vec(hardware)
-            .map_err(|e| CmdbError::Serialization(format!("Failed to serialize hardware: {}", e)))?;
-        
+    pub async fn save_hardware(
+        &self,
+        client_id: &str,
+        hardware: &Hardware,
+        save_history: bool,
+    ) -> CmdbResult<()> {
+        let hardware_json = serde_json::to_vec(hardware).map_err(|e| {
+            CmdbError::Serialization(format!("Failed to serialize hardware: {}", e))
+        })?;
+
         // Check if hardware has changed (only if we need to save history)
         let hardware_changed = if save_history {
             match self.get_hardware(client_id).await? {
@@ -49,24 +55,35 @@ impl HardwareRepository {
         } else {
             false
         };
-        
+
         // Save current hardware data
-        self.db.set(&self.get_key(client_id), &hardware_json).await?;
-        
+        self.db
+            .set(&self.get_key(client_id), &hardware_json)
+            .await?;
+
         // Only save to history if hardware has actually changed
         if save_history && hardware_changed {
             let timestamp = chrono::Utc::now().timestamp().to_string();
-            self.db.set(&self.get_history_key(client_id, &timestamp), &hardware_json).await?;
+            self.db
+                .set(&self.get_history_key(client_id, &timestamp), &hardware_json)
+                .await?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Save hardware information to the database with custom timestamp
-    pub async fn save_hardware_with_timestamp(&self, client_id: &str, hardware: &Hardware, save_history: bool, custom_timestamp: Option<&str>) -> CmdbResult<()> {
-        let hardware_json = serde_json::to_vec(hardware)
-            .map_err(|e| CmdbError::Serialization(format!("Failed to serialize hardware: {}", e)))?;
-        
+    pub async fn save_hardware_with_timestamp(
+        &self,
+        client_id: &str,
+        hardware: &Hardware,
+        save_history: bool,
+        custom_timestamp: Option<&str>,
+    ) -> CmdbResult<()> {
+        let hardware_json = serde_json::to_vec(hardware).map_err(|e| {
+            CmdbError::Serialization(format!("Failed to serialize hardware: {}", e))
+        })?;
+
         // Check if hardware has changed (only if we need to save history)
         let hardware_changed = if save_history {
             match self.get_hardware(client_id).await? {
@@ -82,10 +99,12 @@ impl HardwareRepository {
         } else {
             false
         };
-        
+
         // Save current hardware data
-        self.db.set(&self.get_key(client_id), &hardware_json).await?;
-        
+        self.db
+            .set(&self.get_key(client_id), &hardware_json)
+            .await?;
+
         // Only save to history if hardware has actually changed
         if save_history && hardware_changed {
             let timestamp = if let Some(ts) = custom_timestamp {
@@ -99,54 +118,62 @@ impl HardwareRepository {
             } else {
                 chrono::Utc::now().timestamp().to_string()
             };
-            self.db.set(&self.get_history_key(client_id, &timestamp), &hardware_json).await?;
+            self.db
+                .set(&self.get_history_key(client_id, &timestamp), &hardware_json)
+                .await?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Compare two hardware configurations to check if they are equal
     fn hardware_equals(&self, hw1: &Hardware, hw2: &Hardware) -> bool {
         hw1.semantically_eq(hw2)
     }
-    
+
     /// Get hardware information for a client
     pub async fn get_hardware(&self, client_id: &str) -> CmdbResult<Option<Hardware>> {
         let hardware_data = match self.db.get(&self.get_key(client_id)).await? {
             Some(data) => data,
             None => return Ok(None),
         };
-        
-        let hardware = serde_json::from_slice(&hardware_data)
-            .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize hardware: {}", e)))?;
-            
+
+        let hardware = serde_json::from_slice(&hardware_data).map_err(|e| {
+            CmdbError::Serialization(format!("Failed to deserialize hardware: {}", e))
+        })?;
+
         Ok(Some(hardware))
     }
-    
+
     /// Get hardware history for a client
-    pub async fn get_hardware_history(&self, client_id: &str) -> CmdbResult<Vec<(String, Hardware)>> {
+    pub async fn get_hardware_history(
+        &self,
+        client_id: &str,
+    ) -> CmdbResult<Vec<(String, Hardware)>> {
         let history_prefix = format!("{}{}:history:", self.key_prefix, client_id);
         let entries = self.db.list_entries(&history_prefix).await?;
         let mut history = Vec::with_capacity(entries.len());
-        
+
         for (key, data) in entries {
-            let hardware = serde_json::from_slice(&data)
-                .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize hardware history: {}", e)))?;
-            
+            let hardware = serde_json::from_slice(&data).map_err(|e| {
+                CmdbError::Serialization(format!("Failed to deserialize hardware history: {}", e))
+            })?;
+
             // Extract timestamp from key
-            let timestamp = key.strip_prefix(&history_prefix)
+            let timestamp = key
+                .strip_prefix(&history_prefix)
                 .unwrap_or_default()
                 .to_string();
-            
+
             history.push((timestamp, hardware));
         }
-        
+
         // Sort by timestamp, descending
         history.sort_by(|a, b| b.0.cmp(&a.0));
-        
+
         Ok(history)
     }
-    
+
     /// Delete hardware information for a client
     pub async fn delete_hardware(&self, client_id: &str) -> CmdbResult<()> {
         // Delete current hardware data
@@ -226,15 +253,13 @@ mod tests {
                 flags: vec!["fpu".to_string(), "sse".to_string(), "avx".to_string()],
                 speed: 2300,
             },
-            gpus: vec![
-                GPU {
-                    vendor: "NVIDIA".to_string(),
-                    model: "Tesla T4".to_string(),
-                    device_id: "1EB4".to_string(),
-                    serial_number: "GPU-SN-001".to_string(),
-                    driver_version: "535.129.02".to_string(),
-                }
-            ],
+            gpus: vec![GPU {
+                vendor: "NVIDIA".to_string(),
+                model: "Tesla T4".to_string(),
+                device_id: "1EB4".to_string(),
+                serial_number: "GPU-SN-001".to_string(),
+                driver_version: "535.129.02".to_string(),
+            }],
             ram: RAM {
                 vendor: "Samsung".to_string(),
                 model: "DDR4 ECC".to_string(),
@@ -243,62 +268,54 @@ mod tests {
                 total_size: 256,
                 count: 16,
                 form_factor: "DIMM".to_string(),
-                modules: vec![
-                    RAMModule {
-                        slot: "DIMM_A1".to_string(),
-                        vendor: "Samsung".to_string(),
-                        part_number: "M393A1G40Q1-CRC".to_string(),
-                        serial_number: "RAM-SN-001".to_string(),
-                        size: 16,
-                        speed: 2933,
-                        form_factor: "UDIMM".to_string(),
-                        memory_type: "DDR4".to_string(),
-                        locator: "CPU0_DIMM_A1".to_string(),
-                    }
-                ],
-            },
-            disks: vec![
-                Disk {
+                modules: vec![RAMModule {
+                    slot: "DIMM_A1".to_string(),
                     vendor: "Samsung".to_string(),
+                    part_number: "M393A1G40Q1-CRC".to_string(),
+                    serial_number: "RAM-SN-001".to_string(),
+                    size: 16,
+                    speed: 2933,
+                    form_factor: "UDIMM".to_string(),
+                    memory_type: "DDR4".to_string(),
+                    locator: "CPU0_DIMM_A1".to_string(),
+                }],
+            },
+            disks: vec![Disk {
+                vendor: "Samsung".to_string(),
+                size: "480.0".to_string(),
+                size_unit: "GB".to_string(),
+                model: "SSD 970 EVO".to_string(),
+                storage_type: StorageType::SSD,
+                firmware_version: "2B7Q".to_string(),
+                serial_number: "DISK-SN-001".to_string(),
+                parted: true,
+                partitions: vec![Partition {
+                    name: "/dev/sda1".to_string(),
                     size: "480.0".to_string(),
                     size_unit: "GB".to_string(),
-                    model: "SSD 970 EVO".to_string(),
-                    storage_type: StorageType::SSD,
-                    firmware_version: "2B7Q".to_string(),
-                    serial_number: "DISK-SN-001".to_string(),
-                    parted: true,
-                    partitions: vec![
-                        Partition {
-                            name: "/dev/sda1".to_string(),
-                            size: "480.0".to_string(),
-                            size_unit: "GB".to_string(),
-                        }
-                    ],
-                }
-            ],
-            nics: vec![
-                NIC {
-                    name: "eth0".to_string(),
-                    vendor: "Intel Corporation".to_string(),
-                    model: "I350 Gigabit Network Connection".to_string(),
-                    speed: 1000,
-                    mac_address: "00:11:22:33:44:55:66".to_string(),
-                    ipv4_address: "192.168.1.100".to_string(),
-                    ipv4_subnet_mask: "255.255.255.0".to_string(),
-                    ipv4_gateway: "192.168.1.1".to_string(),
-                    ipv6_address: "".to_string(),
-                    ipv6_subnet_mask: "".to_string(),
-                    ipv6_gateway: "".to_string(),
-                    dhcp: false,
-                    bonding_slaves: vec![],
-                    nic_type: NICType::Ethernet,
-                    status: NICStatus::Up,
-                    pci_slot: Some("0000:03:00.0".to_string()),
-                    firmware_version: "1.5.15".to_string(),
-                    ib_node_type: "".to_string(),
-                    driver: "igb".to_string(),
-                }
-            ],
+                }],
+            }],
+            nics: vec![NIC {
+                name: "eth0".to_string(),
+                vendor: "Intel Corporation".to_string(),
+                model: "I350 Gigabit Network Connection".to_string(),
+                speed: 1000,
+                mac_address: "00:11:22:33:44:55:66".to_string(),
+                ipv4_address: "192.168.1.100".to_string(),
+                ipv4_subnet_mask: "255.255.255.0".to_string(),
+                ipv4_gateway: "192.168.1.1".to_string(),
+                ipv6_address: "".to_string(),
+                ipv6_subnet_mask: "".to_string(),
+                ipv6_gateway: "".to_string(),
+                dhcp: false,
+                bonding_slaves: vec![],
+                nic_type: NICType::Ethernet,
+                status: NICStatus::Up,
+                pci_slot: Some("0000:03:00.0".to_string()),
+                firmware_version: "1.5.15".to_string(),
+                ib_node_type: "".to_string(),
+                driver: "igb".to_string(),
+            }],
             ipmi: Some(IpmiInfo {
                 ip_address: Some("10.0.0.10".to_string()),
                 mac_address: Some("b0:31:a6:4f:d6:57".to_string()),
@@ -320,7 +337,9 @@ mod tests {
         let repo = HardwareRepository::new(std::sync::Arc::new(db));
 
         let hardware = create_test_hardware();
-        repo.save_hardware("client-005", &hardware, false).await.unwrap();
+        repo.save_hardware("client-005", &hardware, false)
+            .await
+            .unwrap();
 
         let mut hardware2 = create_test_hardware();
         hardware2.cpu.model_name = "Intel(R) Xeon(R) Gold 6248".to_string();
@@ -341,7 +360,9 @@ mod tests {
         let repo = HardwareRepository::new(std::sync::Arc::new(db));
 
         let hardware = create_test_hardware();
-        repo.save_hardware("client-008", &hardware, true).await.unwrap();
+        repo.save_hardware("client-008", &hardware, true)
+            .await
+            .unwrap();
 
         let delete_result = repo.delete_hardware("client-008").await;
         assert!(delete_result.is_ok(), "Delete should succeed");
@@ -368,7 +389,10 @@ mod tests {
         let hardware1 = create_test_hardware();
         let hardware2 = create_test_hardware();
 
-        assert!(hardware1.semantically_eq(&hardware2), "Same hardware should be semantically equal");
+        assert!(
+            hardware1.semantically_eq(&hardware2),
+            "Same hardware should be semantically equal"
+        );
     }
 
     #[tokio::test]
@@ -379,7 +403,10 @@ mod tests {
         hardware1.cpu.model_name = "Intel i7".to_string();
         hardware2.cpu.model_name = "AMD Ryzen".to_string();
 
-        assert!(!hardware1.semantically_eq(&hardware2), "Different CPU models should not be equal");
+        assert!(
+            !hardware1.semantically_eq(&hardware2),
+            "Different CPU models should not be equal"
+        );
     }
 
     #[tokio::test]
@@ -390,7 +417,10 @@ mod tests {
         hardware1.cpu.speed = 2400;
         hardware2.cpu.speed = 2500;
 
-        assert!(hardware1.semantically_eq(&hardware2), "Different CPU speeds should be semantically equal (ignored)");
+        assert!(
+            hardware1.semantically_eq(&hardware2),
+            "Different CPU speeds should be semantically equal (ignored)"
+        );
     }
 
     #[tokio::test]
@@ -413,7 +443,9 @@ mod tests {
         let repo = HardwareRepository::new(std::sync::Arc::new(db));
 
         let hardware = create_test_hardware();
-        repo.save_hardware("client-003", &hardware, false).await.unwrap();
+        repo.save_hardware("client-003", &hardware, false)
+            .await
+            .unwrap();
 
         let result = repo.get_hardware("client-003").await;
 
@@ -447,8 +479,14 @@ mod tests {
 
         let retrieved = repo.get_hardware("client-004").await.unwrap().unwrap();
 
-        assert_eq!(retrieved.cpu.cores, 16, "CPU cores should serialize correctly");
-        assert_eq!(retrieved.ram.total_size, 256, "RAM total should serialize correctly");
+        assert_eq!(
+            retrieved.cpu.cores, 16,
+            "CPU cores should serialize correctly"
+        );
+        assert_eq!(
+            retrieved.ram.total_size, 256,
+            "RAM total should serialize correctly"
+        );
         assert_eq!(retrieved.disks.len(), 1, "Disks should serialize correctly");
         assert_eq!(retrieved.nics.len(), 1, "NICs should serialize correctly");
         assert_eq!(retrieved.gpus.len(), 1, "GPUs should serialize correctly");
@@ -461,7 +499,9 @@ mod tests {
         let repo = HardwareRepository::new(std::sync::Arc::new(db));
 
         let mut hardware = create_test_hardware();
-        repo.save_hardware("client-005", &hardware, false).await.unwrap();
+        repo.save_hardware("client-005", &hardware, false)
+            .await
+            .unwrap();
 
         hardware.cpu.model_name = "Intel(R) Xeon(R) Gold 6248".to_string();
         hardware.cpu.cores = 24;
@@ -472,6 +512,6 @@ mod tests {
 
         let retrieved = repo.get_hardware("client-005").await.unwrap().unwrap();
         assert_eq!(retrieved.cpu.model_name, "Intel(R) Xeon(R) Gold 6248");
-         assert_eq!(retrieved.cpu.cores, 24);
+        assert_eq!(retrieved.cpu.cores, 24);
     }
 }

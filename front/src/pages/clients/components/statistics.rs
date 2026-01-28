@@ -1,9 +1,9 @@
-use yew::prelude::*;
-use crate::types::Client;
-use crate::pages::clients::utils::{calculate_os_counts, calculate_vendor_counts};
 use crate::components::ui::card::{Card, CardContent};
 use crate::hooks::use_trans::use_trans;
-use lucide_yew::{Monitor, Search, Cpu, Building2};
+use crate::pages::clients::utils::{calculate_os_counts, calculate_vendor_counts};
+use crate::types::Client;
+use lucide_yew::{Building2, Cpu, Monitor, Search};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct StatisticsProps {
@@ -63,4 +63,4 @@ pub fn statistics(props: &StatisticsProps) -> Html {
             </Card>
         </div>
     }
-} 
+}

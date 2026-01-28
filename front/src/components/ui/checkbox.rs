@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct CheckboxProps {
@@ -26,14 +26,14 @@ pub fn checkbox(props: &CheckboxProps) -> Html {
     };
 
     let classes = classes!(
-        "h-4", 
-        "w-4", 
-        "rounded", 
-        "border-cyan-500/50", 
-        "text-cyan-600", 
-        "shadow-[0_0_5px_rgba(6,182,212,0.3)]", 
-        "focus:ring-cyan-500/30", 
-        "bg-slate-950", 
+        "h-4",
+        "w-4",
+        "rounded",
+        "border-cyan-500/50",
+        "text-cyan-600",
+        "shadow-[0_0_5px_rgba(6,182,212,0.3)]",
+        "focus:ring-cyan-500/30",
+        "bg-slate-950",
         "accent-cyan-600",
         "transition-all",
         "duration-200",
@@ -44,8 +44,8 @@ pub fn checkbox(props: &CheckboxProps) -> Html {
     );
 
     html! {
-        <input 
-            type="checkbox" 
+        <input
+            type="checkbox"
             class={classes}
             checked={props.checked}
             onchange={onchange}

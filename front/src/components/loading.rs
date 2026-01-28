@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use lucide_yew::LoaderCircle;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct LoadingProps {
@@ -17,4 +17,4 @@ pub fn loading(props: &LoadingProps) -> Html {
             <p class="text-sm text-muted-foreground">{ &props.message }</p>
         </div>
     }
-} 
+}

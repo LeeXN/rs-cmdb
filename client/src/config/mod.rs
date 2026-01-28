@@ -1,9 +1,9 @@
-use std::path::PathBuf;
-use std::env;
-use std::fs;
 use config::{Config, ConfigError, File};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::env;
+use std::fs;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 /// 客户端配置
@@ -36,7 +36,7 @@ pub struct ReportConfig {
     /// 是否启用服务模式
     pub service_mode: bool,
     /// 是否启用推送模式（向服务器主动推送数据）
-    pub push_enabled: bool, 
+    pub push_enabled: bool,
     /// 推送间隔（秒）
     pub push_interval: u64,
     /// 是否启用拉取模式（接收服务器请求）
@@ -75,27 +75,28 @@ pub fn get_config() -> &'static ClientConfig {
 fn load_config() -> Result<ClientConfig, ConfigError> {
     // 设置默认配置源
     let mut builder = Config::builder();
-    
+
     // 使用默认配置
     let default_config = default_config();
     builder = builder.add_source(config::Config::try_from(&default_config).unwrap());
-    
+
     // 添加配置文件
-    builder = builder.add_source(File::from(PathBuf::from("config/client.toml")).required(false))
+    builder = builder
+        .add_source(File::from(PathBuf::from("config/client.toml")).required(false))
         .add_source(File::from(PathBuf::from("/etc/rs-cmdb/client.toml")).required(false));
-    
+
     // 添加用户主目录的配置
     if let Ok(home) = env::var("HOME") {
         let home_config = PathBuf::from(home).join(".config/rs-cmdb/client.toml");
         builder = builder.add_source(File::from(home_config).required(false));
     }
-    
+
     // 添加环境变量，前缀为 "CMDB_CLIENT_"
     builder = builder.add_source(config::Environment::with_prefix("CMDB_CLIENT").separator("_"));
-    
+
     // 构建配置
     let config: ClientConfig = builder.build()?.try_deserialize()?;
-    
+
     Ok(config)
 }
 
@@ -105,13 +106,13 @@ pub fn load_from_file(path: &str) -> Result<ClientConfig, Box<dyn std::error::Er
     if !PathBuf::from(path).exists() {
         return Err(format!("Config file not found: {}", path).into());
     }
-    
+
     // 读取文件内容
     let content = fs::read_to_string(path)?;
-    
+
     // 解析 TOML
     let config: ClientConfig = toml::from_str(&content)?;
-    
+
     Ok(config)
 }
 
@@ -162,18 +163,21 @@ pub fn default_config_exists() -> bool {
 }
 
 /// 保存配置到文件
-pub fn save_config_to_file(config: &ClientConfig, path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+pub fn save_config_to_file(
+    config: &ClientConfig,
+    path: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     // 确保目录存在
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    
+
     // 将配置序列化为TOML
     let toml_str = toml::to_string_pretty(config)?;
-    
+
     // 写入文件
     fs::write(path, toml_str)?;
-    
+
     Ok(())
 }
 
@@ -185,53 +189,54 @@ pub fn save_to_file(path: String, config: &ClientConfig) -> Result<(), Box<dyn s
 /// 确保客户端有一个持久化的ID
 pub fn ensure_client_id() -> String {
     let default_path = get_default_config_path();
-    
+
     // 如果默认配置文件不存在，创建一个包含客户端ID的配置
     if !default_path.exists() {
         let mut config = default_config();
         let new_id = Uuid::new_v4().to_string();
         config.client_id = Some(new_id.clone());
-        
+
         // 尝试保存配置
         if let Err(e) = save_config_to_file(&config, &default_path) {
-            eprintln!("Warning: Failed to save default config with client ID: {}", e);
+            eprintln!(
+                "Warning: Failed to save default config with client ID: {}",
+                e
+            );
             return new_id;
         }
-        
-        return new_id;
+
+        new_id
     } else {
         // 从默认配置文件加载
         match fs::read_to_string(&default_path) {
-            Ok(content) => {
-                match toml::from_str::<ClientConfig>(&content) {
-                    Ok(config) => {
-                        if let Some(id) = config.client_id {
-                            return id;
-                        }
-                    },
-                    Err(e) => {
-                        eprintln!("Warning: Failed to parse default config: {}", e);
+            Ok(content) => match toml::from_str::<ClientConfig>(&content) {
+                Ok(config) => {
+                    if let Some(id) = config.client_id {
+                        return id;
                     }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to parse default config: {}", e);
                 }
             },
             Err(e) => {
                 eprintln!("Warning: Failed to read default config: {}", e);
             }
         }
-        
+
         // 如果配置存在但无法获取ID，生成一个新ID并更新配置
         let new_id = Uuid::new_v4().to_string();
-        
+
         // 尝试加载现有配置
         if let Ok(mut config) = load_from_file(default_path.to_str().unwrap()) {
             config.client_id = Some(new_id.clone());
-            
+
             // 保存更新后的配置
             if let Err(e) = save_config_to_file(&config, &default_path) {
                 eprintln!("Warning: Failed to update config with client ID: {}", e);
             }
         }
-        
-        return new_id;
+
+        new_id
     }
-} 
+}

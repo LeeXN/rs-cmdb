@@ -1,13 +1,13 @@
 use gloo_net::http::Request;
+use gloo_storage::{LocalStorage, Storage};
 use log::info;
 use wasm_bindgen_futures::spawn_local;
-use yew::Callback;
-use gloo_storage::{LocalStorage, Storage};
 use web_sys::window;
+use yew::Callback;
 
-use common::models::{Project, PaginatedResult};
-use crate::types::ApiResponse;
 use crate::stores::auth_store::AuthStore;
+use crate::types::ApiResponse;
+use common::models::{PaginatedResult, Project};
 use urlencoding;
 
 const API_BASE_URL: &str = "/api/v1/projects";
@@ -36,7 +36,10 @@ async fn request_get(url: &str) -> Result<gloo_net::http::Response, gloo_net::Er
     Ok(response)
 }
 
-async fn request_post<T: serde::Serialize>(url: &str, body: &T) -> Result<gloo_net::http::Response, gloo_net::Error> {
+async fn request_post<T: serde::Serialize>(
+    url: &str,
+    body: &T,
+) -> Result<gloo_net::http::Response, gloo_net::Error> {
     let mut req = Request::post(url);
     if let Some(auth) = get_auth_header() {
         req = req.header("Authorization", &auth);
@@ -46,7 +49,10 @@ async fn request_post<T: serde::Serialize>(url: &str, body: &T) -> Result<gloo_n
     Ok(response)
 }
 
-async fn request_put<T: serde::Serialize>(url: &str, body: &T) -> Result<gloo_net::http::Response, gloo_net::Error> {
+async fn request_put<T: serde::Serialize>(
+    url: &str,
+    body: &T,
+) -> Result<gloo_net::http::Response, gloo_net::Error> {
     let mut req = Request::put(url);
     if let Some(auth) = get_auth_header() {
         req = req.header("Authorization", &auth);
@@ -69,8 +75,8 @@ async fn request_delete(url: &str) -> Result<gloo_net::http::Response, gloo_net:
 fn check_auth_error(response: &gloo_net::http::Response) {
     if response.status() == 401 {
         info!("Received 401 Unauthorized, redirecting to login...");
-        let _ = LocalStorage::delete("auth_store");
-        let _ = LocalStorage::delete("AuthStore");
+        LocalStorage::delete("auth_store");
+        LocalStorage::delete("AuthStore");
         if let Some(win) = window() {
             let _ = win.location().set_href("/login");
         }
@@ -82,15 +88,20 @@ pub struct ApiError {
     pub message: String,
 }
 
-pub async fn fetch_projects(page: usize, page_size: usize, search: Option<String>, department: Option<String>) -> Result<PaginatedResult<Project>, ApiError> {
+pub async fn fetch_projects(
+    page: usize,
+    page_size: usize,
+    search: Option<String>,
+    department: Option<String>,
+) -> Result<PaginatedResult<Project>, ApiError> {
     let mut url = format!("{}?page={}&page_size={}", API_BASE_URL, page, page_size);
-    
+
     if let Some(s) = search {
         if !s.is_empty() {
             url.push_str(&format!("&search={}", urlencoding::encode(&s)));
         }
     }
-    
+
     if let Some(d) = department {
         if !d.is_empty() {
             url.push_str(&format!("&department={}", urlencoding::encode(&d)));
@@ -100,21 +111,32 @@ pub async fn fetch_projects(page: usize, page_size: usize, search: Option<String
     match request_get(&url).await {
         Ok(response) => {
             if response.status() == 200 {
-                match response.json::<ApiResponse<PaginatedResult<Project>>>().await {
+                match response
+                    .json::<ApiResponse<PaginatedResult<Project>>>()
+                    .await
+                {
                     Ok(data) => {
                         if let Some(result) = data.data {
                             Ok(result)
                         } else {
-                            Err(ApiError { message: "No data returned".to_string() })
+                            Err(ApiError {
+                                message: "No data returned".to_string(),
+                            })
                         }
-                    },
-                    Err(err) => Err(ApiError { message: format!("Failed to parse projects: {}", err) }),
+                    }
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse projects: {}", err),
+                    }),
                 }
             } else {
-                Err(ApiError { message: format!("Failed to fetch projects: HTTP {}", response.status()) })
+                Err(ApiError {
+                    message: format!("Failed to fetch projects: HTTP {}", response.status()),
+                })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -123,8 +145,12 @@ pub async fn create_project(project: &Project) -> Result<Project, ApiError> {
         Ok(response) => {
             if response.status() == 201 {
                 match response.json::<ApiResponse<Project>>().await {
-                    Ok(data) => Ok(data.data.ok_or(ApiError { message: "No data returned".to_string() })?),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse created project: {}", err) }),
+                    Ok(data) => Ok(data.data.ok_or(ApiError {
+                        message: "No data returned".to_string(),
+                    })?),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse created project: {}", err),
+                    }),
                 }
             } else {
                 // Try to parse error message
@@ -134,8 +160,10 @@ pub async fn create_project(project: &Project) -> Result<Project, ApiError> {
                 };
                 Err(ApiError { message: error_msg })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -145,8 +173,12 @@ pub async fn update_project(id: &str, project: &Project) -> Result<Project, ApiE
         Ok(response) => {
             if response.status() == 200 {
                 match response.json::<ApiResponse<Project>>().await {
-                    Ok(data) => Ok(data.data.ok_or(ApiError { message: "No data returned".to_string() })?),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse updated project: {}", err) }),
+                    Ok(data) => Ok(data.data.ok_or(ApiError {
+                        message: "No data returned".to_string(),
+                    })?),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse updated project: {}", err),
+                    }),
                 }
             } else {
                 // Try to parse error message
@@ -156,8 +188,10 @@ pub async fn update_project(id: &str, project: &Project) -> Result<Project, ApiE
                 };
                 Err(ApiError { message: error_msg })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -171,12 +205,17 @@ pub async fn delete_project(id: &str) -> Result<(), ApiError> {
                 // Try to parse error message from ApiResponse
                 let error_msg = match response.json::<ApiResponse<()>>().await {
                     Ok(data) => data.message,
-                    Err(_) => response.text().await.unwrap_or_else(|_| format!("HTTP {}", response.status())),
+                    Err(_) => response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| format!("HTTP {}", response.status())),
                 };
                 Err(ApiError { message: error_msg })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 

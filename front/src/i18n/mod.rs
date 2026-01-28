@@ -1,20 +1,15 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-pub mod zh_cn;
 pub mod en_us;
+pub mod zh_cn;
 
 /// 支持的语言
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum Language {
+    #[default]
     ZhCn,
     EnUs,
-}
-
-impl Default for Language {
-    fn default() -> Self {
-        Language::ZhCn
-    }
 }
 
 impl Language {
@@ -25,7 +20,7 @@ impl Language {
             Language::EnUs => "en-US",
         }
     }
-    
+
     #[allow(dead_code)]
     pub fn from_code(code: &str) -> Self {
         match code {
@@ -50,21 +45,19 @@ impl I18n {
             Language::ZhCn => zh_cn::get_translations(),
             Language::EnUs => en_us::get_translations(),
         };
-        
+
         Self {
             current_language: language,
             translations,
         }
     }
-    
+
     #[allow(dead_code)]
     pub fn t(&self, key: &str) -> String {
-        self.translations.get(key)
-            .cloned()
-            .unwrap_or_else(|| {
-                web_sys::console::warn_1(&format!("Missing translation for key: {}", key).into());
-                key.to_string()
-            })
+        self.translations.get(key).cloned().unwrap_or_else(|| {
+            web_sys::console::warn_1(&format!("Missing translation for key: {}", key).into());
+            key.to_string()
+        })
     }
 
     #[allow(dead_code)]
@@ -75,12 +68,12 @@ impl I18n {
         }
         text
     }
-    
+
     #[allow(dead_code)]
     pub fn current_language(&self) -> &Language {
         &self.current_language
     }
-    
+
     #[allow(dead_code)]
     pub fn set_language(&mut self, language: Language) {
         if self.current_language != language {
@@ -97,4 +90,4 @@ impl Default for I18n {
     fn default() -> Self {
         Self::new(Language::default())
     }
-} 
+}

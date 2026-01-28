@@ -59,7 +59,8 @@ docker run -itd \
 ```
 
 启动后，访问 UI: `http://localhost:8080`。
-*   **默认管理员**: `admin` / `admin`
+
+**⚠️ 重要提示:** 服务器首次启动需要设置安全的环境变量。请参阅下方的[配置](#-配置)部分。
 
 ## 🏗 架构
 
@@ -241,6 +242,63 @@ User ID  Username         Enabled  Privilege
 
 服务器通过 TOML 文件进行配置。默认情况下，它会读取 `config/default.toml`。您也可以使用环境变量（前缀为 `CMDB_`）覆盖设置。
 
+### 🔐 安全配置（必需）
+
+出于安全考虑，服务器在首次启动前需要设置两个环境变量：
+
+#### 1. JWT 密钥 (`CMDB_JWT_SECRET`)
+
+JWT 密钥用于签名认证令牌。**如果未设置或使用默认值，服务器将无法启动**。
+
+**生成安全的 JWT 密钥（32 字符以上）：**
+
+```bash
+# 使用 OpenSSL（推荐）
+export CMDB_JWT_SECRET=$(openssl rand -base64 32)
+
+# 或使用 /dev/urandom
+export CMDB_JWT_SECRET=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+
+# 或生成更长的密钥以提高安全性
+export CMDB_JWT_SECRET=$(openssl rand -hex 64)
+```
+
+#### 2. 管理员密码 (`CMDB_ADMIN_PASSWORD`)
+
+首次启动时，服务器会检查是否存在管理员用户。如果不存在，将使用此密码创建管理员。密码必须满足复杂度要求：
+- 至少 12 个字符
+- 至少一个大写字母 (A-Z)
+- 至少一个小写字母 (a-z)
+- 至少一个数字 (0-9)
+- 至少一个特殊字符
+
+**设置安全的管理员密码：**
+
+```bash
+# 示例（请更改为您自己的安全密码）
+export CMDB_ADMIN_PASSWORD="YourSecureP@ssword123"
+
+# 或生成随机安全密码
+export CMDB_ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d '=' | tr '+/' '@#')
+```
+
+**Docker 使用环境变量示例：**
+
+```bash
+docker run -itd \
+  --name rs-cmdb \
+  -p 8080:8080 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/binaires:/app/binaires \
+  -e CMDB_JWT_SECRET="$(openssl rand -base64 32)" \
+  -e CMDB_ADMIN_PASSWORD="YourSecureP@ssword123" \
+  leex2019/rs-cmdb:${RSCMDB_VERSION}
+```
+
+**不使用环境变量：**
+
+如果未设置 `CMDB_ADMIN_PASSWORD`，服务器会在首次启动时交互式提示您输入管理员密码（不推荐用于自动化部署）。
+
 ### 配置文件 (`config/default.toml`)
 
 ```toml
@@ -248,9 +306,16 @@ User ID  Username         Enabled  Privilege
 host = "0.0.0.0"           # 绑定地址
 port = 8080                # 服务器端口
 log_level = "info"         # 日志级别: debug, info, warn, error
-jwt_secret = "change_me"   # JWT 令牌密钥
 
-# 安全 (可选)
+# 安全
+# jwt_secret 应通过 CMDB_JWT_SECRET 环境变量设置
+# 请勿在生产环境中使用默认值！
+jwt_secret = "change_me_in_production"
+
+# SSH 配置（用于远程服务管理）
+ssh_known_hosts_file = "/etc/cmdb/ssh_known_hosts"  # SSH known_hosts 文件路径
+
+# TLS（可选）
 enable_tls = false
 # tls_cert = "path/to/cert.pem"
 # tls_key = "path/to/key.pem"
@@ -273,10 +338,46 @@ capacity = 1000            # 内部消息队列容量
 
 每个设置都可以通过环境变量覆盖。嵌套键使用双下划线 `__` 分隔。
 
-*   `CMDB_HOST`
-*   `CMDB_PORT`
-*   `CMDB_DATABASE__PATH`
-*   `CMDB_JWT_SECRET`
+**安全变量：**
+- `CMDB_JWT_SECRET` - **必需**，最少 32 个字符（使用 `openssl rand -base64 32` 生成）
+- `CMDB_ADMIN_PASSWORD` - **首次启动时必需**，必须满足复杂度要求
+
+**可选变量：**
+- `CMDB_HOST` - 服务器绑定地址（默认：`0.0.0.0`）
+- `CMDB_PORT` - 服务器端口（默认：`8080`）
+- `CMDB_LOG_LEVEL` - 日志级别：debug, info, warn, error（默认：`info`）
+- `CMDB_DATABASE__PATH` - 数据库文件路径（默认：`data/cmdb.redb`）
+- `CMDB_SSH_KNOWN_HOSTS_FILE` - SSH known_hosts 文件路径（默认：`/etc/cmdb/ssh_known_hosts`）
+
+### SSH Known Hosts 设置
+
+如需通过 SSH 进行远程服务管理，您需要设置 SSH known_hosts 文件：
+
+```bash
+# 创建目录
+sudo mkdir -p /etc/cmdb
+
+# 将客户端主机添加到 known_hosts（在服务器上运行）
+ssh-keyscan -H 192.168.1.100 >> /etc/cmdb/ssh_known_hosts
+
+# 设置正确的权限
+sudo chmod 644 /etc/cmdb/ssh_known_hosts
+```
+
+### 密码复杂度要求
+
+创建用户或更改密码时，需要满足以下要求：
+
+- **最小长度：** 12 个字符
+- **大写字母：** 至少一个 (A-Z)
+- **小写字母：** 至少一个 (a-z)
+- **数字：** 至少一个 (0-9)
+- **特殊字符：** 至少一个 (!@#$%^&* 等)
+
+**有效密码示例：**
+- `SecureP@ssword123`
+- `MyStr0ng!Pass`
+- `C0mplex#SecuriTy`
 
 ## 📦 部署
 
@@ -309,14 +410,22 @@ capacity = 1000            # 内部消息队列容量
 
 ```bash
 cd /opt/rs-cmdb
+
+# 设置必需的环境变量
+export CMDB_JWT_SECRET=$(openssl rand -base64 32)
+export CMDB_ADMIN_PASSWORD="YourSecureP@ssword123"
+
+# 运行服务器
 ./rs-cmdb-server
 ```
 
 访问 UI: `http://localhost:8080`。
 
-**默认凭据:**
+**首次登录:**
+
+使用管理员用户名和您通过 `CMDB_ADMIN_PASSWORD` 设置的密码：
 - 用户名: `admin`
-- 密码: `admin`
+- 密码: *(您选择的密码)*
 
 ## 📄 许可证
 

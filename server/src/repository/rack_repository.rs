@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use common::error::{CmdbResult, CmdbError};
+use crate::db::Database;
+use common::error::{CmdbError, CmdbResult};
 use common::models::Rack;
 use serde_json;
-use crate::db::Database;
+use std::sync::Arc;
 
 /// Repository for rack operations
 pub struct RackRepository {
@@ -18,54 +18,55 @@ impl RackRepository {
             key_prefix: "rack:".to_string(),
         }
     }
-    
+
     /// Get rack key in database
     fn get_key(&self, rack_id: &str) -> String {
         format!("{}{}", self.key_prefix, rack_id)
     }
-    
+
     /// Save a rack to the database
     pub async fn save(&self, rack: &Rack) -> CmdbResult<()> {
         let rack_json = serde_json::to_vec(rack)
             .map_err(|e| CmdbError::Serialization(format!("Failed to serialize rack: {}", e)))?;
-        
+
         self.db.set(&self.get_key(&rack.id), &rack_json).await
     }
-    
+
     /// Get a rack by ID
     pub async fn get(&self, rack_id: &str) -> CmdbResult<Option<Rack>> {
         let rack_data = match self.db.get(&self.get_key(rack_id)).await? {
             Some(data) => data,
             None => return Ok(None),
         };
-        
+
         let rack = serde_json::from_slice(&rack_data)
             .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize rack: {}", e)))?;
-            
+
         Ok(Some(rack))
     }
-    
+
     /// Check if a rack exists
     pub async fn exists(&self, rack_id: &str) -> CmdbResult<bool> {
         self.db.exists(&self.get_key(rack_id)).await
     }
-    
+
     /// Delete a rack
     pub async fn delete(&self, rack_id: &str) -> CmdbResult<()> {
         self.db.delete(&self.get_key(rack_id)).await
     }
-    
+
     /// List all racks
     pub async fn list_all(&self) -> CmdbResult<Vec<Rack>> {
         let values = self.db.list_values(&self.key_prefix).await?;
         let mut racks = Vec::with_capacity(values.len());
-        
+
         for data in values {
-            let rack = serde_json::from_slice(&data)
-                .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize rack: {}", e)))?;
+            let rack = serde_json::from_slice(&data).map_err(|e| {
+                CmdbError::Serialization(format!("Failed to deserialize rack: {}", e))
+            })?;
             racks.push(rack);
         }
-        
+
         Ok(racks)
     }
 }
@@ -74,7 +75,7 @@ impl RackRepository {
 mod tests {
     use super::*;
     use crate::tests::fixtures::setup_test_db;
-    use common::models::{Rack, RackQuery};
+    use common::models::Rack;
 
     fn create_test_rack(id: &str, name: &str) -> Rack {
         Rack {
@@ -124,7 +125,10 @@ mod tests {
         let result = repo.get("nonexistent").await;
 
         assert!(result.is_ok(), "Get should not return error");
-        assert!(result.unwrap().is_none(), "Should return None for non-existent rack");
+        assert!(
+            result.unwrap().is_none(),
+            "Should return None for non-existent rack"
+        );
     }
 
     #[tokio::test]
@@ -149,7 +153,10 @@ mod tests {
         let result = repo.exists("nonexistent").await;
 
         assert!(result.is_ok(), "Exists should not return error");
-        assert!(!result.unwrap(), "Should return false for non-existent rack");
+        assert!(
+            !result.unwrap(),
+            "Should return false for non-existent rack"
+        );
     }
 
     #[tokio::test]
@@ -205,7 +212,10 @@ mod tests {
         let result = repo.list_all().await;
 
         assert!(result.is_ok(), "List all should not return error");
-        assert!(result.unwrap().is_empty(), "Should return empty vec for empty db");
+        assert!(
+            result.unwrap().is_empty(),
+            "Should return empty vec for empty db"
+        );
     }
 
     #[tokio::test]
@@ -224,6 +234,10 @@ mod tests {
         assert!(result.is_ok(), "Get should not return error");
         let retrieved = result.unwrap();
         assert!(retrieved.is_some(), "Should return the rack");
-        assert_eq!(retrieved.unwrap().height_u, 48, "Should have updated height");
+        assert_eq!(
+            retrieved.unwrap().height_u,
+            48,
+            "Should have updated height"
+        );
     }
 }

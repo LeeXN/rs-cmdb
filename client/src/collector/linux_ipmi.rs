@@ -1,9 +1,9 @@
-use std::path::Path;
+use common::entity::hardware::{IpmiInfo, IpmiStatus, IpmiUser};
 use std::fs::OpenOptions;
 use std::io::Read;
+use std::path::Path;
 use std::process::Command;
 use std::str;
-use common::entity::hardware::{IpmiInfo, IpmiUser, IpmiStatus};
 
 // IPMI 设备结构
 struct IpmiDevice {
@@ -94,7 +94,7 @@ fn collect_via_ipmitool_optimized() -> Result<Option<IpmiInfo>, Box<dyn std::err
     // 优化：只尝试通道1，因为大多数系统都使用通道1
     // 如果通道1失败，再尝试其他通道
     let mut found_channel = false;
-    
+
     // 首先尝试通道1
     if let Ok(lan_config) = get_lan_config_via_ipmitool(1) {
         if lan_config.ip_address != "0.0.0.0" && !lan_config.ip_address.is_empty() {
@@ -130,7 +130,7 @@ fn collect_via_ipmitool_optimized() -> Result<Option<IpmiInfo>, Box<dyn std::err
         ipmi_info.device_id = device_info.device_id;
         ipmi_info.firmware_version = device_info.firmware_version;
         ipmi_info.manufacturer_id = device_info.manufacturer_id;
-        
+
         // 如果获取到设备信息，至少标记为已配置
         if ipmi_info.status == IpmiStatus::NotAvailable {
             ipmi_info.status = IpmiStatus::NotConfigured;
@@ -181,9 +181,11 @@ struct LanConfiguration {
     gateway: String,
 }
 
-fn get_lan_config_via_ipmitool(channel: u8) -> Result<LanConfiguration, Box<dyn std::error::Error>> {
+fn get_lan_config_via_ipmitool(
+    channel: u8,
+) -> Result<LanConfiguration, Box<dyn std::error::Error>> {
     let output = Command::new("ipmitool")
-        .args(&["lan", "print", &channel.to_string()])
+        .args(["lan", "print", &channel.to_string()])
         .output()?;
 
     if !output.status.success() {
@@ -191,7 +193,7 @@ fn get_lan_config_via_ipmitool(channel: u8) -> Result<LanConfiguration, Box<dyn 
     }
 
     let output_str = str::from_utf8(&output.stdout)?;
-    
+
     let mut config = LanConfiguration {
         ip_address: "0.0.0.0".to_string(),
         mac_address: "00:00:00:00:00:00".to_string(),
@@ -210,30 +212,49 @@ fn get_lan_config_via_ipmitool(channel: u8) -> Result<LanConfiguration, Box<dyn 
                 if let Some(ip) = line.split(':').nth(1) {
                     let ip_addr = ip.trim().to_string();
                     // 确保不是源类型描述
-                    if !ip_addr.contains("Static") && !ip_addr.contains("DHCP") && !ip_addr.contains("BIOS") {
+                    if !ip_addr.contains("Static")
+                        && !ip_addr.contains("DHCP")
+                        && !ip_addr.contains("BIOS")
+                    {
                         config.ip_address = ip_addr;
                         found_fields += 1;
                     }
                 }
             }
-        } else if line.starts_with("MAC Address") && line.contains(":") && config.mac_address == "00:00:00:00:00:00" {
+        } else if line.starts_with("MAC Address")
+            && line.contains(":")
+            && config.mac_address == "00:00:00:00:00:00"
+        {
             // MAC地址格式: "MAC Address             : 38:68:dd:23:26:1d"
-            if let Some(mac_part) = line.split(':').skip(1).collect::<Vec<_>>().join(":").trim().split_whitespace().next() {
+            if let Some(mac_part) = line
+                .split(':')
+                .skip(1)
+                .collect::<Vec<_>>()
+                .join(":")
+                .split_whitespace()
+                .next()
+            {
                 config.mac_address = mac_part.to_string();
                 found_fields += 1;
             }
-        } else if line.starts_with("Subnet Mask") && line.contains(":") && config.subnet_mask == "0.0.0.0" {
+        } else if line.starts_with("Subnet Mask")
+            && line.contains(":")
+            && config.subnet_mask == "0.0.0.0"
+        {
             if let Some(subnet) = line.split(':').nth(1) {
                 config.subnet_mask = subnet.trim().to_string();
                 found_fields += 1;
             }
-        } else if line.starts_with("Default Gateway IP") && line.contains(":") && config.gateway == "0.0.0.0" {
+        } else if line.starts_with("Default Gateway IP")
+            && line.contains(":")
+            && config.gateway == "0.0.0.0"
+        {
             if let Some(gateway) = line.split(':').nth(1) {
                 config.gateway = gateway.trim().to_string();
                 found_fields += 1;
             }
         }
-        
+
         // 如果找到所有字段，提前退出
         if found_fields >= 4 {
             break;
@@ -251,16 +272,14 @@ struct DeviceInfo {
 }
 
 fn get_device_info_via_ipmitool() -> Result<DeviceInfo, Box<dyn std::error::Error>> {
-    let output = Command::new("ipmitool")
-        .args(&["mc", "info"])
-        .output()?;
+    let output = Command::new("ipmitool").args(["mc", "info"]).output()?;
 
     if !output.status.success() {
         return Err("ipmitool mc info failed".into());
     }
 
     let output_str = str::from_utf8(&output.stdout)?;
-    
+
     let mut device_info = DeviceInfo {
         device_id: None,
         firmware_version: None,
@@ -276,12 +295,18 @@ fn get_device_info_via_ipmitool() -> Result<DeviceInfo, Box<dyn std::error::Erro
                 device_info.device_id = Some(id.trim().to_string());
                 found_fields += 1;
             }
-        } else if line.starts_with("Firmware Revision") && line.contains(":") && device_info.firmware_version.is_none() {
+        } else if line.starts_with("Firmware Revision")
+            && line.contains(":")
+            && device_info.firmware_version.is_none()
+        {
             if let Some(fw) = line.split(':').nth(1) {
                 device_info.firmware_version = Some(fw.trim().to_string());
                 found_fields += 1;
             }
-        } else if line.starts_with("Manufacturer ID") && line.contains(":") && device_info.manufacturer_id.is_none() {
+        } else if line.starts_with("Manufacturer ID")
+            && line.contains(":")
+            && device_info.manufacturer_id.is_none()
+        {
             if let Some(mfg) = line.split(':').nth(1) {
                 let mfg_str = mfg.trim();
                 // 尝试解析十六进制或十进制
@@ -294,7 +319,7 @@ fn get_device_info_via_ipmitool() -> Result<DeviceInfo, Box<dyn std::error::Erro
                 }
             }
         }
-        
+
         // 如果找到所有字段，提前退出
         if found_fields >= 3 {
             break;
@@ -309,7 +334,7 @@ fn get_users_via_ipmitool(channel: u8) -> Vec<IpmiUser> {
 
     // 使用一次调用获取所有用户信息
     if let Ok(output) = Command::new("ipmitool")
-        .args(&["user", "list", &channel.to_string()])
+        .args(["user", "list", &channel.to_string()])
         .output()
     {
         if output.status.success() {
@@ -319,17 +344,17 @@ fn get_users_via_ipmitool(channel: u8) -> Vec<IpmiUser> {
                     if line.is_empty() || line.starts_with("ID") {
                         continue; // 跳过标题行和空行
                     }
-                    
+
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() >= 2 {
                         if let Ok(user_id) = parts[0].parse::<u8>() {
                             let username = parts[1].to_string();
-                            
+
                             // 跳过空用户名或默认值
                             if username.is_empty() || username == "true" || username == "false" {
                                 continue;
                             }
-                            
+
                             // 解析启用状态 - 通常在第3列
                             let enabled = if parts.len() > 2 {
                                 parts[2] == "true" || parts[2] == "yes" || parts[2] == "enabled"
@@ -365,4 +390,4 @@ fn get_users_via_ipmitool(channel: u8) -> Vec<IpmiUser> {
     }
 
     users
-} 
+}

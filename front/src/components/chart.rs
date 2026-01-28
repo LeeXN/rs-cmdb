@@ -1,7 +1,7 @@
-use yew::prelude::*;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
-use wasm_bindgen::JsCast;
 use std::f64::consts::PI;
+use wasm_bindgen::JsCast;
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+use yew::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChartData {
@@ -54,7 +54,7 @@ pub fn pie_chart(props: &PieChartProps) -> Html {
                     html! {}
                 }
             }
-            <canvas 
+            <canvas
                 ref={canvas_ref}
                 width={props.width.to_string()}
                 height={props.height.to_string()}
@@ -108,7 +108,7 @@ pub fn bar_chart(props: &BarChartProps) -> Html {
                     html! {}
                 }
             }
-            <canvas 
+            <canvas
                 ref={canvas_ref}
                 width={props.width.to_string()}
                 height={props.height.to_string()}
@@ -121,7 +121,7 @@ pub fn bar_chart(props: &BarChartProps) -> Html {
 fn draw_pie_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width: f64, height: f64) {
     // 清除画布
     context.clear_rect(0.0, 0.0, width, height);
-    
+
     if data.is_empty() {
         return;
     }
@@ -139,19 +139,27 @@ fn draw_pie_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width:
 
     for item in data {
         let slice_angle = (item.value / total) * 2.0 * PI;
-        
+
         // 绘制扇形
         context.begin_path();
         context.move_to(center_x, center_y);
-        context.arc(center_x, center_y, radius, current_angle, current_angle + slice_angle).unwrap();
+        context
+            .arc(
+                center_x,
+                center_y,
+                radius,
+                current_angle,
+                current_angle + slice_angle,
+            )
+            .unwrap();
         context.close_path();
-        
+
         // 设置填充样式
-        let _ = context.set_fill_style_str(&item.color);
+        context.set_fill_style_str(&item.color);
         context.fill();
-        
+
         // 绘制边框
-        let _ = context.set_stroke_style_str("#ffffff");
+        context.set_stroke_style_str("#ffffff");
         context.set_line_width(2.0);
         context.stroke();
 
@@ -162,7 +170,7 @@ fn draw_pie_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width:
 fn draw_bar_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width: f64, height: f64) {
     // 清除画布
     context.clear_rect(0.0, 0.0, width, height);
-    
+
     if data.is_empty() {
         return;
     }
@@ -170,7 +178,7 @@ fn draw_bar_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width:
     let margin = 40.0;
     let chart_width = width - 2.0 * margin;
     let chart_height = height - 2.0 * margin;
-    
+
     let max_value = data.iter().map(|d| d.value).fold(0.0, f64::max);
     if max_value == 0.0 {
         return;
@@ -180,15 +188,15 @@ fn draw_bar_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width:
     let bar_spacing = chart_width / data.len() as f64 * 0.2;
 
     // 绘制坐标轴
-    let _ = context.set_stroke_style_str("#666666");
+    context.set_stroke_style_str("#666666");
     context.set_line_width(1.0);
-    
+
     // Y轴
     context.begin_path();
     context.move_to(margin, margin);
     context.line_to(margin, height - margin);
     context.stroke();
-    
+
     // X轴
     context.begin_path();
     context.move_to(margin, height - margin);
@@ -201,11 +209,11 @@ fn draw_bar_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width:
         let bar_height = (item.value / max_value) * chart_height;
         let y = height - margin - bar_height;
 
-        let _ = context.set_fill_style_str(&item.color);
+        context.set_fill_style_str(&item.color);
         context.fill_rect(x, y, bar_width, bar_height);
-        
+
         // 绘制边框
-        let _ = context.set_stroke_style_str("#ffffff");
+        context.set_stroke_style_str("#ffffff");
         context.set_line_width(1.0);
         context.stroke_rect(x, y, bar_width, bar_height);
     }
@@ -225,4 +233,4 @@ fn draw_bar_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width:
 //         "#4BC0C0".to_string(),
 //         "#FF6384".to_string(),
 //     ]
-// } 
+// }

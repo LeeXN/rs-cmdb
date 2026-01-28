@@ -1,18 +1,18 @@
-use yew::prelude::*;
-use std::rc::Rc;
+use crate::components::error::ErrorDisplay;
+use crate::components::loading::Loading;
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardBody, CardHeader};
 use crate::hooks::use_trans::use_trans;
-use std::collections::HashMap;
 use crate::services::api::{self, ApiError};
 use crate::types::DetailedStats;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::card::{Card, CardHeader, CardBody};
-use crate::components::loading::Loading;
-use crate::components::error::ErrorDisplay;
-use wasm_bindgen_futures;
-use web_sys;
 use gloo_timers;
 use js_sys;
-use lucide_yew::{Monitor, CircleCheck, CircleX, Activity};
+use lucide_yew::{Activity, CircleCheck, CircleX, Monitor};
+use std::collections::HashMap;
+use std::rc::Rc;
+use wasm_bindgen_futures;
+use web_sys;
+use yew::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AnalyticsAction {
@@ -71,18 +71,18 @@ pub fn analytics_page() -> Html {
         let state = state.clone();
         use_effect_with((), move |_| {
             state.dispatch(AnalyticsAction::SetLoading(true));
-            
-            api::get_detailed_stats(Callback::from(move |result: Result<DetailedStats, ApiError>| {
-                        match result {
+
+            api::get_detailed_stats(Callback::from(
+                move |result: Result<DetailedStats, ApiError>| match result {
                     Ok(stats) => {
-                                state.dispatch(AnalyticsAction::SetStats(stats));
-                            }
-                            Err(err) => {
-                                state.dispatch(AnalyticsAction::SetError(Some(err.message)));
-                        }
+                        state.dispatch(AnalyticsAction::SetStats(stats));
                     }
-                }));
-            
+                    Err(err) => {
+                        state.dispatch(AnalyticsAction::SetError(Some(err.message)));
+                    }
+                },
+            ));
+
             || ()
         });
     }
@@ -107,20 +107,18 @@ pub fn analytics_page() -> Html {
         let state = state.clone();
         Callback::from(move |_: MouseEvent| {
             state.dispatch(AnalyticsAction::SetLoading(true));
-            
-                api::get_detailed_stats(Callback::from({
-                    let state = state.clone();
-                    move |result: Result<DetailedStats, ApiError>| {
-                        match result {
-                            Ok(stats) => {
-                                state.dispatch(AnalyticsAction::SetStats(stats));
-                            }
-                            Err(err) => {
-                                state.dispatch(AnalyticsAction::SetError(Some(err.message)));
-                            }
-                        }
+
+            api::get_detailed_stats(Callback::from({
+                let state = state.clone();
+                move |result: Result<DetailedStats, ApiError>| match result {
+                    Ok(stats) => {
+                        state.dispatch(AnalyticsAction::SetStats(stats));
                     }
-                }));
+                    Err(err) => {
+                        state.dispatch(AnalyticsAction::SetError(Some(err.message)));
+                    }
+                }
+            }));
         })
     };
 
@@ -133,9 +131,9 @@ pub fn analytics_page() -> Html {
                     } else if let Some(error) = &state.error {
                         <div class="d-flex flex-column align-items-center">
                             <ErrorDisplay message={error.clone()} />
-                            <Button 
-                                variant={ButtonVariant::Default} 
-                                size={ButtonSize::Sm} 
+                            <Button
+                                variant={ButtonVariant::Default}
+                                size={ButtonSize::Sm}
                                 onclick={on_refresh.clone()}
                                 class="mt-3"
                             >
@@ -147,7 +145,7 @@ pub fn analytics_page() -> Html {
                         <>
                             // 统计概览
                             { render_summary_cards(&state.stats, &t) }
-                            
+
                             // 详细图表
                             { render_analytics_charts(&state.stats, &t) }
                         </>
@@ -235,8 +233,6 @@ fn render_summary_cards(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> Htm
     }
 }
 
-
-
 // 渲染分析图表
 fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> Html {
     // 使用effect来初始化图表
@@ -264,9 +260,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="gpuVendorChart" width="300" height="200"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto">
                             <table class="table w-full text-slate-300">
@@ -304,9 +300,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="gpuModelChart" width="300" height="200"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto max-h-[300px]">
                             <table class="table w-full text-slate-300">
@@ -344,9 +340,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="gpuDetailChart" width="300" height="200"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto max-h-[300px]">
                             <table class="table w-full text-slate-300">
@@ -387,9 +383,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="cpuModelChart" width="400" height="250"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto max-h-[300px]">
                             <table class="table w-full text-slate-300">
@@ -427,9 +423,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="storageTypeChart" width="400" height="250"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto">
                             <table class="table w-full text-slate-300">
@@ -470,9 +466,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="osChart" width="400" height="250"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto">
                             <table class="table w-full text-slate-300">
@@ -510,9 +506,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="memoryChart" width="400" height="250"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto">
                             <table class="table w-full text-slate-300">
@@ -553,9 +549,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="networkChart" width="400" height="250"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto">
                             <table class="table w-full text-slate-300">
@@ -593,9 +589,9 @@ fn render_analytics_charts(stats: &DetailedStats, t: &Rc<crate::i18n::I18n>) -> 
                         <div class="flex justify-center my-4">
                             <canvas id="serverChart" width="400" height="250"></canvas>
                         </div>
-                        
+
                         <div class="divider my-1 border-slate-700"></div>
-                        
+
                         <h3 class="font-bold text-xs uppercase opacity-70 mb-2 text-slate-400">{t.t("analytics.detailed_stats")}</h3>
                         <div class="overflow-x-auto max-h-[300px]">
                             <table class="table w-full text-slate-300">
@@ -641,95 +637,106 @@ async fn init_all_charts(stats: &DetailedStats) {
         "#6366f1", // Indigo 500
         "#14b8a6", // Teal 500
     ];
-    
+
     // 给页面更多时间渲染完成，并等待Chart.js加载
     gloo_timers::future::TimeoutFuture::new(500).await;
-    
+
     // 检查Chart.js是否已加载
     if let Ok(window) = web_sys::window().ok_or("window不存在") {
-        if let Ok(chart_obj) = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str("Chart")) {
+        if let Ok(chart_obj) =
+            js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str("Chart"))
+        {
             if chart_obj.is_undefined() {
                 return;
             }
         }
     }
-    
+
     // GPU厂商饼图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("gpuVendorChart")) {
+        .and_then(|d| d.get_element_by_id("gpuVendorChart"))
+    {
         if !stats.gpu_stats.by_vendor.is_empty() {
             create_pie_chart_js(&canvas, &stats.gpu_stats.by_vendor, &colors).await;
         }
     }
-    
+
     // GPU型号柱状图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("gpuModelChart")) {
+        .and_then(|d| d.get_element_by_id("gpuModelChart"))
+    {
         if !stats.gpu_stats.by_model.is_empty() {
             create_bar_chart_js(&canvas, &stats.gpu_stats.by_model, &colors).await;
         }
     }
-    
+
     // GPU详细配置柱状图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("gpuDetailChart")) {
+        .and_then(|d| d.get_element_by_id("gpuDetailChart"))
+    {
         if !stats.gpu_stats.by_model_with_count.is_empty() {
             create_bar_chart_js(&canvas, &stats.gpu_stats.by_model_with_count, &colors).await;
         }
     }
-    
+
     // CPU型号柱状图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("cpuModelChart")) {
+        .and_then(|d| d.get_element_by_id("cpuModelChart"))
+    {
         if !stats.cpu_stats.by_model.is_empty() {
             create_bar_chart_js(&canvas, &stats.cpu_stats.by_model, &colors).await;
         }
     }
-    
+
     // 存储类型饼图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("storageTypeChart")) {
+        .and_then(|d| d.get_element_by_id("storageTypeChart"))
+    {
         if !stats.storage_stats.by_type.is_empty() {
             create_pie_chart_js(&canvas, &stats.storage_stats.by_type, &colors).await;
         }
     }
-    
+
     // 操作系统饼图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("osChart")) {
+        .and_then(|d| d.get_element_by_id("osChart"))
+    {
         if !stats.os_stats.by_name.is_empty() {
             create_pie_chart_js(&canvas, &stats.os_stats.by_name, &colors).await;
         }
     }
-    
+
     // 内存饼图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("memoryChart")) {
+        .and_then(|d| d.get_element_by_id("memoryChart"))
+    {
         if !stats.memory_stats.by_capacity.is_empty() {
             create_pie_chart_js(&canvas, &stats.memory_stats.by_capacity, &colors).await;
         }
     }
-    
+
     // 网络类型饼图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("networkChart")) {
+        .and_then(|d| d.get_element_by_id("networkChart"))
+    {
         if !stats.network_stats.by_type.is_empty() {
             create_pie_chart_js(&canvas, &stats.network_stats.by_type, &colors).await;
         }
     }
-    
+
     // 服务器型号柱状图
     if let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id("serverChart")) {
+        .and_then(|d| d.get_element_by_id("serverChart"))
+    {
         if !stats.server_stats.by_product_name.is_empty() {
             create_bar_chart_js(&canvas, &stats.server_stats.by_product_name, &colors).await;
         }
@@ -737,192 +744,363 @@ async fn init_all_charts(stats: &DetailedStats) {
 }
 
 // 使用Chart.js创建饼图
-async fn create_pie_chart_js(canvas: &web_sys::Element, data: &[crate::types::StatItem], colors: &[&str]) {
+async fn create_pie_chart_js(
+    canvas: &web_sys::Element,
+    data: &[crate::types::StatItem],
+    colors: &[&str],
+) {
     use wasm_bindgen::JsValue;
-    
-    if data.is_empty() { 
-        return; 
+
+    if data.is_empty() {
+        return;
     }
-    
-    let labels: Vec<JsValue> = data.iter().take(10)
+
+    let labels: Vec<JsValue> = data
+        .iter()
+        .take(10)
         .map(|item| JsValue::from_str(&item.name))
         .collect();
-    
-    let values: Vec<JsValue> = data.iter().take(10)
+
+    let values: Vec<JsValue> = data
+        .iter()
+        .take(10)
         .map(|item| JsValue::from_f64(item.count as f64))
         .collect();
-    
-    let chart_colors: Vec<JsValue> = colors.iter().take(data.len().min(10))
+
+    let chart_colors: Vec<JsValue> = colors
+        .iter()
+        .take(data.len().min(10))
         .map(|color| JsValue::from_str(color))
         .collect();
-    
+
     let config = js_sys::Object::new();
-    
+
     // type
-    js_sys::Reflect::set(&config, &JsValue::from_str("type"), &JsValue::from_str("pie")).unwrap();
-    
+    js_sys::Reflect::set(
+        &config,
+        &JsValue::from_str("type"),
+        &JsValue::from_str("pie"),
+    )
+    .unwrap();
+
     // data
     let chart_data = js_sys::Object::new();
-    js_sys::Reflect::set(&chart_data, &JsValue::from_str("labels"), &js_sys::Array::from_iter(labels)).unwrap();
-    
+    js_sys::Reflect::set(
+        &chart_data,
+        &JsValue::from_str("labels"),
+        &js_sys::Array::from_iter(labels),
+    )
+    .unwrap();
+
     let datasets = js_sys::Array::new();
     let dataset = js_sys::Object::new();
-    js_sys::Reflect::set(&dataset, &JsValue::from_str("data"), &js_sys::Array::from_iter(values)).unwrap();
-    js_sys::Reflect::set(&dataset, &JsValue::from_str("backgroundColor"), &js_sys::Array::from_iter(chart_colors)).unwrap();
-    js_sys::Reflect::set(&dataset, &JsValue::from_str("borderWidth"), &JsValue::from_f64(0.0)).unwrap(); // No border for cleaner look
+    js_sys::Reflect::set(
+        &dataset,
+        &JsValue::from_str("data"),
+        &js_sys::Array::from_iter(values),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &dataset,
+        &JsValue::from_str("backgroundColor"),
+        &js_sys::Array::from_iter(chart_colors),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &dataset,
+        &JsValue::from_str("borderWidth"),
+        &JsValue::from_f64(0.0),
+    )
+    .unwrap(); // No border for cleaner look
     datasets.push(&dataset);
-    
+
     js_sys::Reflect::set(&chart_data, &JsValue::from_str("datasets"), &datasets).unwrap();
     js_sys::Reflect::set(&config, &JsValue::from_str("data"), &chart_data).unwrap();
-    
+
     // options - 限制饼图大小
     let options = js_sys::Object::new();
-    
+
     // 设置响应式和维持长宽比
-    js_sys::Reflect::set(&options, &JsValue::from_str("responsive"), &JsValue::from_bool(true)).unwrap();
-    js_sys::Reflect::set(&options, &JsValue::from_str("maintainAspectRatio"), &JsValue::from_bool(true)).unwrap();
-    js_sys::Reflect::set(&options, &JsValue::from_str("aspectRatio"), &JsValue::from_f64(1.5)).unwrap();
-    
+    js_sys::Reflect::set(
+        &options,
+        &JsValue::from_str("responsive"),
+        &JsValue::from_bool(true),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &options,
+        &JsValue::from_str("maintainAspectRatio"),
+        &JsValue::from_bool(true),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &options,
+        &JsValue::from_str("aspectRatio"),
+        &JsValue::from_f64(1.5),
+    )
+    .unwrap();
+
     // 设置饼图大小限制
     let elements = js_sys::Object::new();
     let arc = js_sys::Object::new();
-    js_sys::Reflect::set(&arc, &JsValue::from_str("borderWidth"), &JsValue::from_f64(0.0)).unwrap();
+    js_sys::Reflect::set(
+        &arc,
+        &JsValue::from_str("borderWidth"),
+        &JsValue::from_f64(0.0),
+    )
+    .unwrap();
     js_sys::Reflect::set(&elements, &JsValue::from_str("arc"), &arc).unwrap();
     js_sys::Reflect::set(&options, &JsValue::from_str("elements"), &elements).unwrap();
-    
+
     let plugins = js_sys::Object::new();
     let legend = js_sys::Object::new();
-    js_sys::Reflect::set(&legend, &JsValue::from_str("display"), &JsValue::from_bool(true)).unwrap();
-    js_sys::Reflect::set(&legend, &JsValue::from_str("position"), &JsValue::from_str("right")).unwrap();
-    
+    js_sys::Reflect::set(
+        &legend,
+        &JsValue::from_str("display"),
+        &JsValue::from_bool(true),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &legend,
+        &JsValue::from_str("position"),
+        &JsValue::from_str("right"),
+    )
+    .unwrap();
+
     // Legend labels color
     let legend_labels = js_sys::Object::new();
-    js_sys::Reflect::set(&legend_labels, &JsValue::from_str("color"), &JsValue::from_str("#94a3b8")).unwrap(); // slate-400
+    js_sys::Reflect::set(
+        &legend_labels,
+        &JsValue::from_str("color"),
+        &JsValue::from_str("#94a3b8"),
+    )
+    .unwrap(); // slate-400
     js_sys::Reflect::set(&legend, &JsValue::from_str("labels"), &legend_labels).unwrap();
-    
+
     js_sys::Reflect::set(&plugins, &JsValue::from_str("legend"), &legend).unwrap();
-    
+
     let chart_title = js_sys::Object::new();
-    js_sys::Reflect::set(&chart_title, &JsValue::from_str("display"), &JsValue::from_bool(false)).unwrap();
+    js_sys::Reflect::set(
+        &chart_title,
+        &JsValue::from_str("display"),
+        &JsValue::from_bool(false),
+    )
+    .unwrap();
     js_sys::Reflect::set(&plugins, &JsValue::from_str("title"), &chart_title).unwrap();
-    
+
     // 添加布局边距来进一步控制大小
     let layout = js_sys::Object::new();
     let padding = js_sys::Object::new();
-    js_sys::Reflect::set(&padding, &JsValue::from_str("top"), &JsValue::from_f64(10.0)).unwrap();
-    js_sys::Reflect::set(&padding, &JsValue::from_str("bottom"), &JsValue::from_f64(10.0)).unwrap();
-    js_sys::Reflect::set(&padding, &JsValue::from_str("left"), &JsValue::from_f64(10.0)).unwrap();
-    js_sys::Reflect::set(&padding, &JsValue::from_str("right"), &JsValue::from_f64(10.0)).unwrap();
+    js_sys::Reflect::set(
+        &padding,
+        &JsValue::from_str("top"),
+        &JsValue::from_f64(10.0),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &padding,
+        &JsValue::from_str("bottom"),
+        &JsValue::from_f64(10.0),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &padding,
+        &JsValue::from_str("left"),
+        &JsValue::from_f64(10.0),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &padding,
+        &JsValue::from_str("right"),
+        &JsValue::from_f64(10.0),
+    )
+    .unwrap();
     js_sys::Reflect::set(&layout, &JsValue::from_str("padding"), &padding).unwrap();
     js_sys::Reflect::set(&options, &JsValue::from_str("layout"), &layout).unwrap();
-    
+
     js_sys::Reflect::set(&options, &JsValue::from_str("plugins"), &plugins).unwrap();
     js_sys::Reflect::set(&config, &JsValue::from_str("options"), &options).unwrap();
-    
+
     // 调用Chart.js
     if let Ok(window) = web_sys::window().ok_or("window不存在") {
         if let Ok(chart_constructor) = js_sys::Reflect::get(&window, &JsValue::from_str("Chart")) {
             if !chart_constructor.is_undefined() {
-                js_sys::Reflect::construct(&chart_constructor.into(), &js_sys::Array::of2(canvas, &config)).ok();
+                js_sys::Reflect::construct(
+                    &chart_constructor.into(),
+                    &js_sys::Array::of2(canvas, &config),
+                )
+                .ok();
             }
         }
     }
 }
 
 // 使用Chart.js创建柱状图
-async fn create_bar_chart_js(canvas: &web_sys::Element, data: &[crate::types::StatItem], colors: &[&str]) {
+async fn create_bar_chart_js(
+    canvas: &web_sys::Element,
+    data: &[crate::types::StatItem],
+    colors: &[&str],
+) {
     use wasm_bindgen::JsValue;
-    
-    if data.is_empty() { 
-        return; 
+
+    if data.is_empty() {
+        return;
     }
-    
+
     let display_data = data.iter().take(8).collect::<Vec<_>>();
-    
-    let labels: Vec<JsValue> = display_data.iter()
+
+    let labels: Vec<JsValue> = display_data
+        .iter()
         .map(|item| JsValue::from_str(&item.name))
         .collect();
-    
-    let values: Vec<JsValue> = display_data.iter()
+
+    let values: Vec<JsValue> = display_data
+        .iter()
         .map(|item| JsValue::from_f64(item.count as f64))
         .collect();
-    
-    let chart_colors: Vec<JsValue> = colors.iter().take(display_data.len())
+
+    let chart_colors: Vec<JsValue> = colors
+        .iter()
+        .take(display_data.len())
         .map(|color| JsValue::from_str(color))
         .collect();
-    
+
     let config = js_sys::Object::new();
-    
+
     // type
-    js_sys::Reflect::set(&config, &JsValue::from_str("type"), &JsValue::from_str("bar")).unwrap();
-    
+    js_sys::Reflect::set(
+        &config,
+        &JsValue::from_str("type"),
+        &JsValue::from_str("bar"),
+    )
+    .unwrap();
+
     // data
     let chart_data = js_sys::Object::new();
-    js_sys::Reflect::set(&chart_data, &JsValue::from_str("labels"), &js_sys::Array::from_iter(labels)).unwrap();
-    
+    js_sys::Reflect::set(
+        &chart_data,
+        &JsValue::from_str("labels"),
+        &js_sys::Array::from_iter(labels),
+    )
+    .unwrap();
+
     let datasets = js_sys::Array::new();
     let dataset = js_sys::Object::new();
-    js_sys::Reflect::set(&dataset, &JsValue::from_str("data"), &js_sys::Array::from_iter(values)).unwrap();
-    js_sys::Reflect::set(&dataset, &JsValue::from_str("backgroundColor"), &js_sys::Array::from_iter(chart_colors)).unwrap();
-    js_sys::Reflect::set(&dataset, &JsValue::from_str("borderWidth"), &JsValue::from_f64(0.0)).unwrap();
+    js_sys::Reflect::set(
+        &dataset,
+        &JsValue::from_str("data"),
+        &js_sys::Array::from_iter(values),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &dataset,
+        &JsValue::from_str("backgroundColor"),
+        &js_sys::Array::from_iter(chart_colors),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &dataset,
+        &JsValue::from_str("borderWidth"),
+        &JsValue::from_f64(0.0),
+    )
+    .unwrap();
     datasets.push(&dataset);
-    
+
     js_sys::Reflect::set(&chart_data, &JsValue::from_str("datasets"), &datasets).unwrap();
     js_sys::Reflect::set(&config, &JsValue::from_str("data"), &chart_data).unwrap();
-    
+
     // options
     let options = js_sys::Object::new();
     let responsive = JsValue::from_bool(true);
     js_sys::Reflect::set(&options, &JsValue::from_str("responsive"), &responsive).unwrap();
-    
+
     let plugins = js_sys::Object::new();
     let legend = js_sys::Object::new();
-    js_sys::Reflect::set(&legend, &JsValue::from_str("display"), &JsValue::from_bool(false)).unwrap();
+    js_sys::Reflect::set(
+        &legend,
+        &JsValue::from_str("display"),
+        &JsValue::from_bool(false),
+    )
+    .unwrap();
     js_sys::Reflect::set(&plugins, &JsValue::from_str("legend"), &legend).unwrap();
-    
+
     let chart_title = js_sys::Object::new();
-    js_sys::Reflect::set(&chart_title, &JsValue::from_str("display"), &JsValue::from_bool(false)).unwrap();
+    js_sys::Reflect::set(
+        &chart_title,
+        &JsValue::from_str("display"),
+        &JsValue::from_bool(false),
+    )
+    .unwrap();
     js_sys::Reflect::set(&plugins, &JsValue::from_str("title"), &chart_title).unwrap();
-    
+
     js_sys::Reflect::set(&options, &JsValue::from_str("plugins"), &plugins).unwrap();
-    
+
     let scales = js_sys::Object::new();
-    
+
     // Y Axis
     let y_axis = js_sys::Object::new();
-    js_sys::Reflect::set(&y_axis, &JsValue::from_str("beginAtZero"), &JsValue::from_bool(true)).unwrap();
-    
+    js_sys::Reflect::set(
+        &y_axis,
+        &JsValue::from_str("beginAtZero"),
+        &JsValue::from_bool(true),
+    )
+    .unwrap();
+
     let grid = js_sys::Object::new();
-    js_sys::Reflect::set(&grid, &JsValue::from_str("color"), &JsValue::from_str("#334155")).unwrap(); // slate-700
+    js_sys::Reflect::set(
+        &grid,
+        &JsValue::from_str("color"),
+        &JsValue::from_str("#334155"),
+    )
+    .unwrap(); // slate-700
     js_sys::Reflect::set(&y_axis, &JsValue::from_str("grid"), &grid).unwrap();
-    
+
     let ticks = js_sys::Object::new();
-    js_sys::Reflect::set(&ticks, &JsValue::from_str("color"), &JsValue::from_str("#94a3b8")).unwrap(); // slate-400
+    js_sys::Reflect::set(
+        &ticks,
+        &JsValue::from_str("color"),
+        &JsValue::from_str("#94a3b8"),
+    )
+    .unwrap(); // slate-400
     js_sys::Reflect::set(&y_axis, &JsValue::from_str("ticks"), &ticks).unwrap();
-    
+
     js_sys::Reflect::set(&scales, &JsValue::from_str("y"), &y_axis).unwrap();
-    
+
     // X Axis
     let x_axis = js_sys::Object::new();
     let x_grid = js_sys::Object::new();
-    js_sys::Reflect::set(&x_grid, &JsValue::from_str("display"), &JsValue::from_bool(false)).unwrap();
+    js_sys::Reflect::set(
+        &x_grid,
+        &JsValue::from_str("display"),
+        &JsValue::from_bool(false),
+    )
+    .unwrap();
     js_sys::Reflect::set(&x_axis, &JsValue::from_str("grid"), &x_grid).unwrap();
-    
+
     let x_ticks = js_sys::Object::new();
-    js_sys::Reflect::set(&x_ticks, &JsValue::from_str("color"), &JsValue::from_str("#94a3b8")).unwrap(); // slate-400
+    js_sys::Reflect::set(
+        &x_ticks,
+        &JsValue::from_str("color"),
+        &JsValue::from_str("#94a3b8"),
+    )
+    .unwrap(); // slate-400
     js_sys::Reflect::set(&x_axis, &JsValue::from_str("ticks"), &x_ticks).unwrap();
-    
+
     js_sys::Reflect::set(&scales, &JsValue::from_str("x"), &x_axis).unwrap();
-    
+
     js_sys::Reflect::set(&options, &JsValue::from_str("scales"), &scales).unwrap();
-    
+
     js_sys::Reflect::set(&config, &JsValue::from_str("options"), &options).unwrap();
-    
+
     // 调用Chart.js
     if let Ok(window) = web_sys::window().ok_or("window不存在") {
         if let Ok(chart_constructor) = js_sys::Reflect::get(&window, &JsValue::from_str("Chart")) {
             if !chart_constructor.is_undefined() {
-                js_sys::Reflect::construct(&chart_constructor.into(), &js_sys::Array::of2(canvas, &config)).ok();
+                js_sys::Reflect::construct(
+                    &chart_constructor.into(),
+                    &js_sys::Array::of2(canvas, &config),
+                )
+                .ok();
             }
         }
     }

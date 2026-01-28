@@ -1,15 +1,11 @@
-use axum::{
-    extract::Request,
-    http::StatusCode,
-    middleware::Next,
-    response::Response,
-    extract::Extension,
-};
-use std::sync::Arc;
-use crate::service::auth_service::AuthService;
 use crate::repository::user_repository::UserRepository;
-use axum_extra::headers::{Authorization, authorization::Bearer};
+use crate::service::auth_service::AuthService;
+use axum::{
+    extract::Extension, extract::Request, http::StatusCode, middleware::Next, response::Response,
+};
 use axum_extra::TypedHeader;
+use axum_extra::headers::{Authorization, authorization::Bearer};
+use std::sync::Arc;
 use tracing::error;
 
 pub async fn auth_middleware(
@@ -25,7 +21,7 @@ pub async fn auth_middleware(
     };
 
     let token = auth.token();
-    
+
     let claims = match auth_service.verify_token(token) {
         Ok(claims) => claims,
         Err(_) => return Err(StatusCode::UNAUTHORIZED),

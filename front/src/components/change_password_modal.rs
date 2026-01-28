@@ -1,16 +1,16 @@
+use crate::components::ui::button::{Button, ButtonVariant};
+use crate::components::ui::input::Input;
+use crate::hooks::use_trans::use_trans;
+use crate::routes::Route;
+use crate::services::api::change_password;
+use crate::stores::auth_store::AuthStore;
+use crate::types::ChangePasswordRequest;
+use crate::utils::i18n_helper::translate_api_message;
+use lucide_yew::{Eye, EyeOff, X};
+use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use yew_router::prelude::*;
 use yewdux::prelude::*;
-use wasm_bindgen_futures::spawn_local;
-use crate::services::api::change_password;
-use crate::types::ChangePasswordRequest;
-use crate::components::ui::input::Input;
-use crate::components::ui::button::{Button, ButtonVariant};
-use crate::stores::auth_store::AuthStore;
-use crate::routes::Route;
-use crate::utils::i18n_helper::translate_api_message;
-use crate::hooks::use_trans::use_trans;
-use lucide_yew::{X, Eye, EyeOff};
 
 #[derive(Properties, PartialEq)]
 pub struct ChangePasswordModalProps {
@@ -20,9 +20,9 @@ pub struct ChangePasswordModalProps {
 
 #[function_component(ChangePasswordModal)]
 pub fn change_password_modal(props: &ChangePasswordModalProps) -> Html {
-    let old_password = use_state(|| String::new());
-    let new_password = use_state(|| String::new());
-    let confirm_password = use_state(|| String::new());
+    let old_password = use_state(String::new);
+    let new_password = use_state(String::new);
+    let confirm_password = use_state(String::new);
     let show_old_password = use_state(|| false);
     let show_new_password = use_state(|| false);
     let show_confirm_password = use_state(|| false);
@@ -44,7 +44,7 @@ pub fn change_password_modal(props: &ChangePasswordModalProps) -> Html {
         let show_confirm_password = show_confirm_password.clone();
         let error_message = error_message.clone();
         let success_message = success_message.clone();
-        
+
         Callback::from(move |_: ()| {
             old_password.set(String::new());
             new_password.set(String::new());
@@ -103,7 +103,7 @@ pub fn change_password_modal(props: &ChangePasswordModalProps) -> Html {
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
-            
+
             let old_pwd = (*old_password).clone();
             let new_pwd = (*new_password).clone();
             let confirm_pwd = (*confirm_password).clone();
@@ -139,14 +139,14 @@ pub fn change_password_modal(props: &ChangePasswordModalProps) -> Html {
                     Ok(_) => {
                         success_message.set(Some(t.t("password.success")));
                         is_loading.set(false);
-                        
+
                         // Wait a bit then logout and redirect
                         gloo_timers::future::TimeoutFuture::new(1500).await;
-                        
+
                         AuthStore::logout(auth_dispatch);
                         reset_and_close.emit(());
                         navigator.push(&Route::Login);
-                    },
+                    }
                     Err(err) => {
                         error_message.set(Some(translate_api_message(&err.message)));
                         is_loading.set(false);
@@ -195,7 +195,7 @@ pub fn change_password_modal(props: &ChangePasswordModalProps) -> Html {
                                 required=true
                                 class="pr-10"
                             />
-                            <button 
+                            <button
                                 type="button"
                                 onclick={toggle_old_password}
                                 class="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground"
@@ -221,7 +221,7 @@ pub fn change_password_modal(props: &ChangePasswordModalProps) -> Html {
                                 required=true
                                 class="pr-10"
                             />
-                            <button 
+                            <button
                                 type="button"
                                 onclick={toggle_new_password}
                                 class="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground"
@@ -247,7 +247,7 @@ pub fn change_password_modal(props: &ChangePasswordModalProps) -> Html {
                                 required=true
                                 class="pr-10"
                             />
-                            <button 
+                            <button
                                 type="button"
                                 onclick={toggle_confirm_password}
                                 class="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground"
@@ -262,16 +262,16 @@ pub fn change_password_modal(props: &ChangePasswordModalProps) -> Html {
                     </div>
 
                     <div class="flex justify-end gap-2 pt-2">
-                        <Button 
-                            variant={ButtonVariant::Outline} 
-                            type_="button" 
+                        <Button
+                            variant={ButtonVariant::Outline}
+                            type_="button"
                             onclick={on_close_click}
                             disabled={*is_loading}
                         >
                             {"Cancel"}
                         </Button>
-                        <Button 
-                            type_="submit" 
+                        <Button
+                            type_="submit"
                             disabled={*is_loading}
                         >
                             if *is_loading {

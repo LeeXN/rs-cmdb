@@ -1,11 +1,7 @@
 use axum::{
-    extract::Request,
-    http::StatusCode,
-    middleware::Next,
-    response::Response,
-    extract::Extension,
+    extract::Extension, extract::Request, http::StatusCode, middleware::Next, response::Response,
 };
-use common::entity::user::{User, Role};
+use common::entity::user::{Role, User};
 
 pub async fn require_admin(
     Extension(user): Extension<User>,

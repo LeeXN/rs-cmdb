@@ -21,19 +21,19 @@ pub struct ModalProps {
 #[function_component(Modal)]
 pub fn modal(props: &ModalProps) -> Html {
     let is_open = props.is_open || props.open;
-    
+
     if !is_open {
         return html! {};
     }
 
     let on_close = props.on_close.clone();
     let on_open_change = props.on_open_change.clone();
-    
+
     let on_backdrop_click = Callback::from(move |_e: MouseEvent| {
         on_close.emit(());
         on_open_change.emit(false);
     });
-    
+
     let on_content_click = Callback::from(|e: MouseEvent| {
         e.stop_propagation();
     });

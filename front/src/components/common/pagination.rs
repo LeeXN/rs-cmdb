@@ -1,9 +1,9 @@
-use yew::prelude::*;
-use web_sys::HtmlInputElement;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::input::Input;
 use crate::hooks::use_trans::use_trans;
 use std::collections::HashMap;
+use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct PaginationProps {
@@ -19,20 +19,20 @@ pub struct PaginationProps {
 pub fn pagination(props: &PaginationProps) -> Html {
     let t = use_trans();
     let jump_page_input = use_node_ref();
-    let jump_page_value = use_state(|| String::new());
-    
+    let jump_page_value = use_state(String::new);
+
     let total_pages = props.total_pages;
     let current_page = props.current_page;
     let page_size = props.page_size;
     let total_items = props.total_items;
     let on_page_change = props.on_page_change.clone();
     let on_page_size_change = props.on_page_size_change.clone();
-    
+
     let on_jump_page = {
         let jump_page_input = jump_page_input.clone();
         let jump_page_value = jump_page_value.clone();
         let on_page_change = on_page_change.clone();
-        
+
         Callback::from(move |_: MouseEvent| {
             if let Some(input) = jump_page_input.cast::<HtmlInputElement>() {
                 if let Ok(page) = input.value().parse::<usize>() {
@@ -45,14 +45,14 @@ pub fn pagination(props: &PaginationProps) -> Html {
             }
         })
     };
-    
+
     let on_input_change = {
         let jump_page_value = jump_page_value.clone();
         Callback::from(move |val: String| {
             jump_page_value.set(val);
         })
     };
-    
+
     let on_key_down = {
         let on_jump_page = on_jump_page.clone();
         Callback::from(move |e: KeyboardEvent| {
@@ -63,15 +63,15 @@ pub fn pagination(props: &PaginationProps) -> Html {
     };
 
     let select_class = "flex h-8 w-full items-center justify-between rounded-md border border-input bg-slate-950 px-2 py-1 text-xs text-slate-200 shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
-    
+
     if total_pages <= 1 && total_items <= page_size {
-         return html! {
+        return html! {
             <div class="flex justify-between items-center mt-4 p-4 bg-card/50 rounded-lg border border-border backdrop-blur-sm">
                 <div class="flex items-center gap-2">
                     <span class="text-sm text-muted-foreground">{t.t_with_args("pagination.total_items", &HashMap::from([("count".to_string(), total_items.to_string())]))}</span>
                     <span class="text-muted-foreground">{"•"}</span>
                     <span class="text-sm text-muted-foreground">{t.t("pagination.per_page")}</span>
-                    <select 
+                    <select
                         class={select_class}
                         value={page_size.to_string()}
                         onchange={
@@ -100,7 +100,7 @@ pub fn pagination(props: &PaginationProps) -> Html {
             <div class="flex items-center gap-2">
                 <span class="text-sm text-muted-foreground">{t.t_with_args("pagination.total_items", &HashMap::from([("count".to_string(), total_items.to_string())]))}</span>
                 <span class="text-muted-foreground">{"•"}</span>
-                <select 
+                <select
                     class={select_class}
                     value={page_size.to_string()}
                     onchange={
@@ -120,11 +120,11 @@ pub fn pagination(props: &PaginationProps) -> Html {
                 </select>
                 <span class="text-sm text-muted-foreground">{t.t("pagination.items_per_page")}</span>
             </div>
-            
+
             // 中间：分页导航
             <div class="flex items-center gap-1">
                 // 首页
-                <Button 
+                <Button
                     variant={ButtonVariant::Outline}
                     size={ButtonSize::Sm}
                     class="h-8 w-8 p-0"
@@ -140,9 +140,9 @@ pub fn pagination(props: &PaginationProps) -> Html {
                 >
                     {"‹‹"}
                 </Button>
-                
+
                 // 上一页
-                <Button 
+                <Button
                     variant={ButtonVariant::Outline}
                     size={ButtonSize::Sm}
                     class="h-8 w-8 p-0"
@@ -158,12 +158,12 @@ pub fn pagination(props: &PaginationProps) -> Html {
                 >
                     {"‹"}
                 </Button>
-                
+
                 // 页码
                 {render_page_numbers(total_pages, current_page, on_page_change.clone())}
-                
+
                 // 下一页
-                <Button 
+                <Button
                     variant={ButtonVariant::Outline}
                     size={ButtonSize::Sm}
                     class="h-8 w-8 p-0"
@@ -179,9 +179,9 @@ pub fn pagination(props: &PaginationProps) -> Html {
                 >
                     {"›"}
                 </Button>
-                
+
                 // 尾页
-                <Button 
+                <Button
                     variant={ButtonVariant::Outline}
                     size={ButtonSize::Sm}
                     class="h-8 w-8 p-0"
@@ -198,15 +198,15 @@ pub fn pagination(props: &PaginationProps) -> Html {
                     {"››"}
                 </Button>
             </div>
-            
+
             // 右侧：当前页信息和快速跳转
             <div class="flex items-center gap-2">
                 <span class="text-sm text-muted-foreground">{format!("{}/{}", current_page, total_pages)}</span>
                 <span class="text-muted-foreground">{"•"}</span>
                 <span class="text-xs text-muted-foreground">{t.t("pagination.jump_to")}</span>
-                <Input 
+                <Input
                     node_ref={jump_page_input}
-                    type_="number" 
+                    type_="number"
                     class="h-8 w-16 text-center"
                     min={Some("1".to_string())}
                     max={Some(total_pages.to_string())}
@@ -215,7 +215,7 @@ pub fn pagination(props: &PaginationProps) -> Html {
                     oninput={on_input_change}
                     onkeydown={on_key_down}
                 />
-                <Button 
+                <Button
                     variant={ButtonVariant::Outline}
                     size={ButtonSize::Sm}
                     class="h-8 px-2 text-xs"
@@ -229,12 +229,16 @@ pub fn pagination(props: &PaginationProps) -> Html {
 }
 
 fn render_page_numbers(
-    total_pages: usize, 
-    current_page: usize, 
-    on_page_change: Callback<usize>
+    total_pages: usize,
+    current_page: usize,
+    on_page_change: Callback<usize>,
 ) -> Html {
     // 智能分页：显示当前页前后几页
-    let start_page = if current_page > 3 { current_page - 2 } else { 1 };
+    let start_page = if current_page > 3 {
+        current_page - 2
+    } else {
+        1
+    };
     let end_page = std::cmp::min(start_page + 4, total_pages);
     let actual_start = if end_page == total_pages && total_pages > 5 {
         std::cmp::max(1, total_pages - 4)
@@ -243,18 +247,16 @@ fn render_page_numbers(
     };
 
     let mut pages = Vec::new();
-    
+
     // 如果开始页不是1，显示省略号
-    if actual_start > 1 {
-        if actual_start > 2 {
-            pages.push(html! {
+    if actual_start > 1 && actual_start > 2 {
+        pages.push(html! {
                 <Button variant={ButtonVariant::Ghost} size={ButtonSize::Sm} class="h-8 w-8 p-0" disabled={true} key="start-ellipsis">
                     {"⋯"}
                 </Button>
             });
-        }
     }
-    
+
     // 页码
     for page in actual_start..=end_page {
         let is_current = page == current_page;
@@ -263,10 +265,10 @@ fn render_page_numbers(
         } else {
             ButtonVariant::Outline
         };
-        
+
         pages.push(html! {
-            <Button 
-                variant={variant} 
+            <Button
+                variant={variant}
                 size={ButtonSize::Sm}
                 class="h-8 w-8 p-0"
                 key={page}
@@ -281,17 +283,15 @@ fn render_page_numbers(
             </Button>
         });
     }
-    
+
     // 如果结束页不是最后一页，显示省略号
-    if end_page < total_pages {
-        if end_page < total_pages - 1 {
-            pages.push(html! {
+    if end_page < total_pages && end_page < total_pages - 1 {
+        pages.push(html! {
                 <Button variant={ButtonVariant::Ghost} size={ButtonSize::Sm} class="h-8 w-8 p-0" disabled={true} key="end-ellipsis">
                     {"⋯"}
                 </Button>
             });
-        }
     }
-    
+
     html! { for pages }
 }

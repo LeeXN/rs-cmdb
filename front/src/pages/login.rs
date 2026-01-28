@@ -1,26 +1,26 @@
+use gloo_storage::Storage;
+use js_sys::Date;
+use log::error;
+use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::prelude::*;
 use yewdux::prelude::*;
-use web_sys::HtmlInputElement;
-use js_sys::Date;
-use gloo_storage::Storage;
-use log::error;
 
+use crate::components::ui::button::{Button, ButtonVariant};
+use crate::hooks::use_trans::use_trans;
 use crate::routes::Route;
 use crate::services::api::login as api_login;
 use crate::stores::auth_store::AuthStore;
 use crate::types::LoginRequest;
-use crate::components::ui::button::{Button, ButtonVariant};
 use crate::utils::i18n_helper::translate_api_message;
-use crate::hooks::use_trans::use_trans;
 
 #[function_component(Login)]
 pub fn login() -> Html {
-    let username = use_state(|| String::new());
-    let password = use_state(|| String::new());
+    let username = use_state(String::new);
+    let password = use_state(String::new);
     let error_message = use_state(|| Option::<String>::None);
     let loading = use_state(|| false);
-    
+
     let navigator = use_navigator().unwrap();
     let (_, dispatch) = use_store::<AuthStore>();
     let t = use_trans();
@@ -35,7 +35,7 @@ pub fn login() -> Html {
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
-            
+
             let username = username.clone();
             let password = password.clone();
             let error_message = error_message.clone();
@@ -62,12 +62,12 @@ pub fn login() -> Html {
                             is_authenticated: true,
                         };
                         if let Err(e) = gloo_storage::LocalStorage::set("auth_store", &store) {
-                            error!("Failed to save auth token to LocalStorage: {}", e.to_string());
+                            error!("Failed to save auth token to LocalStorage: {}", e);
                         }
 
                         AuthStore::login(dispatch, response.token, response.user);
                         navigator.push(&Route::Home);
-                    },
+                    }
                     Err(err) => {
                         error_message.set(Some(translate_api_message(&err.message)));
                         loading.set(false);
@@ -120,12 +120,12 @@ pub fn login() -> Html {
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <i class="fas fa-user text-slate-500"></i>
                                 </div>
-                                <input 
-                                    type="text" 
-                                    class="input input-bordered w-full pl-10 bg-slate-950/50 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-200 placeholder-slate-500 transition-all" 
+                                <input
+                                    type="text"
+                                    class="input input-bordered w-full pl-10 bg-slate-950/50 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-200 placeholder-slate-500 transition-all"
                                     placeholder={t.t("auth.username")}
-                                    oninput={oninput_username} 
-                                    value={(*username).clone()} 
+                                    oninput={oninput_username}
+                                    value={(*username).clone()}
                                     required=true
                                 />
                             </div>
@@ -139,12 +139,12 @@ pub fn login() -> Html {
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <i class="fas fa-lock text-slate-500"></i>
                                 </div>
-                                <input 
-                                    type="password" 
-                                    class="input input-bordered w-full pl-10 bg-slate-950/50 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-200 placeholder-slate-500 transition-all" 
+                                <input
+                                    type="password"
+                                    class="input input-bordered w-full pl-10 bg-slate-950/50 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-200 placeholder-slate-500 transition-all"
                                     placeholder={t.t("auth.password")}
-                                    oninput={oninput_password} 
-                                    value={(*password).clone()} 
+                                    oninput={oninput_password}
+                                    value={(*password).clone()}
                                     required=true
                                 />
                             </div>
@@ -156,7 +156,7 @@ pub fn login() -> Html {
                                 <span class="label-text text-slate-400">{"Remember me"}</span>
                             </label>
                         </div>
-                        
+
                         if let Some(msg) = (*error_message).clone() {
                             <div class="alert alert-error shadow-lg text-sm py-2">
                                 <i class="fas fa-exclamation-circle"></i>

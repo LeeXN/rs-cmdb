@@ -1,13 +1,16 @@
-use yew::prelude::*;
-use wasm_bindgen_futures::spawn_local;
-use web_sys::console;
+use crate::components::ui::badge::{Badge, BadgeVariant};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::services::api::{fetch_hardware_history, ApiError};
 use crate::types::Hardware;
-use crate::components::ui::card::{Card, CardHeader, CardContent, CardTitle};
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
-use crate::components::ui::badge::{Badge, BadgeVariant};
-use lucide_yew::{RefreshCw, History, Eye, CirclePlus, CircleMinus, Pencil, TrendingUp, TrendingDown, X, CircleAlert};
+use lucide_yew::{
+    CircleAlert, CircleMinus, CirclePlus, Eye, History, Pencil, RefreshCw, TrendingDown,
+    TrendingUp, X,
+};
+use wasm_bindgen_futures::spawn_local;
+use web_sys::console;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct HardwareHistoryProps {
@@ -51,7 +54,7 @@ impl Component for HardwareHistory {
     fn create(ctx: &Context<Self>) -> Self {
         // 自动加载历史记录
         ctx.link().send_message(HardwareHistoryMsg::LoadHistory);
-        
+
         Self {
             history: Vec::new(),
             loading: true,
@@ -65,20 +68,20 @@ impl Component for HardwareHistory {
             HardwareHistoryMsg::LoadHistory => {
                 self.loading = true;
                 self.error = None;
-                
+
                 let client_id = ctx.props().client_id.clone();
                 let link = ctx.link().clone();
-                
+
                 spawn_local(async move {
                     let result = fetch_hardware_history(&client_id).await;
                     link.send_message(HardwareHistoryMsg::HistoryLoaded(result));
                 });
-                
+
                 true
             }
             HardwareHistoryMsg::HistoryLoaded(result) => {
                 self.loading = false;
-                
+
                 match result {
                     Ok(history) => {
                         self.history = history;
@@ -90,7 +93,7 @@ impl Component for HardwareHistory {
                         console::error_1(&format!("加载硬件历史失败: {}", error_message).into());
                     }
                 }
-                
+
                 true
             }
             HardwareHistoryMsg::SelectHistory(index) => {
@@ -106,15 +109,15 @@ impl Component for HardwareHistory {
                 <CardHeader>
                     <div class="flex justify-between items-center">
                         <CardTitle>{"硬件变更历史"}</CardTitle>
-                        <Button 
+                        <Button
                             variant={ButtonVariant::Outline}
                             size={ButtonSize::Sm}
                             onclick={ctx.link().callback(|_| HardwareHistoryMsg::LoadHistory)}
                             disabled={self.loading}
                         >
-                            {if self.loading { 
+                            {if self.loading {
                                 html! { <RefreshCw class="h-4 w-4 mr-2 animate-spin" /> }
-                            } else { 
+                            } else {
                                 html! { <RefreshCw class="h-4 w-4 mr-2" /> }
                             }}
                             {if self.loading { "加载中..." } else { "刷新" }}
@@ -179,19 +182,25 @@ impl HardwareHistory {
                         </TableBody>
                     </Table>
                 </div>
-                
+
                 {self.render_selected_details(ctx)}
             </div>
         }
     }
 
-    fn render_history_row(&self, ctx: &Context<Self>, index: usize, timestamp: &str, hardware: &Hardware) -> Html {
+    fn render_history_row(
+        &self,
+        ctx: &Context<Self>,
+        index: usize,
+        timestamp: &str,
+        hardware: &Hardware,
+    ) -> Html {
         let is_selected = self.selected_index == Some(index);
         let row_class = if is_selected { "bg-muted/50" } else { "" };
-        
+
         // 格式化时间戳
         let formatted_time = self.format_timestamp(timestamp);
-        
+
         // 计算与前一个版本的差异
         let changes = if index < self.history.len() - 1 {
             let previous_hardware = &self.history[index + 1].1;
@@ -243,7 +252,7 @@ impl HardwareHistory {
                     {self.render_change_badges(&changes)}
                 </TableCell>
                 <TableCell>
-                    <Button 
+                    <Button
                         variant={ButtonVariant::Ghost}
                         size={ButtonSize::Icon}
                         onclick={ctx.link().callback(move |_| HardwareHistoryMsg::SelectHistory(index))}
@@ -273,7 +282,7 @@ impl HardwareHistory {
                             ChangeType::Upgraded => (BadgeVariant::Default, html! { <TrendingUp class="h-3 w-3 mr-1" /> }, "升级"),
                             ChangeType::Downgraded => (BadgeVariant::Warning, html! { <TrendingDown class="h-3 w-3 mr-1" /> }, "降级"),
                         };
-                        
+
                         html! {
                             <Badge variant={variant} class="flex items-center">
                                 {icon}
@@ -290,7 +299,7 @@ impl HardwareHistory {
         if let Some(index) = self.selected_index {
             if let Some((timestamp, hardware)) = self.history.get(index) {
                 let formatted_time = self.format_timestamp(timestamp);
-                
+
                 // 计算详细变更
                 let changes = if index < self.history.len() - 1 {
                     let previous_hardware = &self.history[index + 1].1;
@@ -298,13 +307,13 @@ impl HardwareHistory {
                 } else {
                     vec![]
                 };
-                
+
                 return html! {
                     <Card class="mt-6 bg-muted/30 border-dashed">
                         <CardHeader>
                             <div class="flex justify-between items-center">
                                 <CardTitle class="text-lg">{format!("硬件详情 - {}", formatted_time.0)}</CardTitle>
-                                <Button 
+                                <Button
                                     variant={ButtonVariant::Ghost}
                                     size={ButtonSize::Icon}
                                     onclick={ctx.link().callback(|_| HardwareHistoryMsg::SelectHistory(usize::MAX))}
@@ -339,17 +348,37 @@ impl HardwareHistory {
                 };
             }
         }
-        
+
         html! {}
     }
 
     fn render_change_detail(&self, change: &HardwareChange) -> Html {
         let (icon, bg_class, text_class) = match change.change_type {
-            ChangeType::Added => (html! { <CirclePlus class="h-5 w-5" /> }, "bg-green-500/10", "text-green-500"),
-            ChangeType::Removed => (html! { <CircleMinus class="h-5 w-5" /> }, "bg-red-500/10", "text-red-500"),
-            ChangeType::Modified => (html! { <Pencil class="h-5 w-5" /> }, "bg-blue-500/10", "text-blue-500"),
-            ChangeType::Upgraded => (html! { <TrendingUp class="h-5 w-5" /> }, "bg-primary/10", "text-primary"),
-            ChangeType::Downgraded => (html! { <TrendingDown class="h-5 w-5" /> }, "bg-yellow-500/10", "text-yellow-500"),
+            ChangeType::Added => (
+                html! { <CirclePlus class="h-5 w-5" /> },
+                "bg-green-500/10",
+                "text-green-500",
+            ),
+            ChangeType::Removed => (
+                html! { <CircleMinus class="h-5 w-5" /> },
+                "bg-red-500/10",
+                "text-red-500",
+            ),
+            ChangeType::Modified => (
+                html! { <Pencil class="h-5 w-5" /> },
+                "bg-blue-500/10",
+                "text-blue-500",
+            ),
+            ChangeType::Upgraded => (
+                html! { <TrendingUp class="h-5 w-5" /> },
+                "bg-primary/10",
+                "text-primary",
+            ),
+            ChangeType::Downgraded => (
+                html! { <TrendingDown class="h-5 w-5" /> },
+                "bg-yellow-500/10",
+                "text-yellow-500",
+            ),
         };
 
         html! {
@@ -377,10 +406,10 @@ impl HardwareHistory {
                         <div class="rounded-lg border bg-card p-3 mb-4">
                             <div class="flex flex-col">
                                 <h6 class="font-medium text-sm">{&hardware.cpu.model_name}</h6>
-                                <span class="text-xs text-muted-foreground">{format!("{} | {}核{}线程 | {}MHz", 
-                                    hardware.cpu.vendor_id, 
-                                    hardware.cpu.cores, 
-                                    hardware.cpu.threads, 
+                                <span class="text-xs text-muted-foreground">{format!("{} | {}核{}线程 | {}MHz",
+                                    hardware.cpu.vendor_id,
+                                    hardware.cpu.cores,
+                                    hardware.cpu.threads,
                                     hardware.cpu.speed)}</span>
                             </div>
                         </div>
@@ -389,9 +418,9 @@ impl HardwareHistory {
                         <div class="rounded-lg border bg-card p-3 mb-4">
                             <div class="flex flex-col">
                                 <h6 class="font-medium text-sm">{format!("{}GB", hardware.ram.total_size)}</h6>
-                                <span class="text-xs text-muted-foreground">{format!("{} | {}根内存条 | {}MHz", 
-                                    hardware.ram.vendor, 
-                                    hardware.ram.count, 
+                                <span class="text-xs text-muted-foreground">{format!("{} | {}根内存条 | {}MHz",
+                                    hardware.ram.vendor,
+                                    hardware.ram.count,
                                     hardware.ram.speed)}</span>
                             </div>
                         </div>
@@ -406,9 +435,9 @@ impl HardwareHistory {
                                         <div class="rounded-lg border bg-card p-3">
                                             <div class="flex flex-col">
                                                 <h6 class="font-medium text-sm">{&disk.model}</h6>
-                                                <span class="text-xs text-muted-foreground">{format!("{} | {}GB | {:?}", 
-                                                    disk.vendor, 
-                                                    disk.size, 
+                                                <span class="text-xs text-muted-foreground">{format!("{} | {}GB | {:?}",
+                                                    disk.vendor,
+                                                    disk.size,
                                                     disk.storage_type)}</span>
                                             </div>
                                         </div>
@@ -443,8 +472,8 @@ impl HardwareHistory {
                                             <div class="rounded-lg border bg-card p-3">
                                                 <div class="flex flex-col">
                                                     <h6 class="font-medium text-sm">{&gpu.model}</h6>
-                                                    <span class="text-xs text-muted-foreground">{format!("{} | 设备ID: {}", 
-                                                        gpu.vendor, 
+                                                    <span class="text-xs text-muted-foreground">{format!("{} | 设备ID: {}",
+                                                        gpu.vendor,
                                                         gpu.device_id)}</span>
                                                 </div>
                                             </div>
@@ -469,7 +498,7 @@ impl HardwareHistory {
                 return (date, time);
             }
         }
-        
+
         // 如果解析失败，返回原始时间戳
         (timestamp.to_string(), "".to_string())
     }

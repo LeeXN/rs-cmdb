@@ -1,10 +1,10 @@
+pub mod badge;
 pub mod button;
 pub mod card;
-pub mod input;
-pub mod badge;
-pub mod table;
-pub mod modal;
-pub mod table_action;
 pub mod checkbox;
-pub mod select;
 pub mod confirm_modal;
+pub mod input;
+pub mod modal;
+pub mod select;
+pub mod table;
+pub mod table_action;

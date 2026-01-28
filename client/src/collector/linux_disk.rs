@@ -1,9 +1,9 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::io;
-use common::entity::hardware::{Disk, StorageType, Partition};
-use std::process::Command;
+use common::entity::hardware::{Disk, Partition, StorageType};
 use std::collections::HashMap;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 // Helper function to format size in bytes to appropriate unit and return formatted string
 fn format_storage_size(bytes: u64) -> (String, String) {
@@ -48,7 +48,8 @@ fn get_firmware_serial_from_sysfs(base_path: &str) -> (String, String) {
     // Fallback to firmware_rev if rev is not available
     if firmware_version == "Unknown" {
         let firmware_rev_path = format!("{}/device/firmware_rev", base_path);
-        firmware_version = read_to_string(firmware_rev_path).unwrap_or_else(|_| "Unknown".to_string());
+        firmware_version =
+            read_to_string(firmware_rev_path).unwrap_or_else(|_| "Unknown".to_string());
     }
 
     (firmware_version, serial_number)
@@ -66,16 +67,27 @@ fn get_lsblk_info() -> HashMap<String, (String, String)> {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 1 {
+                if !parts.is_empty() {
                     let name = parts[0].to_string();
                     // REV and SERIAL might be missing or empty
-                    let rev = parts.get(1).filter(|s| !s.is_empty()).map(|s| s.to_string()).unwrap_or_else(|| "Unknown".to_string());
-                    let serial = parts.get(2).filter(|s| !s.is_empty()).map(|s| s.to_string()).unwrap_or_else(|| "Unknown".to_string());
+                    let rev = parts
+                        .get(1)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "Unknown".to_string());
+                    let serial = parts
+                        .get(2)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "Unknown".to_string());
                     info_map.insert(name, (rev, serial));
                 }
             }
         } else {
-            eprintln!("lsblk command failed: {}", String::from_utf8_lossy(&output.stderr));
+            eprintln!(
+                "lsblk command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
     } else {
         eprintln!("Failed to execute lsblk command");
@@ -87,7 +99,8 @@ fn get_lsblk_info() -> HashMap<String, (String, String)> {
 fn detect_storage_type(device: &str) -> StorageType {
     if device.starts_with("nvme") {
         StorageType::NVMe
-    } else if let Ok(rotational) = read_to_string(format!("/sys/block/{}/queue/rotational", device)) {
+    } else if let Ok(rotational) = read_to_string(format!("/sys/block/{}/queue/rotational", device))
+    {
         match rotational.as_str() {
             "0" => StorageType::SSD,
             "1" => StorageType::HDD,
@@ -155,8 +168,10 @@ pub fn collect_disks() -> Vec<Disk> {
 
             let base_path = format!("/sys/block/{}", device_name);
 
-            let vendor = read_to_string(format!("{}/device/vendor", base_path)).unwrap_or_else(|_| "Unknown".into());
-            let model = read_to_string(format!("{}/device/model", base_path)).unwrap_or_else(|_| "Unknown".into());
+            let vendor = read_to_string(format!("{}/device/vendor", base_path))
+                .unwrap_or_else(|_| "Unknown".into());
+            let model = read_to_string(format!("{}/device/model", base_path))
+                .unwrap_or_else(|_| "Unknown".into());
 
             let size_sectors: u64 = read_to_string(format!("{}/size", base_path))
                 .ok()
@@ -167,7 +182,8 @@ pub fn collect_disks() -> Vec<Disk> {
             let (formatted_size_str, unit) = format_storage_size(size_bytes);
 
             // Determine firmware version and serial number using the hybrid approach
-            let (mut final_firmware, mut final_serial) = ("Unknown".to_string(), "Unknown".to_string());
+            let (mut final_firmware, mut final_serial) =
+                ("Unknown".to_string(), "Unknown".to_string());
 
             if lsblk_available {
                 if let Some((lsblk_fw, lsblk_sn)) = lsblk_info.get(&device_name) {
@@ -178,13 +194,13 @@ pub fn collect_disks() -> Vec<Disk> {
 
             // If lsblk didn't provide info (or wasn't available), try sysfs
             if final_firmware == "Unknown" || final_serial == "Unknown" {
-                 let (sysfs_fw, sysfs_sn) = get_firmware_serial_from_sysfs(&base_path);
-                 if final_firmware == "Unknown" {
-                     final_firmware = sysfs_fw;
-                 }
-                 if final_serial == "Unknown" {
-                     final_serial = sysfs_sn;
-                 }
+                let (sysfs_fw, sysfs_sn) = get_firmware_serial_from_sysfs(&base_path);
+                if final_firmware == "Unknown" {
+                    final_firmware = sysfs_fw;
+                }
+                if final_serial == "Unknown" {
+                    final_serial = sysfs_sn;
+                }
             }
 
             let storage_type = detect_storage_type(&device_name);
@@ -197,7 +213,7 @@ pub fn collect_disks() -> Vec<Disk> {
                 model,
                 storage_type,
                 firmware_version: final_firmware, // Use the determined value
-                serial_number: final_serial,    // Use the determined value
+                serial_number: final_serial,      // Use the determined value
                 parted: !partitions.is_empty(),
                 partitions,
             });

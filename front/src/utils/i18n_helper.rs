@@ -1,10 +1,10 @@
 use crate::i18n::{I18n, Language};
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 thread_local! {
     /// 线程本地的国际化实例
-    static GLOBAL_I18N: RefCell<Option<Rc<I18n>>> = RefCell::new(None);
+    static GLOBAL_I18N: RefCell<Option<Rc<I18n>>> = const { RefCell::new(None) };
 }
 
 /// 初始化全局国际化实例
@@ -18,17 +18,15 @@ pub fn init_i18n(language: Language) {
 #[allow(dead_code)]
 pub fn get_i18n() -> Rc<I18n> {
     GLOBAL_I18N.with(|i18n| {
-        i18n.borrow()
-            .clone()
-            .unwrap_or_else(|| {
-                let default_i18n = Rc::new(I18n::default());
-                // 设置默认实例
-                drop(i18n.borrow()); // 释放借用
-                GLOBAL_I18N.with(|i18n_inner| {
-                    *i18n_inner.borrow_mut() = Some(default_i18n.clone());
-                });
-                default_i18n
-            })
+        i18n.borrow().clone().unwrap_or_else(|| {
+            let default_i18n = Rc::new(I18n::default());
+            // 设置默认实例
+            drop(i18n.borrow()); // 释放借用
+            GLOBAL_I18N.with(|i18n_inner| {
+                *i18n_inner.borrow_mut() = Some(default_i18n.clone());
+            });
+            default_i18n
+        })
     })
 }
 
@@ -42,7 +40,7 @@ pub fn t(key: &str) -> String {
 #[allow(dead_code)]
 pub fn translate_api_message(message: &str) -> String {
     // 如果消息是英文的错误码，则翻译它
-    if message.chars().all(|c| c.is_ascii()) && message.contains('_') {
+    if message.is_ascii() && message.contains('_') {
         t(message)
     } else {
         // 如果已经是中文或其他语言，直接返回
@@ -100,10 +98,10 @@ pub fn translate_unit(value: &str, unit: &str) -> String {
         "nics" => t("nics"),
         _ => unit.to_string(),
     };
-    
+
     if translated_unit.is_empty() {
         format!("{}{}", value, translated_unit)
     } else {
         format!("{} {}", value, translated_unit)
     }
-} 
+}

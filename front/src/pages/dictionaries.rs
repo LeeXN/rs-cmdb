@@ -1,21 +1,23 @@
-use yew::prelude::*;
-use common::entity::dictionary::Dictionary;
-use crate::services::api::{fetch_dictionaries, create_dictionary, update_dictionary, delete_dictionary};
-use crate::hooks::use_trans::use_trans;
-use std::collections::HashMap;
-use crate::components::loading::Loading;
 use crate::components::error::ErrorDisplay;
-use crate::components::permission_guard::PermissionGuard;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::table_action::TableActions;
-use crate::components::ui::card::{Card, CardHeader, CardBody};
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
-use crate::components::ui::input::Input;
-use crate::components::ui::confirm_modal::ConfirmModal;
+use crate::components::loading::Loading;
 use crate::components::notification::{Notification, NotificationType};
+use crate::components::permission_guard::PermissionGuard;
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardBody, CardHeader};
+use crate::components::ui::confirm_modal::ConfirmModal;
+use crate::components::ui::input::Input;
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::components::ui::table_action::TableActions;
+use crate::hooks::use_trans::use_trans;
+use crate::services::api::{
+    create_dictionary, delete_dictionary, fetch_dictionaries, update_dictionary,
+};
+use common::entity::dictionary::Dictionary;
 use common::entity::user::Role;
+use lucide_yew::{Briefcase, Building2, Plus, Wallet};
+use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
-use lucide_yew::{Plus, Building2, Briefcase, Wallet};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct DictionaryFormProps {
@@ -46,8 +48,12 @@ pub fn dictionary_form(props: &DictionaryFormProps) -> Html {
             item.category = category.clone();
             item.key = (*key).clone();
             item.value = (*value).clone();
-            item.description = if (*description).is_empty() { None } else { Some((*description).clone()) };
-            
+            item.description = if (*description).is_empty() {
+                None
+            } else {
+                Some((*description).clone())
+            };
+
             on_save.emit(item);
         })
     };
@@ -76,7 +82,7 @@ pub fn dictionary_form(props: &DictionaryFormProps) -> Html {
                 <form {onsubmit}>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("dictionaries.key")}</label>
-                        <Input 
+                        <Input
                             value={(*key).clone()}
                             oninput={Callback::from(move |val: String| key.set(val))}
                             required=true
@@ -86,7 +92,7 @@ pub fn dictionary_form(props: &DictionaryFormProps) -> Html {
 
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("dictionaries.value")}</label>
-                        <Input 
+                        <Input
                             value={(*value).clone()}
                             oninput={Callback::from(move |val: String| value.set(val))}
                             required=true
@@ -96,7 +102,7 @@ pub fn dictionary_form(props: &DictionaryFormProps) -> Html {
 
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("dictionaries.description")}</label>
-                        <Input 
+                        <Input
                             value={(*description).clone()}
                             oninput={Callback::from(move |val: String| description.set(val))}
                             placeholder={t.t("dictionaries.description_placeholder")}
@@ -116,16 +122,16 @@ pub fn dictionary_form(props: &DictionaryFormProps) -> Html {
 #[function_component(Dictionaries)]
 pub fn dictionaries() -> Html {
     let t = use_trans();
-    let items = use_state(|| Vec::<Dictionary>::new());
+    let items = use_state(Vec::<Dictionary>::new);
     let loading = use_state(|| true);
     let error = use_state(|| None::<String>);
     let show_form = use_state(|| false);
-    let editing_item = use_state(|| Dictionary::default());
+    let editing_item = use_state(Dictionary::default);
     let delete_modal_open = use_state(|| false);
     let item_to_delete = use_state(|| None::<String>);
     let delete_error = use_state(|| None::<String>);
     let notification = use_state(|| None::<(NotificationType, String)>);
-    
+
     // Category selection
     let active_category = use_state(|| "Department".to_string());
 
@@ -134,21 +140,21 @@ pub fn dictionaries() -> Html {
         let loading = loading.clone();
         let error = error.clone();
         let active_category = active_category.clone();
-        
+
         Callback::from(move |_| {
             let items = items.clone();
             let loading = loading.clone();
             let error = error.clone();
             let category = (*active_category).clone();
-            
+
             loading.set(true);
-            
+
             spawn_local(async move {
                 match fetch_dictionaries(Some(category)).await {
                     Ok(data) => {
                         items.set(data);
                         loading.set(false);
-                    },
+                    }
                     Err(err) => {
                         error.set(Some(err.message));
                         loading.set(false);
@@ -219,7 +225,7 @@ pub fn dictionaries() -> Html {
             let notification = notification.clone();
             let delete_error = delete_error.clone();
             let t = t.clone();
-            
+
             if let Some(id) = (*item_to_delete).clone() {
                 spawn_local(async move {
                     match delete_dictionary(&id).await {
@@ -227,9 +233,12 @@ pub fn dictionaries() -> Html {
                             delete_modal_open.set(false);
                             item_to_delete.set(None);
                             delete_error.set(None);
-                            notification.set(Some((NotificationType::Success, t.t("dictionaries.delete_success"))));
+                            notification.set(Some((
+                                NotificationType::Success,
+                                t.t("dictionaries.delete_success"),
+                            )));
                             fetch_data.emit(());
-                        },
+                        }
                         Err(e) => {
                             delete_error.set(Some(e.message));
                         }
@@ -270,12 +279,21 @@ pub fn dictionaries() -> Html {
                 match result {
                     Ok(_) => {
                         show_form.set(false);
-                        notification.set(Some((NotificationType::Success, t.t("dictionaries.save_success"))));
+                        notification.set(Some((
+                            NotificationType::Success,
+                            t.t("dictionaries.save_success"),
+                        )));
                         fetch_data.emit(());
-                    },
+                    }
                     Err(e) => {
-                        notification.set(Some((NotificationType::Error, t.t_with_args("dictionaries.save_failed", &HashMap::from([("error".to_string(), e.message)])))));
-                    },
+                        notification.set(Some((
+                            NotificationType::Error,
+                            t.t_with_args(
+                                "dictionaries.save_failed",
+                                &HashMap::from([("error".to_string(), e.message)]),
+                            ),
+                        )));
+                    }
                 }
             });
         })
@@ -314,21 +332,21 @@ pub fn dictionaries() -> Html {
                             </PermissionGuard>
 
                             <div class="flex space-x-2 bg-muted/50 p-1 rounded-lg">
-                                <Button 
+                                <Button
                                     variant={if *active_category == "Department" { ButtonVariant::Default } else { ButtonVariant::Ghost }}
                                     size={ButtonSize::Sm}
                                     onclick={on_category_change.reform(|_| "Department".to_string())}
                                 >
                                     <Building2 class="h-4 w-4 mr-2" />{t.t("dictionaries.department")}
                                 </Button>
-                                <Button 
+                                <Button
                                     variant={if *active_category == "Title" { ButtonVariant::Default } else { ButtonVariant::Ghost }}
                                     size={ButtonSize::Sm}
                                     onclick={on_category_change.reform(|_| "Title".to_string())}
                                 >
                                     <Briefcase class="h-4 w-4 mr-2" />{t.t("dictionaries.title")}
                                 </Button>
-                                <Button 
+                                <Button
                                     variant={if *active_category == "CostCenter" { ButtonVariant::Default } else { ButtonVariant::Ghost }}
                                     size={ButtonSize::Sm}
                                     onclick={on_category_change.reform(|_| "CostCenter".to_string())}
@@ -337,14 +355,14 @@ pub fn dictionaries() -> Html {
                                 </Button>
                             </div>
                         </CardHeader>
-                        
+
                         <CardBody class="px-0 pb-2">
                             if let Some((type_, msg)) = (*notification).clone() {
                                 <div class="px-4">
-                                    <Notification 
-                                        notification_type={type_} 
-                                        message={msg} 
-                                        show={true} 
+                                    <Notification
+                                        notification_type={type_}
+                                        message={msg}
+                                        show={true}
                                         on_close={close_notification.clone()}
                                     />
                                 </div>
@@ -355,11 +373,11 @@ pub fn dictionaries() -> Html {
                                 <ErrorDisplay message={err.clone()} />
                             } else if *show_form {
                                 <div class="p-4">
-                                    <DictionaryForm 
-                                        item={(*editing_item).clone()} 
+                                    <DictionaryForm
+                                        item={(*editing_item).clone()}
                                         category={(*active_category).clone()}
-                                        {on_save} 
-                                        {on_cancel} 
+                                        {on_save}
+                                        {on_cancel}
                                     />
                                 </div>
                             } else {
@@ -394,7 +412,7 @@ pub fn dictionaries() -> Html {
                                                             </TableCell>
                                                             <TableCell class="align-middle text-center">
                                                                 <PermissionGuard min_role={Role::User}>
-                                                                    <TableActions 
+                                                                    <TableActions
                                                                         on_edit={
                                                                             let on_edit = on_edit.clone();
                                                                             let i_edit = i_edit.clone();
@@ -420,7 +438,7 @@ pub fn dictionaries() -> Html {
                     </Card>
                 </div>
             </div>
-            <ConfirmModal 
+            <ConfirmModal
                 is_open={*delete_modal_open}
                 title={t.t("dictionaries.confirm_delete_title")}
                 message={t.t("dictionaries.confirm_delete_message")}

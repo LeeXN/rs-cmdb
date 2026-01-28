@@ -25,4 +25,4 @@ pub fn not_found_page() -> Html {
             </div>
         </div>
     }
-} 
+}

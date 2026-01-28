@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use common::error::{CmdbResult, CmdbError};
-use common::models::{Component, ComponentQuery, PaginatedResult, ComponentStatus};
-use serde_json;
 use crate::db::Database;
+use common::error::{CmdbError, CmdbResult};
+use common::models::{Component, ComponentQuery, ComponentStatus, PaginatedResult};
+use serde_json;
+use std::sync::Arc;
 
 /// Repository for component operations
 pub struct ComponentRepository {
@@ -18,54 +18,59 @@ impl ComponentRepository {
             key_prefix: "component:".to_string(),
         }
     }
-    
+
     /// Get component key in database
     fn get_key(&self, component_id: &str) -> String {
         format!("{}{}", self.key_prefix, component_id)
     }
-    
+
     /// Save a component to the database
     pub async fn save(&self, component: &Component) -> CmdbResult<()> {
-        let component_json = serde_json::to_vec(component)
-            .map_err(|e| CmdbError::Serialization(format!("Failed to serialize component: {}", e)))?;
-        
-        self.db.set(&self.get_key(&component.id), &component_json).await
+        let component_json = serde_json::to_vec(component).map_err(|e| {
+            CmdbError::Serialization(format!("Failed to serialize component: {}", e))
+        })?;
+
+        self.db
+            .set(&self.get_key(&component.id), &component_json)
+            .await
     }
-    
+
     /// Get a component by ID
     pub async fn get(&self, component_id: &str) -> CmdbResult<Option<Component>> {
         let component_data = match self.db.get(&self.get_key(component_id)).await? {
             Some(data) => data,
             None => return Ok(None),
         };
-        
-        let component = serde_json::from_slice(&component_data)
-            .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize component: {}", e)))?;
-            
+
+        let component = serde_json::from_slice(&component_data).map_err(|e| {
+            CmdbError::Serialization(format!("Failed to deserialize component: {}", e))
+        })?;
+
         Ok(Some(component))
     }
-    
+
     /// Check if a component exists
     pub async fn exists(&self, component_id: &str) -> CmdbResult<bool> {
         self.db.exists(&self.get_key(component_id)).await
     }
-    
+
     /// Delete a component
     pub async fn delete(&self, component_id: &str) -> CmdbResult<()> {
         self.db.delete(&self.get_key(component_id)).await
     }
-    
+
     /// List all components
     pub async fn list_all(&self) -> CmdbResult<Vec<Component>> {
         let values = self.db.list_values(&self.key_prefix).await?;
         let mut components = Vec::with_capacity(values.len());
-        
+
         for data in values {
-            let component = serde_json::from_slice(&data)
-                .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize component: {}", e)))?;
+            let component = serde_json::from_slice(&data).map_err(|e| {
+                CmdbError::Serialization(format!("Failed to deserialize component: {}", e))
+            })?;
             components.push(component);
         }
-        
+
         Ok(components)
     }
 
@@ -78,7 +83,10 @@ impl ComponentRepository {
     /// Find components by client ID
     pub async fn find_by_client_id(&self, client_id: &str) -> CmdbResult<Vec<Component>> {
         let all = self.list_all().await?;
-        Ok(all.into_iter().filter(|c| c.client_id.as_deref() == Some(client_id)).collect())
+        Ok(all
+            .into_iter()
+            .filter(|c| c.client_id.as_deref() == Some(client_id))
+            .collect())
     }
 
     /// Release components by client ID (set client_id to None and status to InStock)
@@ -93,9 +101,12 @@ impl ComponentRepository {
     }
 
     /// Find components with query filters and pagination
-    pub async fn find_with_query(&self, query: ComponentQuery) -> CmdbResult<PaginatedResult<Component>> {
+    pub async fn find_with_query(
+        &self,
+        query: ComponentQuery,
+    ) -> CmdbResult<PaginatedResult<Component>> {
         let mut components = self.list_all().await?;
-        
+
         // Filter by client_id
         if let Some(client_id) = &query.client_id {
             components.retain(|c| c.client_id.as_deref() == Some(client_id));
@@ -105,38 +116,41 @@ impl ComponentRepository {
         if let Some(status) = &query.status {
             components.retain(|c| c.status == *status);
         }
-        
+
         // Filter by type
         if let Some(component_type) = &query.component_type {
             components.retain(|c| c.component_type == *component_type);
         }
-        
+
         // Filter by search
-        if let Some(search) = &query.search {
-            if !search.is_empty() {
-                let search_lower = search.to_lowercase();
-                components.retain(|c| {
-                    c.serial_number.to_lowercase().contains(&search_lower) ||
-                    c.model.to_lowercase().contains(&search_lower) ||
-                    c.vendor.as_ref().map(|v| v.to_lowercase().contains(&search_lower)).unwrap_or(false)
-                });
-            }
+        if let Some(search) = &query.search
+            && !search.is_empty()
+        {
+            let search_lower = search.to_lowercase();
+            components.retain(|c| {
+                c.serial_number.to_lowercase().contains(&search_lower)
+                    || c.model.to_lowercase().contains(&search_lower)
+                    || c.vendor
+                        .as_ref()
+                        .map(|v| v.to_lowercase().contains(&search_lower))
+                        .unwrap_or(false)
+            });
         }
-        
+
         let total = components.len();
         let page = query.page.unwrap_or(1);
         let page_size = query.page_size.unwrap_or(10);
         let total_pages = (total as f64 / page_size as f64).ceil() as usize;
-        
+
         let start = (page - 1) * page_size;
         let end = std::cmp::min(start + page_size, total);
-        
+
         let items = if start < total {
             components[start..end].to_vec()
         } else {
             Vec::new()
         };
-        
+
         Ok(PaginatedResult {
             items,
             total,
@@ -180,7 +194,10 @@ mod tests {
         let component = create_test_component("comp-001", ComponentType::CPU);
         let result = repo.save(&component).await;
 
-        assert!(result.is_ok(), "Save should succeed with valid component data");
+        assert!(
+            result.is_ok(),
+            "Save should succeed with valid component data"
+        );
     }
 
     #[tokio::test]
@@ -234,8 +251,15 @@ mod tests {
 
         assert!(result.is_ok(), "Find with query should succeed");
         let paginated = result.unwrap();
-        assert_eq!(paginated.items.len(), 1, "Should return only CPU components");
-        assert_eq!(paginated.total, 1, "Total should be 1 (only CPU component matches)");
+        assert_eq!(
+            paginated.items.len(),
+            1,
+            "Should return only CPU components"
+        );
+        assert_eq!(
+            paginated.total, 1,
+            "Total should be 1 (only CPU component matches)"
+        );
         assert_eq!(paginated.page, 1, "Should be page 1");
         assert_eq!(paginated.page_size, 1, "Page size should be 1");
         assert_eq!(paginated.total_pages, 1, "Should have 1 page");
@@ -262,7 +286,11 @@ mod tests {
 
         assert!(result.is_ok(), "Find with query should succeed");
         let paginated = result.unwrap();
-        assert_eq!(paginated.items.len(), 1, "Should return only components for client-001");
+        assert_eq!(
+            paginated.items.len(),
+            1,
+            "Should return only components for client-001"
+        );
         assert_eq!(paginated.items[0].id, "comp-003");
     }
 
@@ -312,7 +340,11 @@ mod tests {
 
         assert!(result.is_ok(), "Find with query should succeed");
         let paginated = result.unwrap();
-        assert_eq!(paginated.items.len(), 0, "Should return empty for out of bounds page");
+        assert_eq!(
+            paginated.items.len(),
+            0,
+            "Should return empty for out of bounds page"
+        );
         assert_eq!(paginated.total, 5, "Total should still be 5");
     }
 
@@ -358,7 +390,10 @@ mod tests {
 
         let retrieved = repo.get("comp-007").await.unwrap().unwrap();
         assert_eq!(retrieved.model, "Updated Model");
-        assert_ne!(retrieved.updated_at, retrieved.created_at, "Updated timestamp should differ");
+        assert_ne!(
+            retrieved.updated_at, retrieved.created_at,
+            "Updated timestamp should differ"
+        );
     }
 
     #[tokio::test]
@@ -399,7 +434,10 @@ mod tests {
         let result = repo.exists("nonexistent").await;
 
         assert!(result.is_ok(), "Exists should not return error");
-        assert!(!result.unwrap(), "Should return false for non-existent component");
+        assert!(
+            !result.unwrap(),
+            "Should return false for non-existent component"
+        );
     }
 
     #[tokio::test]
@@ -425,8 +463,16 @@ mod tests {
 
         assert_eq!(comp1.client_id, None, "Client ID should be set to None");
         assert_eq!(comp2.client_id, None, "Client ID should be set to None");
-        assert_eq!(comp1.status, ComponentStatus::InStock, "Status should be InStock");
-        assert_eq!(comp2.status, ComponentStatus::InStock, "Status should be InStock");
+        assert_eq!(
+            comp1.status,
+            ComponentStatus::InStock,
+            "Status should be InStock"
+        );
+        assert_eq!(
+            comp2.status,
+            ComponentStatus::InStock,
+            "Status should be InStock"
+        );
     }
 
     #[tokio::test]

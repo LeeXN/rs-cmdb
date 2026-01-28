@@ -1,17 +1,17 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 
-use crate::pages::clients::ClientsPage;
-use crate::pages::client_detail::ClientDetailPage;
-use crate::pages::home::HomePage;
-use crate::pages::client_setup::ClientSetupPage;
 use crate::pages::analytics::AnalyticsPage;
-use crate::pages::not_found::NotFoundPage;
-use crate::pages::login::Login;
-use crate::pages::persons::Persons;
-use crate::pages::projects::Projects;
+use crate::pages::client_detail::ClientDetailPage;
+use crate::pages::client_setup::ClientSetupPage;
+use crate::pages::clients::ClientsPage;
 use crate::pages::components::Components;
 use crate::pages::dictionaries::Dictionaries;
+use crate::pages::home::HomePage;
+use crate::pages::login::Login;
+use crate::pages::not_found::NotFoundPage;
+use crate::pages::persons::Persons;
+use crate::pages::projects::Projects;
 use crate::pages::racks::Racks;
 use crate::pages::settings::change_password::ChangePassword;
 use crate::pages::settings::users::Users;

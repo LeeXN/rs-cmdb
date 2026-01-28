@@ -1,22 +1,21 @@
+use crate::repository::user_repository::UserRepository;
+use crate::service::auth_service::AuthService;
 use axum::{
-    extract::{Path, Extension, Json},
+    extract::{Extension, Json, Path},
     http::StatusCode,
     response::IntoResponse,
 };
-use std::sync::Arc;
-use common::models::ApiResponse;
 use common::entity::user::{UpdateUserRequest, UserResponse};
-use crate::repository::user_repository::UserRepository;
-use crate::service::auth_service::AuthService;
-use tracing::{info, error};
+use common::models::ApiResponse;
+use std::sync::Arc;
+use tracing::{error, info};
 
 /// List all users
-pub async fn list_users(
-    Extension(user_repo): Extension<Arc<UserRepository>>,
-) -> impl IntoResponse {
+pub async fn list_users(Extension(user_repo): Extension<Arc<UserRepository>>) -> impl IntoResponse {
     match user_repo.list_all().await {
         Ok(users) => {
-            let user_responses: Vec<UserResponse> = users.into_iter().map(UserResponse::from).collect();
+            let user_responses: Vec<UserResponse> =
+                users.into_iter().map(UserResponse::from).collect();
             let response = ApiResponse {
                 status: 200,
                 message: "Success".to_string(),

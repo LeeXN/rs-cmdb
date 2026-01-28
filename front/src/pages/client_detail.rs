@@ -1,27 +1,30 @@
-use yew::prelude::*;
 use gloo::timers::callback::Interval;
+use gloo::utils::document;
 use std::rc::Rc;
 use yew::create_portal;
-use gloo::utils::document;
+use yew::prelude::*;
 
-use crate::components::loading::Loading;
 use crate::components::error::ErrorDisplay;
-use crate::components::hardware_info::HardwareInfo;
 use crate::components::hardware_history::HardwareHistory;
+use crate::components::hardware_info::HardwareInfo;
+use crate::components::loading::Loading;
+use crate::hooks::use_trans::use_trans;
 use crate::services::api::{self, ApiError};
-use crate::types::{Client, Hardware, Person, Project, ClientStatus, Environment};
+use crate::types::{Client, ClientStatus, Environment, Hardware, Person, Project};
 use crate::utils::format::{format_datetime, format_time_ago};
 use wasm_bindgen_futures::spawn_local;
-use crate::hooks::use_trans::use_trans;
 
 use crate::components::client_edit_modal::ClientEditModal;
 use crate::components::permission_guard::PermissionGuard;
 use common::entity::user::Role;
 
-use crate::components::ui::card::{Card, CardHeader, CardContent, CardTitle};
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
 use crate::components::ui::badge::{Badge, BadgeVariant};
-use lucide_yew::{Info, Cpu, History, Pencil, RefreshCw, Server, Activity, MapPin, Box as BoxIcon, Power, User, Folder, Tag, Calendar, Clock, TriangleAlert, CircleQuestionMark};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
+use lucide_yew::{
+    Activity, Box as BoxIcon, Calendar, CircleQuestionMark, Clock, Cpu, Folder, History, Info,
+    MapPin, Pencil, Power, RefreshCw, Server, Tag, TriangleAlert, User,
+};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ClientDetailTab {
@@ -81,174 +84,154 @@ impl Reducible for ClientDetailState {
 
     fn reduce(self: Rc<Self>, action: Self::Action) -> Rc<Self> {
         match action {
-            ClientDetailAction::SetClient(client) => {
-                Rc::new(Self {
-                    client: Some(client),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: false,
-                    hardware_loading: self.hardware_loading,
-                    error: None,
-                    hardware_error: self.hardware_error.clone(),
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::SetHardware(hardware) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: Some(hardware),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: self.loading,
-                    hardware_loading: false,
-                    error: self.error.clone(),
-                    hardware_error: None,
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::SetPersons(persons) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons,
-                    projects: self.projects.clone(),
-                    loading: self.loading,
-                    hardware_loading: self.hardware_loading,
-                    error: self.error.clone(),
-                    hardware_error: self.hardware_error.clone(),
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::SetProjects(projects) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects,
-                    loading: self.loading,
-                    hardware_loading: self.hardware_loading,
-                    error: self.error.clone(),
-                    hardware_error: self.hardware_error.clone(),
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::SetLoading(loading) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading,
-                    hardware_loading: self.hardware_loading,
-                    error: if loading { None } else { self.error.clone() },
-                    hardware_error: self.hardware_error.clone(),
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::SetHardwareLoading(loading) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: self.loading,
-                    hardware_loading: loading,
-                    error: self.error.clone(),
-                    hardware_error: if loading { None } else { self.hardware_error.clone() },
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::SetError(error) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: false,
-                    hardware_loading: self.hardware_loading,
-                    error,
-                    hardware_error: self.hardware_error.clone(),
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::SetHardwareError(error) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: self.loading,
-                    hardware_loading: false,
-                    error: self.error.clone(),
-                    hardware_error: error,
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::ChangeTab(tab) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: self.loading,
-                    hardware_loading: self.hardware_loading,
-                    error: self.error.clone(),
-                    hardware_error: self.hardware_error.clone(),
-                    active_tab: tab,
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::RefreshClient => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: true,
-                    hardware_loading: self.hardware_loading,
-                    error: None,
-                    hardware_error: self.hardware_error.clone(),
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::RefreshHardware => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: self.loading,
-                    hardware_loading: true,
-                    error: self.error.clone(),
-                    hardware_error: None,
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: self.show_edit_modal,
-                })
-            }
-            ClientDetailAction::ToggleEditModal(show) => {
-                Rc::new(Self {
-                    client: self.client.clone(),
-                    hardware: self.hardware.clone(),
-                    persons: self.persons.clone(),
-                    projects: self.projects.clone(),
-                    loading: self.loading,
-                    hardware_loading: self.hardware_loading,
-                    error: self.error.clone(),
-                    hardware_error: self.hardware_error.clone(),
-                    active_tab: self.active_tab.clone(),
-                    show_edit_modal: show,
-                })
-            }
+            ClientDetailAction::SetClient(client) => Rc::new(Self {
+                client: Some(client),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: false,
+                hardware_loading: self.hardware_loading,
+                error: None,
+                hardware_error: self.hardware_error.clone(),
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::SetHardware(hardware) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: Some(hardware),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: self.loading,
+                hardware_loading: false,
+                error: self.error.clone(),
+                hardware_error: None,
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::SetPersons(persons) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons,
+                projects: self.projects.clone(),
+                loading: self.loading,
+                hardware_loading: self.hardware_loading,
+                error: self.error.clone(),
+                hardware_error: self.hardware_error.clone(),
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::SetProjects(projects) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects,
+                loading: self.loading,
+                hardware_loading: self.hardware_loading,
+                error: self.error.clone(),
+                hardware_error: self.hardware_error.clone(),
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::SetLoading(loading) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading,
+                hardware_loading: self.hardware_loading,
+                error: if loading { None } else { self.error.clone() },
+                hardware_error: self.hardware_error.clone(),
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::SetHardwareLoading(loading) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: self.loading,
+                hardware_loading: loading,
+                error: self.error.clone(),
+                hardware_error: if loading {
+                    None
+                } else {
+                    self.hardware_error.clone()
+                },
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::SetError(error) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: false,
+                hardware_loading: self.hardware_loading,
+                error,
+                hardware_error: self.hardware_error.clone(),
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::SetHardwareError(error) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: self.loading,
+                hardware_loading: false,
+                error: self.error.clone(),
+                hardware_error: error,
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::ChangeTab(tab) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: self.loading,
+                hardware_loading: self.hardware_loading,
+                error: self.error.clone(),
+                hardware_error: self.hardware_error.clone(),
+                active_tab: tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::RefreshClient => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: true,
+                hardware_loading: self.hardware_loading,
+                error: None,
+                hardware_error: self.hardware_error.clone(),
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::RefreshHardware => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: self.loading,
+                hardware_loading: true,
+                error: self.error.clone(),
+                hardware_error: None,
+                active_tab: self.active_tab,
+                show_edit_modal: self.show_edit_modal,
+            }),
+            ClientDetailAction::ToggleEditModal(show) => Rc::new(Self {
+                client: self.client.clone(),
+                hardware: self.hardware.clone(),
+                persons: self.persons.clone(),
+                projects: self.projects.clone(),
+                loading: self.loading,
+                hardware_loading: self.hardware_loading,
+                error: self.error.clone(),
+                hardware_error: self.hardware_error.clone(),
+                active_tab: self.active_tab,
+                show_edit_modal: show,
+            }),
         }
     }
 }
@@ -262,7 +245,7 @@ pub struct ClientDetailPageProps {
 pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
     let t = use_trans();
     let state = use_reducer(ClientDetailState::default);
-    
+
     // Timer for auto-refresh
     let state_for_interval = state.clone();
     use_effect_with((), move |_| {
@@ -280,12 +263,15 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
     let client_id_load_client = props.client_id.clone();
     use_effect_with(state.loading, move |loading| {
         if *loading {
-            api::get_client(client_id_load_client.clone(), Callback::from(move |result: Result<Client, ApiError>| {
-                match result {
+            api::get_client(
+                client_id_load_client.clone(),
+                Callback::from(move |result: Result<Client, ApiError>| match result {
                     Ok(client) => state_load_client.dispatch(ClientDetailAction::SetClient(client)),
-                    Err(err) => state_load_client.dispatch(ClientDetailAction::SetError(Some(err.message))),
-                }
-            }));
+                    Err(err) => {
+                        state_load_client.dispatch(ClientDetailAction::SetError(Some(err.message)))
+                    }
+                }),
+            );
         }
         || ()
     });
@@ -311,18 +297,24 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
     // Fetch hardware data when tab is active and loading is true
     let state_load_hw = state.clone();
     let client_id_load_hw = props.client_id.clone();
-    use_effect_with((state.hardware_loading, state.active_tab), move |(loading, tab)| {
-        if *loading && *tab == ClientDetailTab::Hardware {
-            api::get_hardware_info(client_id_load_hw.clone(), Callback::from(move |result: Result<Hardware, ApiError>| {
-                match result {
-                    Ok(hardware) => state_load_hw.dispatch(ClientDetailAction::SetHardware(hardware)),
-                    Err(err) => state_load_hw.dispatch(ClientDetailAction::SetHardwareError(Some(err.message))),
-                }
-            }));
-        }
-        || ()
-    });
-
+    use_effect_with(
+        (state.hardware_loading, state.active_tab),
+        move |(loading, tab)| {
+            if *loading && *tab == ClientDetailTab::Hardware {
+                api::get_hardware_info(
+                    client_id_load_hw.clone(),
+                    Callback::from(move |result: Result<Hardware, ApiError>| match result {
+                        Ok(hardware) => {
+                            state_load_hw.dispatch(ClientDetailAction::SetHardware(hardware))
+                        }
+                        Err(err) => state_load_hw
+                            .dispatch(ClientDetailAction::SetHardwareError(Some(err.message))),
+                    }),
+                );
+            }
+            || ()
+        },
+    );
 
     let on_refresh_client = {
         let state = state.clone();
@@ -330,7 +322,7 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
             state.dispatch(ClientDetailAction::RefreshClient);
         })
     };
-    
+
     let _on_refresh_hardware = {
         let state = state.clone();
         Callback::from(move |_: MouseEvent| {
@@ -351,13 +343,14 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
             state.dispatch(ClientDetailAction::RefreshHardware);
         })
     };
-    
+
     let change_tab = {
         let state = state.clone();
         Callback::from(move |tab: ClientDetailTab| {
             state.dispatch(ClientDetailAction::ChangeTab(tab));
-            if tab == ClientDetailTab::Hardware && state.hardware.is_none() { // Also trigger load if hardware not yet loaded
-                 state.dispatch(ClientDetailAction::SetHardwareLoading(true));
+            if tab == ClientDetailTab::Hardware && state.hardware.is_none() {
+                // Also trigger load if hardware not yet loaded
+                state.dispatch(ClientDetailAction::SetHardwareLoading(true));
             }
         })
     };
@@ -390,11 +383,12 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
                         state.dispatch(ClientDetailAction::SetClient(client));
                         state.dispatch(ClientDetailAction::ToggleEditModal(false));
                         gloo::dialogs::alert(&t.t("client_detail.update_success"));
-                    },
-                    Err(e) => gloo::dialogs::alert(&format!(
-                        "{}", 
-                        t.t("client_detail.update_failed").replace("{}", &e.message)
-                    )),
+                    }
+                    Err(e) => gloo::dialogs::alert(
+                        &t.t("client_detail.update_failed")
+                            .replace("{}", &e.message)
+                            .to_string(),
+                    ),
                 }
             });
         })
@@ -404,27 +398,47 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
         let t = t.clone();
         let state = state.clone();
         move |client: &Client| -> Html {
-            let registered_dt = client.registered_at.as_ref().map_or(t.t("unknown"), |time| format_datetime(time));
-            let last_seen_dt = client.last_seen.as_ref().map_or(t.t("unknown"), |time| format_datetime(time));
-            let last_seen_ago = client.last_seen.as_ref().map_or(t.t("unknown"), |time| format_time_ago(time));
+            let registered_dt = client
+                .registered_at
+                .as_ref()
+                .map_or(t.t("unknown"), |time| format_datetime(time));
+            let last_seen_dt = client
+                .last_seen
+                .as_ref()
+                .map_or(t.t("unknown"), |time| format_datetime(time));
+            let last_seen_ago = client
+                .last_seen
+                .as_ref()
+                .map_or(t.t("unknown"), |time| format_time_ago(time));
 
-            let is_online = client.last_seen.as_ref()
+            let is_online = client
+                .last_seen
+                .as_ref()
                 .and_then(|time| chrono::DateTime::parse_from_rfc3339(time).ok())
-                .map(|dt| chrono::Utc::now().signed_duration_since(dt.with_timezone(&chrono::Utc)).num_minutes() <= 5)
+                .map(|dt| {
+                    chrono::Utc::now()
+                        .signed_duration_since(dt.with_timezone(&chrono::Utc))
+                        .num_minutes()
+                        <= 5
+                })
                 .unwrap_or(false);
-            
+
             let online_status_badge = if is_online {
-                html!{ <Badge variant={BadgeVariant::Outline} class="ml-2 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 animate-pulse">{t.t("online")}</Badge> }
+                html! { <Badge variant={BadgeVariant::Outline} class="ml-2 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 animate-pulse">{t.t("online")}</Badge> }
             } else {
-                html!{ <Badge variant={BadgeVariant::Secondary} class="ml-2">{t.t("offline")}</Badge> }
+                html! { <Badge variant={BadgeVariant::Secondary} class="ml-2">{t.t("offline")}</Badge> }
             };
 
-            let owner_name = client.owner_id.as_ref()
+            let owner_name = client
+                .owner_id
+                .as_ref()
                 .and_then(|id| state.persons.iter().find(|p| &p.id == id))
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| client.owner_id.clone().unwrap_or_else(|| "-".to_string()));
 
-            let project_name = client.project_id.as_ref()
+            let project_name = client
+                .project_id
+                .as_ref()
                 .and_then(|id| state.projects.iter().find(|p| &p.id == id))
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| client.project_id.clone().unwrap_or_else(|| "-".to_string()));
@@ -570,27 +584,28 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
                 </Card>
             }
         }
-    };    html! {
+    };
+    html! {
         <div class="p-4 space-y-6">
-            
+
             // Main Content Area with Tabs
             <div class="flex flex-col gap-4">
                 <div class="flex space-x-2 bg-muted/50 p-1 rounded-lg w-fit">
-                    <Button 
+                    <Button
                         variant={if state.active_tab == ClientDetailTab::Overview { ButtonVariant::Default } else { ButtonVariant::Ghost }}
                         size={ButtonSize::Sm}
                         onclick={change_tab.reform(|_| ClientDetailTab::Overview)}
                     >
                         <Info class="h-4 w-4 mr-2" />{t.t("client_detail.tab_overview")}
                     </Button>
-                    <Button 
+                    <Button
                         variant={if state.active_tab == ClientDetailTab::Hardware { ButtonVariant::Default } else { ButtonVariant::Ghost }}
                         size={ButtonSize::Sm}
                         onclick={change_tab.reform(|_| ClientDetailTab::Hardware)}
                     >
                         <Cpu class="h-4 w-4 mr-2" />{t.t("client_detail.tab_hardware")}
                     </Button>
-                    <Button 
+                    <Button
                         variant={if state.active_tab == ClientDetailTab::HardwareHistory { ButtonVariant::Default } else { ButtonVariant::Ghost }}
                         size={ButtonSize::Sm}
                         onclick={change_tab.reform(|_| ClientDetailTab::HardwareHistory)}
@@ -624,16 +639,14 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
                                     html! { <Loading message={t.t("client_detail.loading_hardware")} /> }
                                 } else if let Some(error_msg) = &state.hardware_error {
                                     html! { <ErrorDisplay message={error_msg.clone()} on_retry={on_retry_hardware.clone()} /> }
+                                } else if let Some(hw) = &state.hardware {
+                                    html! { <HardwareInfo hardware={hw.clone()} /> }
                                 } else {
-                                    if let Some(hw) = &state.hardware {
-                                        html! { <HardwareInfo hardware={hw.clone()} /> }
-                                    } else {
-                                        html! { 
-                                            <div class="flex flex-col items-center justify-center p-12 text-muted-foreground">
-                                                <TriangleAlert class="h-12 w-12 mb-4 opacity-50" />
-                                                <p>{t.t("client_detail.no_hardware")}</p>
-                                            </div> 
-                                        }
+                                    html! {
+                                        <div class="flex flex-col items-center justify-center p-12 text-muted-foreground">
+                                            <TriangleAlert class="h-12 w-12 mb-4 opacity-50" />
+                                            <p>{t.t("client_detail.no_hardware")}</p>
+                                        </div>
                                     }
                                 }
                             } else {
@@ -656,18 +669,18 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
                     </div>
                 </div>
             </div>
-            
+
             // Modal rendered outside of tabs to avoid z-index/overflow issues
             {
                 if state.show_edit_modal {
                     if let Some(client_data) = &state.client {
                         create_portal(
-                            html! { 
-                                <ClientEditModal 
-                                    client={client_data.clone()} 
-                                    on_save={on_save_client.clone()} 
-                                    on_cancel={on_close_edit_modal.clone()} 
-                                /> 
+                            html! {
+                                <ClientEditModal
+                                    client={client_data.clone()}
+                                    on_save={on_save_client.clone()}
+                                    on_cancel={on_close_edit_modal.clone()}
+                                />
                             },
                             document().body().unwrap().into()
                         )

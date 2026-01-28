@@ -1,23 +1,14 @@
-use yewdux::prelude::*;
-use serde::{Serialize, Deserialize};
 use crate::types::User;
+use serde::{Deserialize, Serialize};
+use yewdux::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Store)]
 #[store(storage = "local", storage_tab_sync)]
+#[derive(Default)]
 pub struct AuthStore {
     pub token: Option<String>,
     pub user: Option<User>,
     pub is_authenticated: bool,
-}
-
-impl Default for AuthStore {
-    fn default() -> Self {
-        Self {
-            token: None,
-            user: None,
-            is_authenticated: false,
-        }
-    }
 }
 
 impl AuthStore {
@@ -26,10 +17,13 @@ impl AuthStore {
     }
 
     pub fn login(dispatch: Dispatch<AuthStore>, token: String, user: User) {
-        dispatch.reduce(|_| AuthStore {
-            token: Some(token),
-            user: Some(user),
-            is_authenticated: true,
-        }.into());
+        dispatch.reduce(|_| {
+            AuthStore {
+                token: Some(token),
+                user: Some(user),
+                is_authenticated: true,
+            }
+            .into()
+        });
     }
 }

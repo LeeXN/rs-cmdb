@@ -1,11 +1,11 @@
-use crate::types::Client;
 use super::state::FilterState;
+use crate::types::Client;
 
 #[allow(dead_code)]
 pub fn filter_clients_local(
-    all_clients: &[Client], 
-    search_term: &str, 
-    filters: &FilterState
+    all_clients: &[Client],
+    search_term: &str,
+    filters: &FilterState,
 ) -> Vec<Client> {
     all_clients
         .iter()
@@ -13,19 +13,34 @@ pub fn filter_clients_local(
             // 搜索词筛选
             if !search_term.is_empty() {
                 let search_lower = search_term.to_lowercase();
-                let matches_search = client.hostname.to_lowercase().contains(&search_lower) ||
-                    client.ip_address.contains(search_term) ||
-                    client.os.as_ref().map_or(false, |os| os.to_lowercase().contains(&search_lower)) ||
-                    client.kernel_version.as_ref().map_or(false, |kernel| kernel.to_lowercase().contains(&search_lower)) ||
-                    client.sys_vendor.as_ref().map_or(false, |vendor| vendor.to_lowercase().contains(&search_lower)) ||
-                    client.product_name.as_ref().map_or(false, |product| product.to_lowercase().contains(&search_lower)) ||
-                    client.serial_number.as_ref().map_or(false, |serial| serial.to_lowercase().contains(&search_lower));
-                
+                let matches_search = client.hostname.to_lowercase().contains(&search_lower)
+                    || client.ip_address.contains(search_term)
+                    || client
+                        .os
+                        .as_ref()
+                        .is_some_and(|os| os.to_lowercase().contains(&search_lower))
+                    || client
+                        .kernel_version
+                        .as_ref()
+                        .is_some_and(|kernel| kernel.to_lowercase().contains(&search_lower))
+                    || client
+                        .sys_vendor
+                        .as_ref()
+                        .is_some_and(|vendor| vendor.to_lowercase().contains(&search_lower))
+                    || client
+                        .product_name
+                        .as_ref()
+                        .is_some_and(|product| product.to_lowercase().contains(&search_lower))
+                    || client
+                        .serial_number
+                        .as_ref()
+                        .is_some_and(|serial| serial.to_lowercase().contains(&search_lower));
+
                 if !matches_search {
                     return false;
                 }
             }
-            
+
             // 操作系统筛选
             if !filters.os.is_empty() {
                 if let Some(os) = &client.os {
@@ -47,7 +62,7 @@ pub fn filter_clients_local(
                     return false;
                 }
             }
-            
+
             // 服务器厂商筛选
             if !filters.server_vendor.is_empty() {
                 if let Some(vendor) = &client.sys_vendor {
@@ -61,7 +76,9 @@ pub fn filter_clients_local(
 
             // 状态筛选 (在线/离线)
             if !filters.status.is_empty() {
-                let is_online = client.last_seen.as_ref()
+                let is_online = client
+                    .last_seen
+                    .as_ref()
                     .and_then(|last_seen| chrono::DateTime::parse_from_rfc3339(last_seen).ok())
                     .map(|dt| {
                         let now = chrono::Utc::now();
@@ -69,7 +86,7 @@ pub fn filter_clients_local(
                         duration.num_minutes() <= 5
                     })
                     .unwrap_or(false);
-                
+
                 if filters.status == "online" && !is_online {
                     return false;
                 }
@@ -80,7 +97,11 @@ pub fn filter_clients_local(
 
             // 设备状态筛选 (Active, Maintenance, etc.)
             if !filters.client_status.is_empty() {
-                let status_str = client.status.as_ref().map(|s| format!("{:?}", s)).unwrap_or_default();
+                let status_str = client
+                    .status
+                    .as_ref()
+                    .map(|s| format!("{:?}", s))
+                    .unwrap_or_default();
                 if status_str != filters.client_status {
                     return false;
                 }
@@ -88,7 +109,11 @@ pub fn filter_clients_local(
 
             // 环境筛选
             if !filters.environment.is_empty() {
-                let env_str = client.environment.as_ref().map(|e| format!("{:?}", e)).unwrap_or_default();
+                let env_str = client
+                    .environment
+                    .as_ref()
+                    .map(|e| format!("{:?}", e))
+                    .unwrap_or_default();
                 if env_str != filters.environment {
                     return false;
                 }
@@ -129,7 +154,7 @@ pub fn filter_clients_local(
 
             // 对于硬件筛选，如果有设置就表示需要API筛选
             // 这里只做基础验证，实际筛选由API完成
-            
+
             true
         })
         .cloned()

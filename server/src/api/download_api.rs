@@ -1,16 +1,19 @@
 use axum::{
-    extract::{Path, Query, Extension},
-    http::{StatusCode, HeaderMap, header::{CONTENT_TYPE, CONTENT_DISPOSITION, HOST}},
-    response::{Response, Json},
+    extract::{Extension, Path, Query},
+    http::{
+        HeaderMap, StatusCode,
+        header::{CONTENT_DISPOSITION, CONTENT_TYPE, HOST},
+    },
+    response::{Json, Response},
 };
 use axum_macros::debug_handler;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::fs;
-use tracing::{info, error, instrument};
+use tracing::{error, info, instrument};
 
-use crate::service::client_service::ClientService;
 use crate::config::ServerConfig;
+use crate::service::client_service::ClientService;
 
 #[derive(Deserialize, Debug)]
 pub struct DownloadQuery {
@@ -46,14 +49,14 @@ pub async fn get_client_info(
         "darwin" => "rs-cmdb-client",
         _ => "rs-cmdb-client",
     };
-    
+
     // Determine server URL from headers or config
     let host = headers
         .get(HOST)
         .and_then(|h| h.to_str().ok())
         .map(|h| h.to_string())
         .unwrap_or_else(|| format!("{}:{}", config.host, config.port));
-        
+
     // Check for X-Forwarded-Proto to determine scheme
     let scheme = headers
         .get("X-Forwarded-Proto")
@@ -61,12 +64,15 @@ pub async fn get_client_info(
         .unwrap_or("http");
 
     let server_url = format!("{}://{}", scheme, host);
-    let download_url = format!("{}/api/v1/download/client/{}/{}/{}", server_url, platform, arch, binary_name);
-    
+    let download_url = format!(
+        "{}/api/v1/download/client/{}/{}/{}",
+        server_url, platform, arch, binary_name
+    );
+
     let install_script = generate_install_script(&server_url, &platform, &arch);
     let systemd_service = generate_systemd_service(&server_url);
     let config_template = generate_config_template(&server_url);
-    
+
     let response = ClientInfo {
         server_url: server_url.clone(),
         download_url,
@@ -74,7 +80,7 @@ pub async fn get_client_info(
         systemd_service,
         config_template,
     };
-    
+
     Ok(Json(response))
 }
 
@@ -84,24 +90,20 @@ pub async fn get_client_info(
 pub async fn download_client(
     Path((platform, arch, binary_name)): Path<(String, String, String)>,
 ) -> Result<Response, (StatusCode, &'static str)> {
-    
     let file_path = format!("binaries/{}/{}/{}", platform, arch, binary_name);
     println!("Downloading client binary from path: {}", file_path);
-    
+
     match fs::read(&file_path).await {
         Ok(content) => {
             let mut headers = HeaderMap::new();
-            headers.insert(
-                CONTENT_TYPE,
-                "application/octet-stream".parse().unwrap(),
-            );
+            headers.insert(CONTENT_TYPE, "application/octet-stream".parse().unwrap());
             headers.insert(
                 CONTENT_DISPOSITION,
                 format!("attachment; filename=\"{}\"", binary_name)
                     .parse()
                     .unwrap(),
             );
-            
+
             info!("Client binary downloaded: {}", file_path);
             Ok(Response::builder()
                 .status(StatusCode::OK)
@@ -128,7 +130,7 @@ pub async fn get_install_script(
         .and_then(|h| h.to_str().ok())
         .map(|h| h.to_string())
         .unwrap_or_else(|| format!("{}:{}", config.host, config.port));
-        
+
     // Check for X-Forwarded-Proto to determine scheme
     let scheme = headers
         .get("X-Forwarded-Proto")
@@ -137,7 +139,7 @@ pub async fn get_install_script(
 
     let server_url = format!("{}://{}", scheme, host);
     let script = generate_install_script(&server_url, "linux", "x86_64");
-    
+
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, "text/x-shellscript")
@@ -147,7 +149,8 @@ pub async fn get_install_script(
 
 fn generate_install_script(server_url: &str, platform: &str, arch: &str) -> String {
     match platform {
-        "linux" => format!(r#"#!/bin/bash
+        "linux" => format!(
+            r#"#!/bin/bash
 # RS-CMDB Client Install Script
 
 set -e
@@ -213,8 +216,11 @@ sudo systemctl start rs-cmdb-client
 
 echo "RS-CMDB Client installed and started successfully!"
 echo "Check status with: sudo systemctl status rs-cmdb-client"
-"#, server_url, server_url),
-        "windows" => format!(r#"@echo off
+"#,
+            server_url, server_url
+        ),
+        "windows" => format!(
+            r#"@echo off
 REM RS-CMDB Client Install Script for Windows
 
 echo Installing RS-CMDB Client...
@@ -233,13 +239,15 @@ echo Generating configuration...
 
 echo RS-CMDB Client installed successfully!
 echo Run manually with: "C:\Program Files\rs-cmdb\rs-cmdb-client.exe" --config "C:\ProgramData\rs-cmdb\client.toml" service
-"#, server_url, platform, arch, server_url),
+"#,
+            server_url, platform, arch, server_url
+        ),
         _ => "# Unsupported platform".to_string(),
     }
 }
 
 fn generate_systemd_service(_server_url: &str) -> String {
-    format!(r#"[Unit]
+    r#"[Unit]
 Description=RS-CMDB Client
 After=network.target
 
@@ -251,11 +259,13 @@ Restart=always
 RestartSec=10
 
 [Install]
-WantedBy=multi-user.target"#)
+WantedBy=multi-user.target"#
+        .to_string()
 }
 
 fn generate_config_template(server_url: &str) -> String {
-    format!(r#"# RS-CMDB Client Configuration
+    format!(
+        r#"# RS-CMDB Client Configuration
 
 # 客户端唯一标识符（留空将自动生成）
 client_id = ""
@@ -286,5 +296,7 @@ components = ["sys", "os", "cpu", "ram", "disk", "nic", "gpu", "ipmi"]
 level = "info"
 # 日志文件路径（可选）
 file = "/var/log/rs-cmdb-client.log"
-"#, server_url)
-} 
+"#,
+        server_url
+    )
+}

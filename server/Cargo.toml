@@ -39,6 +39,8 @@ jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 argon2 = "0.5.3"
 axum-extra = { version = "0.12.2", features = ["typed-header"] }
 futures = "0.3"
+governor = "0.7.0"
+rpassword = "7.3"
 
 [[bin]]
 name = "rs-cmdb-server"

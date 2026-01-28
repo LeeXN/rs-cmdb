@@ -59,7 +59,8 @@ docker run -itd \
 ```
 
 After starting, access the UI at `http://localhost:8080`.
-*   **Default Admin**: `admin` / `admin`
+
+**⚠️ Important:** The server requires secure environment variables to be set for first-time initialization. See the [Configuration](#-configuration) section below.
 
 ## �� Architecture
 
@@ -241,6 +242,63 @@ User ID  Username         Enabled  Privilege
 
 The server is configured via a TOML file. By default, it looks for `config/default.toml`. You can also override settings using environment variables (prefixed with `CMDB_`).
 
+### 🔐 Security Configuration (Required)
+
+For security reasons, the server requires two environment variables to be set before first-time startup:
+
+#### 1. JWT Secret (`CMDB_JWT_SECRET`)
+
+The JWT secret is used to sign authentication tokens. **The server will NOT start** if this is not set or uses the default value.
+
+**Generate a secure JWT secret (32+ characters):**
+
+```bash
+# Using OpenSSL (recommended)
+export CMDB_JWT_SECRET=$(openssl rand -base64 32)
+
+# Or use /dev/urandom
+export CMDB_JWT_SECRET=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+
+# Or generate a longer secret for extra security
+export CMDB_JWT_SECRET=$(openssl rand -hex 64)
+```
+
+#### 2. Admin Password (`CMDB_ADMIN_PASSWORD`)
+
+On first startup, the server checks if an admin user exists. If not, it creates one using this password. The password must meet complexity requirements:
+- At least 12 characters
+- At least one uppercase letter (A-Z)
+- At least one lowercase letter (a-z)
+- At least one number (0-9)
+- At least one special character
+
+**Set a secure admin password:**
+
+```bash
+# Example (change this to your own secure password)
+export CMDB_ADMIN_PASSWORD="YourSecureP@ssword123"
+
+# Or generate a random secure password
+export CMDB_ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d '=' | tr '+/' '@#')
+```
+
+**Docker Example with Environment Variables:**
+
+```bash
+docker run -itd \
+  --name rs-cmdb \
+  -p 8080:8080 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/binaires:/app/binaires \
+  -e CMDB_JWT_SECRET="$(openssl rand -base64 32)" \
+  -e CMDB_ADMIN_PASSWORD="YourSecureP@ssword123" \
+  leex2019/rs-cmdb:${RSCMDB_VERSION}
+```
+
+**Without Environment Variables:**
+
+If you don't set `CMDB_ADMIN_PASSWORD`, the server will prompt you interactively for the admin password on first startup (not recommended for automated deployments).
+
 ### Configuration File (`config/default.toml`)
 
 ```toml
@@ -248,9 +306,16 @@ The server is configured via a TOML file. By default, it looks for `config/defau
 host = "0.0.0.0"           # Bind address
 port = 8080                # Server port
 log_level = "info"         # Log level: debug, info, warn, error
-jwt_secret = "change_me"   # Secret key for JWT tokens
 
-# Security (Optional)
+# Security
+# jwt_secret should be set via CMDB_JWT_SECRET environment variable
+# Do NOT use the default value in production!
+jwt_secret = "change_me_in_production"
+
+# SSH Configuration (for remote service management)
+ssh_known_hosts_file = "/etc/cmdb/ssh_known_hosts"  # Path to SSH known_hosts file
+
+# TLS (Optional)
 enable_tls = false
 # tls_cert = "path/to/cert.pem"
 # tls_key = "path/to/key.pem"
@@ -273,10 +338,46 @@ capacity = 1000            # Internal message queue capacity
 
 Every setting can be overridden by environment variables. Use double underscores `__` for nested keys.
 
-*   `CMDB_HOST`
-*   `CMDB_PORT`
-*   `CMDB_DATABASE__PATH`
-*   `CMDB_JWT_SECRET`
+**Security Variables:**
+- `CMDB_JWT_SECRET` - **Required**, minimum 32 characters (use `openssl rand -base64 32` to generate)
+- `CMDB_ADMIN_PASSWORD` - **Required on first startup**, must meet complexity requirements
+
+**Optional Variables:**
+- `CMDB_HOST` - Server bind address (default: `0.0.0.0`)
+- `CMDB_PORT` - Server port (default: `8080`)
+- `CMDB_LOG_LEVEL` - Log level: debug, info, warn, error (default: `info`)
+- `CMDB_DATABASE__PATH` - Path to database file (default: `data/cmdb.redb`)
+- `CMDB_SSH_KNOWN_HOSTS_FILE` - Path to SSH known_hosts file (default: `/etc/cmdb/ssh_known_hosts`)
+
+### SSH Known Hosts Setup
+
+For remote service management via SSH, you need to set up the SSH known_hosts file:
+
+```bash
+# Create the directory
+sudo mkdir -p /etc/cmdb
+
+# Add a client host to known_hosts (run from server)
+ssh-keyscan -H 192.168.1.100 >> /etc/cmdb/ssh_known_hosts
+
+# Set proper permissions
+sudo chmod 644 /etc/cmdb/ssh_known_hosts
+```
+
+### Password Complexity Requirements
+
+When creating users or changing passwords, the following requirements apply:
+
+- **Minimum length:** 12 characters
+- **Uppercase letter:** At least one (A-Z)
+- **Lowercase letter:** At least one (a-z)
+- **Number:** At least one (0-9)
+- **Special character:** At least one (!@#$%^&*, etc.)
+
+**Example valid passwords:**
+- `SecureP@ssword123`
+- `MyStr0ng!Pass`
+- `C0mplex#SecuriTy`
 
 ## 📦 Deployment
 
@@ -309,14 +410,22 @@ To deploy the full system manually:
 
 ```bash
 cd /opt/rs-cmdb
+
+# Set required environment variables
+export CMDB_JWT_SECRET=$(openssl rand -base64 32)
+export CMDB_ADMIN_PASSWORD="YourSecureP@ssword123"
+
+# Run the server
 ./rs-cmdb-server
 ```
 
 Access the UI at `http://localhost:8080`.
 
-**Default Credentials:**
+**First Login:**
+
+Use the admin username and the password you set via `CMDB_ADMIN_PASSWORD`:
 - Username: `admin`
-- Password: `admin`
+- Password: *(your chosen password)*
 
 ## 📄 License
 

@@ -1,14 +1,14 @@
+use chrono::Utc;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use chrono::Utc;
 
+use crate::components::ui::badge::{Badge, BadgeVariant};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardContent, CardFooter, CardHeader};
 use crate::routes::Route;
 use crate::types::Client;
 use crate::utils::format::{format_datetime, format_time_ago};
-use crate::components::ui::card::{Card, CardHeader, CardContent, CardFooter};
-use crate::components::ui::badge::{Badge, BadgeVariant};
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use lucide_yew::{ArrowRight, Monitor, Clock, Calendar};
+use lucide_yew::{ArrowRight, Calendar, Clock, Monitor};
 
 #[derive(Properties, PartialEq)]
 pub struct ClientCardProps {
@@ -18,11 +18,26 @@ pub struct ClientCardProps {
 
 #[function_component(ClientCard)]
 pub fn client_card(props: &ClientCardProps) -> Html {
-    let last_seen_ago = props.client.last_seen.as_ref().map_or("未知".to_string(), |time| format_time_ago(time));
-    let last_seen_date = props.client.last_seen.as_ref().map_or("未知".to_string(), |time| format_datetime(time));
-    let registered_date = props.client.registered_at.as_ref().map_or("未知".to_string(), |time| format_datetime(time));
-    
-    let is_online = props.client.last_seen.as_ref()
+    let last_seen_ago = props
+        .client
+        .last_seen
+        .as_ref()
+        .map_or("未知".to_string(), |time| format_time_ago(time));
+    let last_seen_date = props
+        .client
+        .last_seen
+        .as_ref()
+        .map_or("未知".to_string(), |time| format_datetime(time));
+    let registered_date = props
+        .client
+        .registered_at
+        .as_ref()
+        .map_or("未知".to_string(), |time| format_datetime(time));
+
+    let is_online = props
+        .client
+        .last_seen
+        .as_ref()
         .and_then(|time| chrono::DateTime::parse_from_rfc3339(time).ok())
         .map(|dt| {
             let now = Utc::now();
@@ -30,13 +45,13 @@ pub fn client_card(props: &ClientCardProps) -> Html {
             duration.num_minutes() <= 5
         })
         .unwrap_or(false);
-    
+
     let online_status = if is_online {
-        html! { 
+        html! {
             <Badge variant={BadgeVariant::Outline} class="animate-pulse bg-emerald-500/10 text-emerald-500 border-emerald-500/20">{"在线"}</Badge>
         }
     } else {
-        html! { 
+        html! {
             <Badge variant={BadgeVariant::Secondary}>{"离线"}</Badge>
         }
     };
@@ -76,7 +91,7 @@ pub fn client_card(props: &ClientCardProps) -> Html {
                     </div>
                 </div>
             </CardContent>
-            
+
             <CardFooter class="pt-2">
                 <Link<Route> to={Route::ClientDetail { id: props.client.id.clone() }} classes="w-full">
                     <Button variant={ButtonVariant::Outline} size={ButtonSize::Sm} class="w-full group">

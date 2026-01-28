@@ -1,11 +1,9 @@
-use std::sync::Arc;
 use crate::repository::{
-    client_repository::ClientRepository,
-    project_repository::ProjectRepository,
-    rack_repository::RackRepository,
-    person_repository::PersonRepository
+    client_repository::ClientRepository, person_repository::PersonRepository,
+    project_repository::ProjectRepository, rack_repository::RackRepository,
 };
-use common::error::{CmdbResult, CmdbError};
+use common::error::{CmdbError, CmdbResult};
+use std::sync::Arc;
 
 #[cfg(test)]
 use crate::tests::fixtures::*;
@@ -35,28 +33,40 @@ impl ValidationService {
 
     pub async fn validate_rack_exists(&self, rack_id: &str) -> CmdbResult<()> {
         if !self.rack_repo.exists(rack_id).await? {
-            return Err(CmdbError::Validation(format!("Rack with ID {} not found", rack_id)));
+            return Err(CmdbError::Validation(format!(
+                "Rack with ID {} not found",
+                rack_id
+            )));
         }
         Ok(())
     }
 
     pub async fn validate_project_exists(&self, project_id: &str) -> CmdbResult<()> {
         if !self.project_repo.exists(project_id).await? {
-            return Err(CmdbError::Validation(format!("Project with ID {} not found", project_id)));
+            return Err(CmdbError::Validation(format!(
+                "Project with ID {} not found",
+                project_id
+            )));
         }
         Ok(())
     }
 
     pub async fn validate_person_exists(&self, person_id: &str) -> CmdbResult<()> {
         if !self.person_repo.exists(person_id).await? {
-            return Err(CmdbError::Validation(format!("Person with ID {} not found", person_id)));
+            return Err(CmdbError::Validation(format!(
+                "Person with ID {} not found",
+                person_id
+            )));
         }
         Ok(())
     }
-    
+
     pub async fn validate_client_exists(&self, client_id: &str) -> CmdbResult<()> {
         if self.client_repo.get(client_id).await?.is_none() {
-             return Err(CmdbError::Validation(format!("Client with ID {} not found", client_id)));
+            return Err(CmdbError::Validation(format!(
+                "Client with ID {} not found",
+                client_id
+            )));
         }
         Ok(())
     }
@@ -65,15 +75,11 @@ impl ValidationService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
     use crate::repository::{
-        client_repository::ClientRepository,
-        hardware_repository::HardwareRepository,
-        project_repository::ProjectRepository,
-        rack_repository::RackRepository,
-        person_repository::PersonRepository
+        client_repository::ClientRepository, person_repository::PersonRepository,
+        project_repository::ProjectRepository, rack_repository::RackRepository,
     };
-    use crate::tests::fixtures::*;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_validation_service_creation() {
@@ -96,7 +102,12 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
         let person_repo = Arc::new(PersonRepository::new(Arc::clone(&db_arc)));
 
-        let service = ValidationService::new(client_repo.clone(), project_repo.clone(), rack_repo.clone(), person_repo.clone());
+        let service = ValidationService::new(
+            client_repo.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        );
 
         let rack = create_test_rack("rack-1");
         rack_repo.save(&rack).await.unwrap();
@@ -115,7 +126,12 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
         let person_repo = Arc::new(PersonRepository::new(Arc::clone(&db_arc)));
 
-        let service = ValidationService::new(client_repo.clone(), project_repo.clone(), rack_repo.clone(), person_repo.clone());
+        let service = ValidationService::new(
+            client_repo.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        );
 
         let result = service.validate_rack_exists("nonexistent-rack").await;
 
@@ -131,7 +147,12 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
         let person_repo = Arc::new(PersonRepository::new(Arc::clone(&db_arc)));
 
-        let service = ValidationService::new(client_repo.clone(), project_repo.clone(), rack_repo.clone(), person_repo.clone());
+        let service = ValidationService::new(
+            client_repo.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        );
 
         let project = create_test_project("project-1");
         project_repo.save(&project).await.unwrap();
@@ -150,7 +171,12 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
         let person_repo = Arc::new(PersonRepository::new(Arc::clone(&db_arc)));
 
-        let service = ValidationService::new(client_repo.clone(), project_repo.clone(), rack_repo.clone(), person_repo.clone());
+        let service = ValidationService::new(
+            client_repo.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        );
 
         let result = service.validate_project_exists("nonexistent-project").await;
 
@@ -166,7 +192,12 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
         let person_repo = Arc::new(PersonRepository::new(Arc::clone(&db_arc)));
 
-        let service = ValidationService::new(client_repo.clone(), project_repo.clone(), rack_repo.clone(), person_repo.clone());
+        let service = ValidationService::new(
+            client_repo.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        );
 
         let person = create_test_person("person-1");
         person_repo.save(&person).await.unwrap();
@@ -185,7 +216,12 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
         let person_repo = Arc::new(PersonRepository::new(Arc::clone(&db_arc)));
 
-        let service = ValidationService::new(client_repo.clone(), project_repo.clone(), rack_repo.clone(), person_repo.clone());
+        let service = ValidationService::new(
+            client_repo.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        );
 
         let result = service.validate_person_exists("nonexistent-person").await;
 
@@ -201,7 +237,12 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
         let person_repo = Arc::new(PersonRepository::new(Arc::clone(&db_arc)));
 
-        let service = ValidationService::new(client_repo.clone(), project_repo.clone(), rack_repo.clone(), person_repo.clone());
+        let service = ValidationService::new(
+            client_repo.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        );
 
         let client = create_test_client("client-1");
         client_repo.save(&client).await.unwrap();
@@ -220,7 +261,12 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
         let person_repo = Arc::new(PersonRepository::new(Arc::clone(&db_arc)));
 
-        let service = ValidationService::new(client_repo.clone(), project_repo.clone(), rack_repo.clone(), person_repo.clone());
+        let service = ValidationService::new(
+            client_repo.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        );
 
         let result = service.validate_client_exists("nonexistent-client").await;
 

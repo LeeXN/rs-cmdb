@@ -6,7 +6,7 @@ pub fn format_datetime(iso_time: &str) -> String {
         Ok(dt) => {
             let local_time = dt.with_timezone(&Local);
             local_time.format("%Y-%m-%d %H:%M:%S").to_string()
-        },
+        }
         Err(_) => iso_time.to_string(),
     }
 }
@@ -18,7 +18,7 @@ pub fn format_time_ago(iso_time: &str) -> String {
             let now = Utc::now();
             let dt_utc = dt.with_timezone(&Utc);
             let duration = now.signed_duration_since(dt_utc);
-            
+
             if duration.num_days() > 30 {
                 let months = duration.num_days() / 30;
                 format!("{}个月前", months)
@@ -31,7 +31,7 @@ pub fn format_time_ago(iso_time: &str) -> String {
             } else {
                 "刚刚".to_string()
             }
-        },
+        }
         Err(_) => iso_time.to_string(),
     }
 }
@@ -62,14 +62,14 @@ pub fn format_number(num: u64) -> String {
     let num_str = num.to_string();
     let mut result = String::new();
     let chars: Vec<char> = num_str.chars().collect();
-    
+
     for (i, ch) in chars.iter().enumerate() {
-        if i > 0 && (chars.len() - i) % 3 == 0 {
+        if i > 0 && (chars.len() - i).is_multiple_of(3) {
             result.push(',');
         }
         result.push(*ch);
     }
-    
+
     result
 }
 
@@ -88,4 +88,4 @@ pub fn format_frequency(freq_hz: u64) -> String {
     } else {
         format!("{} Hz", freq_hz)
     }
-} 
+}

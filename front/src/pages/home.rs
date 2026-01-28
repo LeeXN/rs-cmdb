@@ -1,18 +1,18 @@
-use yew::prelude::*;
 use gloo::timers::callback::Interval;
+use lucide_yew::{Database, Settings, Signal, Zap};
 use std::rc::Rc;
-use lucide_yew::{Database, Signal, Zap, Settings};
+use yew::prelude::*;
 
-use crate::components::loading::Loading;
-use crate::components::error::ErrorDisplay;
-use crate::components::dashboard::stats_card::StatsCard;
-use crate::components::dashboard::os_dist_card::OsDistCard;
-use crate::components::dashboard::system_status_card::SystemStatusCard;
-use crate::components::dashboard::recent_clients_card::RecentClientsCard;
 use crate::components::dashboard::client_status_list::ClientStatusList;
+use crate::components::dashboard::os_dist_card::OsDistCard;
+use crate::components::dashboard::recent_clients_card::RecentClientsCard;
+use crate::components::dashboard::stats_card::StatsCard;
+use crate::components::dashboard::system_status_card::SystemStatusCard;
+use crate::components::error::ErrorDisplay;
+use crate::components::loading::Loading;
+use crate::hooks::use_trans::use_trans;
 use crate::services::api::{self, ApiError};
 use crate::types::Client;
-use crate::hooks::use_trans::use_trans;
 
 pub enum HomeAction {
     SetClients(Vec<Client>),
@@ -41,27 +41,21 @@ impl Reducible for HomeState {
 
     fn reduce(self: Rc<Self>, action: Self::Action) -> Rc<Self> {
         match action {
-            HomeAction::SetClients(clients) => {
-                Rc::new(Self {
-                    clients,
-                    loading: false,
-                    error: None,
-                })
-            }
-            HomeAction::SetError(error) => {
-                Rc::new(Self {
-                    clients: self.clients.clone(),
-                    loading: false,
-                    error,
-                })
-            }
-            HomeAction::RefreshData => {
-                Rc::new(Self {
-                    clients: self.clients.clone(),
-                    loading: true,
-                    error: None,
-                })
-            }
+            HomeAction::SetClients(clients) => Rc::new(Self {
+                clients,
+                loading: false,
+                error: None,
+            }),
+            HomeAction::SetError(error) => Rc::new(Self {
+                clients: self.clients.clone(),
+                loading: false,
+                error,
+            }),
+            HomeAction::RefreshData => Rc::new(Self {
+                clients: self.clients.clone(),
+                loading: true,
+                error: None,
+            }),
         }
     }
 }
@@ -70,69 +64,84 @@ impl Reducible for HomeState {
 pub fn home_page() -> Html {
     let state = use_reducer(HomeState::default);
     let t = use_trans();
-    
+
     // 设置定时刷新
     let state_for_interval = state.clone();
-    use_effect_with(
-        (),
-        move |_| {
-            // 每60秒刷新一次数据
-            let interval = Interval::new(60000, move || {
-                state_for_interval.dispatch(HomeAction::RefreshData);
-            });
-            
-            || drop(interval) // cleanup
-        }
-    );
+    use_effect_with((), move |_| {
+        // 每60秒刷新一次数据
+        let interval = Interval::new(60000, move || {
+            state_for_interval.dispatch(HomeAction::RefreshData);
+        });
+
+        || drop(interval) // cleanup
+    });
 
     // 加载数据
     {
         let state = state.clone();
-        use_effect_with(
-            state.loading,
-            move |loading| {
-                if *loading {
-                    let state_clone = state.clone();
-                    api::get_clients(1, 1000, None, None, None, Callback::from(move |result: Result<crate::types::PaginatedResult<Client>, ApiError>| {
-                        match result {
-                            Ok(paginated) => {
-                                state_clone.dispatch(HomeAction::SetClients(paginated.items));
+        use_effect_with(state.loading, move |loading| {
+            if *loading {
+                let state_clone = state.clone();
+                api::get_clients(
+                    1,
+                    1000,
+                    None,
+                    None,
+                    None,
+                    Callback::from(
+                        move |result: Result<crate::types::PaginatedResult<Client>, ApiError>| {
+                            match result {
+                                Ok(paginated) => {
+                                    state_clone.dispatch(HomeAction::SetClients(paginated.items));
+                                }
+                                Err(err) => {
+                                    state_clone.dispatch(HomeAction::SetError(Some(err.message)));
+                                }
                             }
-                            Err(err) => {
-                                state_clone.dispatch(HomeAction::SetError(Some(err.message)));
-                            }
-                        }
-                    }));
-                }
-                
-                || ()
+                        },
+                    ),
+                );
             }
-        );
+
+            || ()
+        });
     }
 
     // 计算统计数据
     let total_clients = state.clients.len();
-    let online_clients = state.clients.iter().filter(|client| {
-        client.last_seen.as_ref()
-            .and_then(|last_seen| chrono::DateTime::parse_from_rfc3339(last_seen).ok())
-            .map(|dt| {
-                let now = chrono::Utc::now();
-                let duration = now.signed_duration_since(dt.with_timezone(&chrono::Utc));
-                duration.num_minutes() <= 5
-            })
-            .unwrap_or(false)
-    }).count();
+    let online_clients = state
+        .clients
+        .iter()
+        .filter(|client| {
+            client
+                .last_seen
+                .as_ref()
+                .and_then(|last_seen| chrono::DateTime::parse_from_rfc3339(last_seen).ok())
+                .map(|dt| {
+                    let now = chrono::Utc::now();
+                    let duration = now.signed_duration_since(dt.with_timezone(&chrono::Utc));
+                    duration.num_minutes() <= 5
+                })
+                .unwrap_or(false)
+        })
+        .count();
 
-    let new_clients_today = state.clients.iter().filter(|client| {
-        client.registered_at.as_ref()
-            .and_then(|registered_at| chrono::DateTime::parse_from_rfc3339(registered_at).ok())
-            .map(|dt| {
-                let now = chrono::Utc::now();
-                let duration = now.signed_duration_since(dt.with_timezone(&chrono::Utc));
-                duration.num_hours() <= 24
-            })
-            .unwrap_or(false)
-    }).count();
+    let new_clients_today = state
+        .clients
+        .iter()
+        .filter(|client| {
+            client
+                .registered_at
+                .as_ref()
+                .and_then(|registered_at| chrono::DateTime::parse_from_rfc3339(registered_at).ok())
+                .map(|dt| {
+                    let now = chrono::Utc::now();
+                    let duration = now.signed_duration_since(dt.with_timezone(&chrono::Utc));
+                    duration.num_hours() <= 24
+                })
+                .unwrap_or(false)
+        })
+        .count();
 
     let offline_clients = total_clients.saturating_sub(online_clients);
     let online_ratio = if total_clients > 0 {
@@ -152,13 +161,11 @@ pub fn home_page() -> Html {
 
     // 获取最近注册的客户端
     let mut recent_clients = state.clients.clone();
-    recent_clients.sort_by(|a, b| {
-        match (&b.registered_at, &a.registered_at) {
-            (Some(b_time), Some(a_time)) => b_time.cmp(a_time),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => std::cmp::Ordering::Equal,
-        }
+    recent_clients.sort_by(|a, b| match (&b.registered_at, &a.registered_at) {
+        (Some(b_time), Some(a_time)) => b_time.cmp(a_time),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
     });
     recent_clients.truncate(5);
 

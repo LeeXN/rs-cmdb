@@ -1,13 +1,15 @@
-use yew::prelude::*;
-use web_sys::{HtmlInputElement, HtmlSelectElement};
-use wasm_bindgen_futures::spawn_local;
-use crate::types::{Client, Person, Project, ClientStatus, Environment, Rack};
-use crate::services::api;
-use crate::components::ui::modal::{Modal, ModalContent, ModalHeader, ModalFooter, ModalTitle, ModalDescription};
 use crate::components::ui::button::{Button, ButtonVariant};
 use crate::components::ui::input::Input;
-use lucide_yew::X;
+use crate::components::ui::modal::{
+    Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle,
+};
 use crate::hooks::use_trans::use_trans;
+use crate::services::api;
+use crate::types::{Client, ClientStatus, Environment, Person, Project, Rack};
+use lucide_yew::X;
+use wasm_bindgen_futures::spawn_local;
+use web_sys::{HtmlInputElement, HtmlSelectElement};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct ClientEditModalProps {
@@ -25,20 +27,21 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
     let u_height = use_state(|| props.client.u_height.unwrap_or(1));
     let power_consumption = use_state(|| props.client.power_consumption);
     let comment = use_state(|| props.client.comment.clone().unwrap_or_default());
-    
+
     let owner_id = use_state(|| props.client.owner_id.clone().unwrap_or_default());
     let project_id = use_state(|| props.client.project_id.clone().unwrap_or_default());
-    
+
     let status = use_state(|| props.client.status.clone());
     let environment = use_state(|| props.client.environment.clone());
-    
+
     let asset_tag = use_state(|| props.client.asset_tag.clone().unwrap_or_default());
-    let warranty_expiration = use_state(|| props.client.warranty_expiration.clone().unwrap_or_default());
+    let warranty_expiration =
+        use_state(|| props.client.warranty_expiration.clone().unwrap_or_default());
     let supplier = use_state(|| props.client.supplier.clone().unwrap_or_default());
 
-    let persons = use_state(|| Vec::<Person>::new());
-    let projects = use_state(|| Vec::<Project>::new());
-    let racks = use_state(|| Vec::<Rack>::new());
+    let persons = use_state(Vec::<Person>::new);
+    let projects = use_state(Vec::<Project>::new);
+    let racks = use_state(Vec::<Rack>::new);
 
     {
         let persons = persons.clone();
@@ -81,30 +84,66 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
         let asset_tag = asset_tag.clone();
         let warranty_expiration = warranty_expiration.clone();
         let supplier = supplier.clone();
-        
+
         let client = props.client.clone();
         let on_save = props.on_save.clone();
-        
+
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
             let mut updated_client = client.clone();
-            updated_client.location = if location.is_empty() { None } else { Some((*location).clone()) };
-            updated_client.rack = if rack.is_empty() { None } else { Some((*rack).clone()) };
-            updated_client.unit_position = if unit_position.is_empty() { None } else { Some((*unit_position).clone()) };
+            updated_client.location = if location.is_empty() {
+                None
+            } else {
+                Some((*location).clone())
+            };
+            updated_client.rack = if rack.is_empty() {
+                None
+            } else {
+                Some((*rack).clone())
+            };
+            updated_client.unit_position = if unit_position.is_empty() {
+                None
+            } else {
+                Some((*unit_position).clone())
+            };
             updated_client.u_height = Some(*u_height);
             updated_client.power_consumption = *power_consumption;
-            updated_client.comment = if comment.is_empty() { None } else { Some((*comment).clone()) };
-            
-            updated_client.owner_id = if owner_id.is_empty() { None } else { Some((*owner_id).clone()) };
-            updated_client.project_id = if project_id.is_empty() { None } else { Some((*project_id).clone()) };
-            
+            updated_client.comment = if comment.is_empty() {
+                None
+            } else {
+                Some((*comment).clone())
+            };
+
+            updated_client.owner_id = if owner_id.is_empty() {
+                None
+            } else {
+                Some((*owner_id).clone())
+            };
+            updated_client.project_id = if project_id.is_empty() {
+                None
+            } else {
+                Some((*project_id).clone())
+            };
+
             updated_client.status = (*status).clone();
             updated_client.environment = (*environment).clone();
-            
-            updated_client.asset_tag = if asset_tag.is_empty() { None } else { Some((*asset_tag).clone()) };
-            updated_client.warranty_expiration = if warranty_expiration.is_empty() { None } else { Some((*warranty_expiration).clone()) };
-            updated_client.supplier = if supplier.is_empty() { None } else { Some((*supplier).clone()) };
-            
+
+            updated_client.asset_tag = if asset_tag.is_empty() {
+                None
+            } else {
+                Some((*asset_tag).clone())
+            };
+            updated_client.warranty_expiration = if warranty_expiration.is_empty() {
+                None
+            } else {
+                Some((*warranty_expiration).clone())
+            };
+            updated_client.supplier = if supplier.is_empty() {
+                None
+            } else {
+                Some((*supplier).clone())
+            };
+
             on_save.emit(updated_client);
         })
     };
@@ -118,8 +157,8 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                 <ModalHeader>
                     <ModalTitle>{t.t("client_edit.title")}</ModalTitle>
                     <ModalDescription>{t.t("client_edit.description")}</ModalDescription>
-                    <Button 
-                        variant={ButtonVariant::Ghost} 
+                    <Button
+                        variant={ButtonVariant::Ghost}
                         size={crate::components::ui::button::ButtonSize::Icon}
                         class="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
                         onclick={props.on_cancel.reform(|_| ())}
@@ -128,13 +167,13 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                         <span class="sr-only">{"Close"}</span>
                     </Button>
                 </ModalHeader>
-                
+
                 <form {onsubmit} class="space-y-6 py-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         // Basic Info
                         <div class="space-y-2">
                             <label class={label_class}>{t.t("client_detail.location")}</label>
-                            <Input 
+                            <Input
                                 value={(*location).clone()}
                                 oninput={
                                     let location = location.clone();
@@ -155,7 +194,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                                         let input: HtmlSelectElement = e.target_unchecked_into();
                                         let selected_rack_id = input.value();
                                         rack.set(selected_rack_id.clone());
-                                        
+
                                         // Auto-fill location if a rack is selected
                                         if !selected_rack_id.is_empty() {
                                             if let Some(selected_rack) = racks.iter().find(|r| r.id == selected_rack_id) {
@@ -179,7 +218,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                         </div>
                         <div class="space-y-2">
                             <label class={label_class}>{t.t("client_detail.unit_position")}</label>
-                            <Input 
+                            <Input
                                 value={(*unit_position).clone()}
                                 oninput={Callback::from(move |val: String| {
                                     unit_position.set(val);
@@ -188,7 +227,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                         </div>
                         <div class="space-y-2">
                             <label class={label_class}>{t.t("client_detail.u_height")}</label>
-                            <Input 
+                            <Input
                                 type_="number"
                                 value={(*u_height).to_string()}
                                 min="1"
@@ -202,7 +241,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                         </div>
                         <div class="space-y-2">
                             <label class={label_class}>{t.t("client_detail.power")}</label>
-                            <Input 
+                            <Input
                                 type_="number"
                                 value={(*power_consumption).map(|v| v.to_string()).unwrap_or_default()}
                                 min="0"
@@ -317,7 +356,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                         // Asset Info
                         <div class="space-y-2">
                             <label class={label_class}>{t.t("client_detail.asset_tag")}</label>
-                            <Input 
+                            <Input
                                 value={(*asset_tag).clone()}
                                 oninput={Callback::from(move |val: String| {
                                     asset_tag.set(val);
@@ -326,7 +365,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                         </div>
                         <div class="space-y-2">
                             <label class={label_class}>{t.t("client_detail.warranty")}</label>
-                            <Input 
+                            <Input
                                 type_="date"
                                 value={(*warranty_expiration).clone()}
                                 oninput={Callback::from(move |val: String| {
@@ -336,7 +375,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                         </div>
                         <div class="space-y-2">
                             <label class={label_class}>{t.t("client_detail.supplier")}</label>
-                            <Input 
+                            <Input
                                 value={(*supplier).clone()}
                                 oninput={Callback::from(move |val: String| {
                                     supplier.set(val);
@@ -347,7 +386,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
 
                     <div class="space-y-2">
                         <label class={label_class}>{t.t("client_detail.comment")}</label>
-                        <textarea 
+                        <textarea
                             class="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 bg-slate-950/50"
                             value={(*comment).clone()}
                             oninput={Callback::from(move |e: InputEvent| {

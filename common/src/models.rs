@@ -263,7 +263,7 @@ impl Client {
 }
 
 /// 详细统计数据结构
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct DetailedStats {
     pub total_clients: usize,
     pub online_clients: usize,
@@ -277,23 +277,6 @@ pub struct DetailedStats {
     pub storage_stats: StorageStats,
 }
 
-impl Default for DetailedStats {
-    fn default() -> Self {
-        Self {
-            total_clients: 0,
-            online_clients: 0,
-            offline_clients: 0,
-            cpu_stats: CpuStats::default(),
-            memory_stats: MemoryStats::default(),
-            gpu_stats: GpuStats::default(),
-            network_stats: NetworkStats::default(),
-            os_stats: OsStats::default(),
-            server_stats: ServerStats::default(),
-            storage_stats: StorageStats::default(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StatItem {
     pub name: String,
@@ -302,7 +285,7 @@ pub struct StatItem {
     pub client_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct CpuStats {
     pub by_vendor: Vec<StatItem>,
     pub by_model: Vec<StatItem>,
@@ -310,18 +293,7 @@ pub struct CpuStats {
     pub by_threads: Vec<StatItem>,
 }
 
-impl Default for CpuStats {
-    fn default() -> Self {
-        Self {
-            by_vendor: Vec::new(),
-            by_model: Vec::new(),
-            by_cores: Vec::new(),
-            by_threads: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct MemoryStats {
     pub by_capacity: Vec<StatItem>,
     pub by_vendor: Vec<StatItem>,
@@ -329,18 +301,7 @@ pub struct MemoryStats {
     pub by_speed: Vec<StatItem>,
 }
 
-impl Default for MemoryStats {
-    fn default() -> Self {
-        Self {
-            by_capacity: Vec::new(),
-            by_vendor: Vec::new(),
-            by_type: Vec::new(),
-            by_speed: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct GpuStats {
     pub by_vendor: Vec<StatItem>,
     pub by_model: Vec<StatItem>,
@@ -348,18 +309,7 @@ pub struct GpuStats {
     pub by_driver_version: Vec<StatItem>,
 }
 
-impl Default for GpuStats {
-    fn default() -> Self {
-        Self {
-            by_vendor: Vec::new(),
-            by_model: Vec::new(),
-            by_model_with_count: Vec::new(),
-            by_driver_version: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct NetworkStats {
     pub by_type: Vec<StatItem>,
     pub by_vendor: Vec<StatItem>,
@@ -367,18 +317,7 @@ pub struct NetworkStats {
     pub by_status: Vec<StatItem>,
 }
 
-impl Default for NetworkStats {
-    fn default() -> Self {
-        Self {
-            by_type: Vec::new(),
-            by_vendor: Vec::new(),
-            by_speed: Vec::new(),
-            by_status: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct OsStats {
     pub by_name: Vec<StatItem>,
     pub by_version: Vec<StatItem>,
@@ -386,53 +325,22 @@ pub struct OsStats {
     pub by_architecture: Vec<StatItem>,
 }
 
-impl Default for OsStats {
-    fn default() -> Self {
-        Self {
-            by_name: Vec::new(),
-            by_version: Vec::new(),
-            by_kernel: Vec::new(),
-            by_architecture: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ServerStats {
     pub by_vendor: Vec<StatItem>,
     pub by_product_name: Vec<StatItem>,
     pub by_product_version: Vec<StatItem>,
 }
 
-impl Default for ServerStats {
-    fn default() -> Self {
-        Self {
-            by_vendor: Vec::new(),
-            by_product_name: Vec::new(),
-            by_product_version: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct StorageStats {
     pub by_type: Vec<StatItem>,
     pub by_capacity: Vec<StatItem>,
     pub by_vendor: Vec<StatItem>,
 }
 
-impl Default for StorageStats {
-    fn default() -> Self {
-        Self {
-            by_type: Vec::new(),
-            by_capacity: Vec::new(),
-            by_vendor: Vec::new(),
-        }
-    }
-}
-
 /// 筛选条件结构
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct FilterCriteria {
     pub cpu_vendor: Option<String>,
     pub cpu_model: Option<String>,
@@ -461,25 +369,6 @@ pub struct FilterOptions {
     pub storage_types: Vec<String>,
     pub network_types: Vec<String>,
     pub network_models: Vec<String>,
-}
-
-impl Default for FilterCriteria {
-    fn default() -> Self {
-        Self {
-            cpu_vendor: None,
-            cpu_model: None,
-            cpu_cores: None,
-            memory_capacity_min: None,
-            memory_capacity_max: None,
-            gpu_vendor: None,
-            gpu_model: None,
-            os_name: None,
-            os_kernel: None,
-            server_vendor: None,
-            storage_type: None,
-            network_type: None,
-        }
-    }
 }
 
 /// 客户端硬件导出数据结构
@@ -598,7 +487,7 @@ pub enum ComponentStatus {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ComponentQuery {
     pub page: Option<usize>,
     pub page_size: Option<usize>,
@@ -608,20 +497,7 @@ pub struct ComponentQuery {
     pub client_id: Option<String>,
 }
 
-impl Default for ComponentQuery {
-    fn default() -> Self {
-        Self {
-            page: None,
-            page_size: None,
-            status: None,
-            component_type: None,
-            search: None,
-            client_id: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ClientQuery {
     pub page: Option<usize>,
     pub page_size: Option<usize>,
@@ -630,19 +506,7 @@ pub struct ClientQuery {
     pub status: Option<String>,
 }
 
-impl Default for ClientQuery {
-    fn default() -> Self {
-        Self {
-            page: None,
-            page_size: None,
-            search: None,
-            os: None,
-            status: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RackQuery {
     pub page: Option<usize>,
     pub page_size: Option<usize>,
@@ -650,18 +514,7 @@ pub struct RackQuery {
     pub location: Option<String>,
 }
 
-impl Default for RackQuery {
-    fn default() -> Self {
-        Self {
-            page: None,
-            page_size: None,
-            search: None,
-            location: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersonQuery {
     pub page: Option<usize>,
     pub page_size: Option<usize>,
@@ -669,34 +522,12 @@ pub struct PersonQuery {
     pub department: Option<String>,
 }
 
-impl Default for PersonQuery {
-    fn default() -> Self {
-        Self {
-            page: None,
-            page_size: None,
-            search: None,
-            department: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectQuery {
     pub page: Option<usize>,
     pub page_size: Option<usize>,
     pub search: Option<String>,
     pub department: Option<String>,
-}
-
-impl Default for ProjectQuery {
-    fn default() -> Self {
-        Self {
-            page: None,
-            page_size: None,
-            search: None,
-            department: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -1,10 +1,10 @@
-use yew::prelude::*;
-use std::collections::HashMap;
-use crate::components::ui::card::{Card, CardHeader, CardTitle, CardDescription, CardContent};
-use crate::components::ui::table::{Table, TableBody, TableRow, TableCell};
 use crate::components::ui::badge::{Badge, BadgeVariant};
+use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
+use crate::components::ui::table::{Table, TableBody, TableCell, TableRow};
 use crate::hooks::use_trans::use_trans;
-use lucide_yew::{Monitor, Server, Terminal, Command, AppWindow};
+use lucide_yew::{AppWindow, Command, Monitor, Server, Terminal};
+use std::collections::HashMap;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct OsDistCardProps {

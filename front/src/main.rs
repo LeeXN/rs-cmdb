@@ -1,23 +1,23 @@
 mod app;
-mod routes;
 mod components;
+mod hooks;
+mod i18n;
 mod pages;
+mod routes;
 mod services;
 mod stores;
 mod types;
 mod utils;
-mod i18n;
-mod hooks;
 
 use app::App;
-use utils::i18n_helper;
 use i18n::Language;
+use utils::i18n_helper;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::default());
-    
+
     // 初始化国际化，默认使用中文
     i18n_helper::init_i18n(Language::ZhCn);
-    
+
     yew::Renderer::<App>::new().render();
 }

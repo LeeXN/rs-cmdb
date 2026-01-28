@@ -1,8 +1,8 @@
-use yew::prelude::*;
-use crate::types::FilterCriteria;
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent};
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use lucide_yew::{RefreshCw, Download};
+use crate::types::FilterCriteria;
+use lucide_yew::{Download, RefreshCw};
+use yew::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 pub struct StatsFilterProps {
@@ -112,7 +112,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
             <CardContent class="p-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     <div>
-                        <select 
+                        <select
                             class={select_class}
                             onchange={on_cpu_vendor_change}
                             value={filter.cpu_vendor.unwrap_or_default()}
@@ -124,7 +124,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                         </select>
                     </div>
                     <div>
-                        <select 
+                        <select
                             class={select_class}
                             onchange={on_memory_capacity_change}
                         >
@@ -136,7 +136,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                         </select>
                     </div>
                     <div>
-                        <select 
+                        <select
                             class={select_class}
                             onchange={on_gpu_vendor_change}
                             value={filter.gpu_vendor.unwrap_or_default()}
@@ -148,7 +148,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                         </select>
                     </div>
                     <div>
-                        <select 
+                        <select
                             class={select_class}
                             onchange={on_os_change}
                             value={filter.os_name.unwrap_or_default()}
@@ -160,10 +160,10 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                         </select>
                     </div>
                     <div>
-                        <Button 
-                            variant={ButtonVariant::Outline} 
-                            size={ButtonSize::Sm} 
-                            class="w-full" 
+                        <Button
+                            variant={ButtonVariant::Outline}
+                            size={ButtonSize::Sm}
+                            class="w-full"
                             onclick={on_reset_click}
                         >
                             <RefreshCw class="mr-2 h-4 w-4" />
@@ -171,10 +171,10 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                         </Button>
                     </div>
                     <div>
-                        <Button 
-                            variant={ButtonVariant::Default} 
-                            size={ButtonSize::Sm} 
-                            class="w-full" 
+                        <Button
+                            variant={ButtonVariant::Default}
+                            size={ButtonSize::Sm}
+                            class="w-full"
                             onclick={on_export_click}
                         >
                             <Download class="mr-2 h-4 w-4" />
@@ -186,4 +186,3 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
         </Card>
     }
 }
- 

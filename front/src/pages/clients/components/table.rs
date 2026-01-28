@@ -1,17 +1,17 @@
+use crate::components::common::pagination::Pagination;
+use crate::components::permission_guard::PermissionGuard;
+use crate::components::ui::badge::{Badge, BadgeVariant};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::checkbox::Checkbox;
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::hooks::use_trans::use_trans;
+use crate::routes::Route;
+use crate::types::{Client, ClientStatus, Environment, Person, Project};
+use common::entity::user::Role;
+use lucide_yew::{Eye, Pencil, Trash2};
+use std::collections::HashSet;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use std::collections::HashSet;
-use crate::routes::Route;
-use crate::types::{Client, Person, Project, ClientStatus, Environment};
-use crate::components::common::pagination::Pagination;
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
-use crate::components::ui::badge::{Badge, BadgeVariant};
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::checkbox::Checkbox;
-use crate::hooks::use_trans::use_trans;
-use lucide_yew::{Eye, Pencil, Trash2};
-use crate::components::permission_guard::PermissionGuard;
-use common::entity::user::Role;
 
 #[derive(Properties, PartialEq)]
 pub struct TableProps {
@@ -42,12 +42,15 @@ pub fn clients_table(props: &TableProps) -> Html {
             </div>
         };
     }
-    
+
     let page_clients = &props.clients;
-    
+
     // Check if all clients on the current page are selected
-    let is_all_selected = !page_clients.is_empty() && page_clients.iter().all(|c| props.selected_clients.contains(&c.id));
-    
+    let is_all_selected = !page_clients.is_empty()
+        && page_clients
+            .iter()
+            .all(|c| props.selected_clients.contains(&c.id));
+
     let on_select_all_click = {
         let on_select_all = props.on_select_all.clone();
         let is_all_selected = is_all_selected;
@@ -92,33 +95,33 @@ pub fn clients_table(props: &TableProps) -> Html {
                                     .unwrap_or_else(|| "-".to_string());
 
                                 let status_display = match &client.status {
-                                    Some(ClientStatus::Active) => html! { 
-                                        <Badge variant={BadgeVariant::Outline} class="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20">{t.t("clients.status.active")}</Badge> 
+                                    Some(ClientStatus::Active) => html! {
+                                        <Badge variant={BadgeVariant::Outline} class="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20">{t.t("clients.status.active")}</Badge>
                                     },
-                                    Some(ClientStatus::Maintenance) => html! { 
-                                        <Badge variant={BadgeVariant::Outline} class="bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20">{t.t("clients.status.maintenance")}</Badge> 
+                                    Some(ClientStatus::Maintenance) => html! {
+                                        <Badge variant={BadgeVariant::Outline} class="bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20">{t.t("clients.status.maintenance")}</Badge>
                                     },
-                                    Some(ClientStatus::InStock) => html! { 
-                                        <Badge variant={BadgeVariant::Outline} class="bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20">{t.t("clients.status.instock")}</Badge> 
+                                    Some(ClientStatus::InStock) => html! {
+                                        <Badge variant={BadgeVariant::Outline} class="bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20">{t.t("clients.status.instock")}</Badge>
                                     },
-                                    Some(ClientStatus::Decommissioned) => html! { 
-                                        <Badge variant={BadgeVariant::Outline} class="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20">{t.t("clients.status.decommissioned")}</Badge> 
+                                    Some(ClientStatus::Decommissioned) => html! {
+                                        <Badge variant={BadgeVariant::Outline} class="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20">{t.t("clients.status.decommissioned")}</Badge>
                                     },
                                     None => html! { <span class="opacity-50">{"-"}</span> },
                                 };
 
                                 let env_display = match &client.environment {
-                                    Some(Environment::Prod) => html! { 
-                                        <Badge variant={BadgeVariant::Outline} class="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20">{t.t("clients.env.prod")}</Badge> 
+                                    Some(Environment::Prod) => html! {
+                                        <Badge variant={BadgeVariant::Outline} class="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20">{t.t("clients.env.prod")}</Badge>
                                     },
-                                    Some(Environment::Staging) => html! { 
-                                        <Badge variant={BadgeVariant::Outline} class="bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20">{t.t("clients.env.staging")}</Badge> 
+                                    Some(Environment::Staging) => html! {
+                                        <Badge variant={BadgeVariant::Outline} class="bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20">{t.t("clients.env.staging")}</Badge>
                                     },
-                                    Some(Environment::Test) => html! { 
-                                        <Badge variant={BadgeVariant::Outline} class="bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20">{t.t("clients.env.test")}</Badge> 
+                                    Some(Environment::Test) => html! {
+                                        <Badge variant={BadgeVariant::Outline} class="bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20">{t.t("clients.env.test")}</Badge>
                                     },
-                                    Some(Environment::Dev) => html! { 
-                                        <Badge variant={BadgeVariant::Outline} class="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20">{t.t("clients.env.dev")}</Badge> 
+                                    Some(Environment::Dev) => html! {
+                                        <Badge variant={BadgeVariant::Outline} class="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20">{t.t("clients.env.dev")}</Badge>
                                     },
                                     None => html! { <span class="opacity-50">{"-"}</span> },
                                 };
@@ -205,7 +208,7 @@ pub fn clients_table(props: &TableProps) -> Html {
                     </TableBody>
                 </Table>
             </div>
-            
+
             <Pagination
                 total_pages={props.total_pages}
                 total_items={props.total_items}
@@ -216,4 +219,4 @@ pub fn clients_table(props: &TableProps) -> Html {
             />
         </div>
     }
-} 
+}

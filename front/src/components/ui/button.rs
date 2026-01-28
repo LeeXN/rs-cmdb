@@ -70,7 +70,21 @@ pub struct ButtonProps {
 pub fn button(props: &ButtonProps) -> Html {
     let type_ = props.type_.clone().unwrap_or_else(|| "button".to_string());
     let classes = classes!(
-        "inline-flex", "items-center", "justify-center", "whitespace-nowrap", "rounded-md", "text-sm", "font-medium", "ring-offset-background", "transition-colors", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-ring", "focus-visible:ring-offset-2", "disabled:pointer-events-none", "disabled:opacity-50",
+        "inline-flex",
+        "items-center",
+        "justify-center",
+        "whitespace-nowrap",
+        "rounded-md",
+        "text-sm",
+        "font-medium",
+        "ring-offset-background",
+        "transition-colors",
+        "focus-visible:outline-none",
+        "focus-visible:ring-2",
+        "focus-visible:ring-ring",
+        "focus-visible:ring-offset-2",
+        "disabled:pointer-events-none",
+        "disabled:opacity-50",
         props.variant.as_class(),
         props.size.as_class(),
         props.class.clone(),

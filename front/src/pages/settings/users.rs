@@ -1,27 +1,27 @@
+use crate::components::error::ErrorDisplay;
+use crate::components::loading::Loading;
+use crate::components::ui::badge::{Badge, BadgeVariant};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardBody, CardHeader, CardTitle};
+use crate::components::ui::checkbox::Checkbox;
+use crate::components::ui::confirm_modal::ConfirmModal;
+use crate::components::ui::input::Input;
+use crate::components::ui::select::{Select, SelectOption};
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::components::ui::table_action::TableActions;
+use crate::hooks::use_trans::use_trans;
+use crate::routes::Route;
+use crate::services::api;
+use crate::stores::auth_store::AuthStore;
+use crate::types::{CreateUserRequest, Role, UpdateUserRequest, User};
+use crate::utils::i18n_helper::translate_api_message;
+use gloo::utils::document;
+use lucide_yew::{Plus, Shield, User as UserIcon, X};
+use wasm_bindgen_futures::spawn_local;
+use yew::create_portal;
 use yew::prelude::*;
 use yew_router::prelude::*;
 use yewdux::prelude::*;
-use wasm_bindgen_futures::spawn_local;
-use yew::create_portal;
-use gloo::utils::document;
-use crate::services::api;
-use crate::types::{User, Role, CreateUserRequest, UpdateUserRequest};
-use crate::stores::auth_store::AuthStore;
-use crate::routes::Route;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::table_action::TableActions;
-use crate::components::ui::card::{Card, CardHeader, CardBody, CardTitle};
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
-use crate::components::ui::badge::{Badge, BadgeVariant};
-use crate::components::ui::input::Input;
-use crate::components::ui::select::{Select, SelectOption};
-use crate::components::ui::checkbox::Checkbox;
-use crate::components::ui::confirm_modal::ConfirmModal;
-use crate::components::loading::Loading;
-use crate::components::error::ErrorDisplay;
-use crate::utils::i18n_helper::translate_api_message;
-use crate::hooks::use_trans::use_trans;
-use lucide_yew::{Plus, User as UserIcon, Shield, X};
 
 #[function_component(Users)]
 pub fn users() -> Html {
@@ -42,21 +42,21 @@ pub fn users() -> Html {
         });
     }
 
-    let users = use_state(|| Vec::<User>::new());
+    let users = use_state(Vec::<User>::new);
     let error_message = use_state(|| Option::<String>::None);
     let success_message = use_state(|| Option::<String>::None);
     let loading = use_state(|| false);
-    
+
     // Modal state
     let show_modal = use_state(|| false);
     let is_edit = use_state(|| false);
-    let current_user_id = use_state(|| String::new());
+    let current_user_id = use_state(String::new);
     let delete_modal_open = use_state(|| false);
     let user_to_delete = use_state(|| None::<String>);
-    
+
     // Form state
-    let form_username = use_state(|| String::new());
-    let form_password = use_state(|| String::new());
+    let form_username = use_state(String::new);
+    let form_password = use_state(String::new);
     let form_role = use_state(|| Role::Viewer);
     let form_is_active = use_state(|| true);
 
@@ -64,12 +64,12 @@ pub fn users() -> Html {
         let users = users.clone();
         let error_message = error_message.clone();
         let loading = loading.clone();
-        
+
         Callback::from(move |_| {
             let users = users.clone();
             let error_message = error_message.clone();
             let loading = loading.clone();
-            
+
             loading.set(true);
             spawn_local(async move {
                 match api::fetch_users().await {
@@ -89,7 +89,6 @@ pub fn users() -> Html {
             || ()
         });
     }
-
 
     let open_create_modal = {
         let show_modal = show_modal.clone();
@@ -159,14 +158,14 @@ pub fn users() -> Html {
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
-            
+
             let is_edit_mode = *is_edit;
             let id = (*current_user_id).clone();
             let username = (*form_username).clone();
             let password = (*form_password).clone();
             let role = (*form_role).clone();
             let is_active = *form_is_active;
-            
+
             let show_modal = show_modal.clone();
             let fetch_users = fetch_users.clone();
             let error_message = error_message.clone();
@@ -178,14 +177,18 @@ pub fn users() -> Html {
                     let request = UpdateUserRequest {
                         role: Some(role),
                         is_active: Some(is_active),
-                        password: if password.is_empty() { None } else { Some(password) },
+                        password: if password.is_empty() {
+                            None
+                        } else {
+                            Some(password)
+                        },
                     };
                     match api::update_user(&id, request).await {
                         Ok(_) => {
                             success_message.set(Some(t.t("users.update_success")));
                             show_modal.set(false);
                             fetch_users.emit(());
-                        },
+                        }
                         Err(err) => error_message.set(Some(translate_api_message(&err.message))),
                     }
                 } else {
@@ -199,7 +202,7 @@ pub fn users() -> Html {
                             success_message.set(Some(t.t("users.create_success")));
                             show_modal.set(false);
                             fetch_users.emit(());
-                        },
+                        }
                         Err(err) => error_message.set(Some(translate_api_message(&err.message))),
                     }
                 }
@@ -232,7 +235,7 @@ pub fn users() -> Html {
             let success_message = success_message.clone();
             let error_message = error_message.clone();
             let t = t.clone();
-            
+
             if let Some(id) = (*user_to_delete).clone() {
                 spawn_local(async move {
                     match api::delete_user(&id).await {
@@ -241,12 +244,12 @@ pub fn users() -> Html {
                             delete_modal_open.set(false);
                             user_to_delete.set(None);
                             fetch_users.emit(());
-                        },
+                        }
                         Err(err) => {
                             error_message.set(Some(translate_api_message(&err.message)));
                             delete_modal_open.set(false); // Close modal on error too? Or keep open? Usually close or show error in modal.
-                            // For now, close and show error in main page as before
-                        },
+                                                          // For now, close and show error in main page as before
+                        }
                     }
                 });
             }
@@ -263,9 +266,18 @@ pub fn users() -> Html {
     };
 
     let role_options = vec![
-        SelectOption { value: "Viewer".to_string(), label: t.t("users.role_viewer") },
-        SelectOption { value: "User".to_string(), label: t.t("users.role_user") },
-        SelectOption { value: "Admin".to_string(), label: t.t("users.role_admin") },
+        SelectOption {
+            value: "Viewer".to_string(),
+            label: t.t("users.role_viewer"),
+        },
+        SelectOption {
+            value: "User".to_string(),
+            label: t.t("users.role_user"),
+        },
+        SelectOption {
+            value: "Admin".to_string(),
+            label: t.t("users.role_admin"),
+        },
     ];
 
     html! {
@@ -276,9 +288,9 @@ pub fn users() -> Html {
                         <Card class="my-4 shadow-xl">
                             <CardHeader class="flex flex-row justify-start items-center">
                                 <div class="flex gap-2">
-                                    <Button 
-                                        variant={ButtonVariant::Default} 
-                                        size={ButtonSize::Sm} 
+                                    <Button
+                                        variant={ButtonVariant::Default}
+                                        size={ButtonSize::Sm}
                                         onclick={open_create_modal}
                                     >
                                         <Plus class="h-4 w-4 mr-1" /> {t.t("users.create_user")}
@@ -329,7 +341,7 @@ pub fn users() -> Html {
                                                                 on_delete.emit(i.clone())
                                                             })
                                                         };
-                                                        
+
                                                         html! {
                                                             <TableRow class="hover:bg-slate-800/50 transition-colors">
                                                                 <TableCell>
@@ -361,9 +373,9 @@ pub fn users() -> Html {
                                                                     </span>
                                                                 </TableCell>
                                                                 <TableCell class="align-middle text-center">
-                                                                    <TableActions 
-                                                                        on_edit={on_edit_click} 
-                                                                        on_delete={on_delete_click} 
+                                                                    <TableActions
+                                                                        on_edit={on_edit_click}
+                                                                        on_delete={on_delete_click}
                                                                     />
                                                                 </TableCell>
                                                             </TableRow>
@@ -380,7 +392,7 @@ pub fn users() -> Html {
                 </div>
             </div>
 
-            <ConfirmModal 
+            <ConfirmModal
                 is_open={*delete_modal_open}
                 title={t.t("common.confirm_delete")}
                 message={t.t("users.delete_confirm")}
@@ -399,9 +411,9 @@ pub fn users() -> Html {
                                         <CardTitle>
                                             { if *is_edit { t.t("users.edit_user") } else { t.t("users.create_user") } }
                                         </CardTitle>
-                                        <Button 
-                                            variant={ButtonVariant::Ghost} 
-                                            size={ButtonSize::Icon} 
+                                        <Button
+                                            variant={ButtonVariant::Ghost}
+                                            size={ButtonSize::Icon}
                                             onclick={close_modal.clone()}
                                         >
                                             <X class="h-4 w-4" />
@@ -411,7 +423,7 @@ pub fn users() -> Html {
                                         <form onsubmit={on_submit} class="flex flex-col gap-4">
                                             <div class="space-y-2">
                                                 <label class="text-sm font-medium text-slate-300">{t.t("users.username")}</label>
-                                                <Input 
+                                                <Input
                                                     value={(*form_username).clone()}
                                                     oninput={Callback::from(move |val: String| form_username.set(val))}
                                                     disabled={*is_edit}
@@ -419,12 +431,12 @@ pub fn users() -> Html {
                                                     placeholder={t.t("users.username_placeholder")}
                                                 />
                                             </div>
-                                            
+
                                             <div class="space-y-2">
                                                 <label class="text-sm font-medium text-slate-300">
                                                     { if *is_edit { t.t("users.password_placeholder_edit") } else { t.t("users.password") } }
                                                 </label>
-                                                <Input 
+                                                <Input
                                                     type_="password"
                                                     value={(*form_password).clone()}
                                                     oninput={Callback::from(move |val: String| form_password.set(val))}
@@ -453,7 +465,7 @@ pub fn users() -> Html {
 
                                             if *is_edit {
                                                 <div class="flex items-center space-x-2 pt-2">
-                                                    <Checkbox 
+                                                    <Checkbox
                                                         checked={*form_is_active}
                                                         onchange={Callback::from(move |checked: bool| form_is_active.set(checked))}
                                                         id="active-check"
@@ -463,15 +475,15 @@ pub fn users() -> Html {
                                             }
 
                                             <div class="flex justify-end gap-2 mt-6">
-                                                <Button 
-                                                    variant={ButtonVariant::Outline} 
-                                                    type_="button" 
+                                                <Button
+                                                    variant={ButtonVariant::Outline}
+                                                    type_="button"
                                                     onclick={close_modal}
                                                 >
                                                     {t.t("users.cancel")}
                                                 </Button>
-                                                <Button 
-                                                    variant={ButtonVariant::Default} 
+                                                <Button
+                                                    variant={ButtonVariant::Default}
                                                     type_="submit"
                                                 >
                                                     {t.t("users.save")}

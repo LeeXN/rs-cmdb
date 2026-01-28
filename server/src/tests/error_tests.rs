@@ -8,8 +8,7 @@
 
 #[cfg(test)]
 mod tests {
-    use common::error::{CmdbError, CmdbResult};
-    use serde_json;
+    use common::error::CmdbError;
 
     #[test]
     fn test_serialization_failure_returns_serialization_error() {

@@ -1,16 +1,16 @@
+use crate::repository::client_repository::ClientRepository;
+use crate::repository::component_repository::ComponentRepository;
+use crate::service::validation_service::ValidationService;
 use axum::{
-    extract::{Path, Extension, Json, Query},
+    extract::{Extension, Json, Path, Query},
     http::StatusCode,
     response::IntoResponse,
 };
 use axum_macros::debug_handler;
-use std::sync::Arc;
-use serde::Deserialize;
 use common::models::{ApiResponse, Component, ComponentStatus, ComponentType, PaginatedResult};
-use crate::repository::component_repository::ComponentRepository;
-use crate::repository::client_repository::ClientRepository;
-use crate::service::validation_service::ValidationService;
-use tracing::{info, error, instrument};
+use serde::Deserialize;
+use std::sync::Arc;
+use tracing::{error, info, instrument};
 
 #[derive(Debug, Deserialize)]
 pub struct ComponentQuery {
@@ -46,7 +46,6 @@ pub async fn list_components(
     Extension(component_repo): Extension<Arc<ComponentRepository>>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
 ) -> impl IntoResponse {
-    
     // Map API query to Repository query
     let status = if let Some(s) = &params.status {
         if s == "all" || s.is_empty() {
@@ -97,22 +96,27 @@ pub async fn list_components(
         Ok(mut paginated_result) => {
             // Populate client_hostname
             for component in &mut paginated_result.items {
-                if let Some(client_id) = &component.client_id {
-                    if let Ok(Some(client)) = client_repo.get(client_id).await {
-                        component.client_hostname = Some(client.hostname);
-                    }
+                if let Some(client_id) = &component.client_id
+                    && let Ok(Some(client)) = client_repo.get(client_id).await
+                {
+                    component.client_hostname = Some(client.hostname);
                 }
             }
 
-            info!("Listed {} components (page {}/{})", paginated_result.items.len(), paginated_result.page, paginated_result.total_pages);
+            info!(
+                "Listed {} components (page {}/{})",
+                paginated_result.items.len(),
+                paginated_result.page,
+                paginated_result.total_pages
+            );
             let response = ApiResponse {
                 status: 200,
                 message: "Components retrieved successfully".to_string(),
                 data: Some(paginated_result),
             };
-            
+
             (StatusCode::OK, Json(response))
-        },
+        }
         Err(err) => {
             error!("Failed to list components: {}", err);
             let response = ApiResponse::<PaginatedResult<Component>> {
@@ -120,8 +124,12 @@ pub async fn list_components(
                 message: err.to_string(),
                 data: None,
             };
-            
-            (StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(response))
+
+            (
+                StatusCode::from_u16(err.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(response),
+            )
         }
     }
 }
@@ -140,18 +148,18 @@ pub async fn get_component(
                 message: "Component retrieved successfully".to_string(),
                 data: Some(component),
             };
-            
+
             (StatusCode::OK, Json(response))
-        },
+        }
         Ok(None) => {
             let response = ApiResponse::<Component> {
                 status: 404,
                 message: format!("Component {} not found", component_id),
                 data: None,
             };
-            
+
             (StatusCode::NOT_FOUND, Json(response))
-        },
+        }
         Err(err) => {
             error!("Failed to get component {}: {}", component_id, err);
             let response = ApiResponse::<Component> {
@@ -159,8 +167,12 @@ pub async fn get_component(
                 message: err.to_string(),
                 data: None,
             };
-            
-            (StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(response))
+
+            (
+                StatusCode::from_u16(err.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(response),
+            )
         }
     }
 }
@@ -176,19 +188,21 @@ pub async fn create_component(
     info!("Creating component: {}", component.serial_number);
 
     // Validate client_id
-    if let Some(client_id) = &component.client_id {
-        if !client_id.is_empty() {
-            if let Err(e) = validation_service.validate_client_exists(client_id).await {
-                let response = ApiResponse::<Component> {
-                    status: e.status_code(),
-                    message: e.to_string(),
-                    data: None,
-                };
-                return (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::BAD_REQUEST), Json(response));
-            }
-        }
+    if let Some(client_id) = &component.client_id
+        && !client_id.is_empty()
+        && let Err(e) = validation_service.validate_client_exists(client_id).await
+    {
+        let response = ApiResponse::<Component> {
+            status: e.status_code(),
+            message: e.to_string(),
+            data: None,
+        };
+        return (
+            StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::BAD_REQUEST),
+            Json(response),
+        );
     }
-    
+
     match component_repo.save(&component).await {
         Ok(_) => {
             let response = ApiResponse {
@@ -197,7 +211,7 @@ pub async fn create_component(
                 data: Some(component),
             };
             (StatusCode::CREATED, Json(response))
-        },
+        }
         Err(err) => {
             error!("Failed to create component: {}", err);
             let response = ApiResponse::<Component> {
@@ -205,7 +219,11 @@ pub async fn create_component(
                 message: err.to_string(),
                 data: None,
             };
-            (StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(response))
+            (
+                StatusCode::from_u16(err.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(response),
+            )
         }
     }
 }
@@ -222,19 +240,21 @@ pub async fn update_component(
     info!("Updating component: {}", component_id);
 
     // Validate client_id
-    if let Some(client_id) = &component.client_id {
-        if !client_id.is_empty() {
-            if let Err(e) = validation_service.validate_client_exists(client_id).await {
-                let response = ApiResponse::<Component> {
-                    status: e.status_code(),
-                    message: e.to_string(),
-                    data: None,
-                };
-                return (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::BAD_REQUEST), Json(response));
-            }
-        }
+    if let Some(client_id) = &component.client_id
+        && !client_id.is_empty()
+        && let Err(e) = validation_service.validate_client_exists(client_id).await
+    {
+        let response = ApiResponse::<Component> {
+            status: e.status_code(),
+            message: e.to_string(),
+            data: None,
+        };
+        return (
+            StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::BAD_REQUEST),
+            Json(response),
+        );
     }
-    
+
     // Check if component exists
     match component_repo.exists(&component_id).await {
         Ok(true) => {
@@ -247,7 +267,7 @@ pub async fn update_component(
                 };
                 return (StatusCode::BAD_REQUEST, Json(response));
             }
-            
+
             match component_repo.save(&component).await {
                 Ok(_) => {
                     let response = ApiResponse {
@@ -256,7 +276,7 @@ pub async fn update_component(
                         data: Some(component),
                     };
                     (StatusCode::OK, Json(response))
-                },
+                }
                 Err(err) => {
                     error!("Failed to update component {}: {}", component_id, err);
                     let response = ApiResponse::<Component> {
@@ -264,10 +284,14 @@ pub async fn update_component(
                         message: err.to_string(),
                         data: None,
                     };
-                    (StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(response))
+                    (
+                        StatusCode::from_u16(err.status_code())
+                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                        Json(response),
+                    )
                 }
             }
-        },
+        }
         Ok(false) => {
             let response = ApiResponse::<Component> {
                 status: 404,
@@ -275,7 +299,7 @@ pub async fn update_component(
                 data: None,
             };
             (StatusCode::NOT_FOUND, Json(response))
-        },
+        }
         Err(err) => {
             error!("Failed to check component {}: {}", component_id, err);
             let response = ApiResponse::<Component> {
@@ -283,10 +307,15 @@ pub async fn update_component(
                 message: err.to_string(),
                 data: None,
             };
-            (StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(response))
+            (
+                StatusCode::from_u16(err.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(response),
+            )
         }
     }
-}/// Batch create components
+}
+/// Batch create components
 #[debug_handler]
 #[instrument(skip(component_repo))]
 pub async fn batch_create_components(
@@ -294,17 +323,20 @@ pub async fn batch_create_components(
     Json(request): Json<BatchCreateRequest>,
 ) -> impl IntoResponse {
     info!("Batch creating {} components", request.components.len());
-    
+
     let mut created_count = 0;
     let mut errors = Vec::new();
-    
+
     for component in request.components {
         match component_repo.save(&component).await {
             Ok(_) => created_count += 1,
-            Err(e) => errors.push(format!("Failed to save component {}: {}", component.serial_number, e)),
+            Err(e) => errors.push(format!(
+                "Failed to save component {}: {}",
+                component.serial_number, e
+            )),
         }
     }
-    
+
     if errors.is_empty() {
         let response = ApiResponse {
             status: 200,
@@ -315,7 +347,12 @@ pub async fn batch_create_components(
     } else {
         let response = ApiResponse {
             status: 207, // Multi-Status
-            message: format!("Created {} components, {} failed. Errors: {:?}", created_count, errors.len(), errors),
+            message: format!(
+                "Created {} components, {} failed. Errors: {:?}",
+                created_count,
+                errors.len(),
+                errors
+            ),
             data: Some(created_count),
         };
         (StatusCode::MULTI_STATUS, Json(response))
@@ -330,27 +367,27 @@ pub async fn batch_update_components(
     Json(request): Json<BatchUpdateRequest>,
 ) -> impl IntoResponse {
     info!("Batch updating {} components", request.ids.len());
-    
+
     let mut updated_count = 0;
     let mut errors = Vec::new();
-    
+
     for id in request.ids {
         match component_repo.get(&id).await {
             Ok(Some(mut component)) => {
                 if let Some(status) = &request.status {
                     component.status = status.clone();
                 }
-                
+
                 match component_repo.save(&component).await {
                     Ok(_) => updated_count += 1,
                     Err(e) => errors.push(format!("Failed to update component {}: {}", id, e)),
                 }
-            },
+            }
             Ok(None) => errors.push(format!("Component {} not found", id)),
             Err(e) => errors.push(format!("Failed to get component {}: {}", id, e)),
         }
     }
-    
+
     if errors.is_empty() {
         let response = ApiResponse {
             status: 200,
@@ -361,7 +398,12 @@ pub async fn batch_update_components(
     } else {
         let response = ApiResponse {
             status: 207, // Multi-Status
-            message: format!("Updated {} components, {} failed. Errors: {:?}", updated_count, errors.len(), errors),
+            message: format!(
+                "Updated {} components, {} failed. Errors: {:?}",
+                updated_count,
+                errors.len(),
+                errors
+            ),
             data: Some(updated_count),
         };
         (StatusCode::MULTI_STATUS, Json(response))
@@ -376,17 +418,17 @@ pub async fn batch_delete_components(
     Json(request): Json<BatchDeleteRequest>,
 ) -> impl IntoResponse {
     info!("Batch deleting {} components", request.ids.len());
-    
+
     let mut deleted_count = 0;
     let mut errors = Vec::new();
-    
+
     for id in request.ids {
         match component_repo.delete(&id).await {
             Ok(_) => deleted_count += 1,
             Err(e) => errors.push(format!("Failed to delete component {}: {}", id, e)),
         }
     }
-    
+
     if errors.is_empty() {
         let response = ApiResponse {
             status: 200,
@@ -397,7 +439,12 @@ pub async fn batch_delete_components(
     } else {
         let response = ApiResponse {
             status: 207, // Multi-Status
-            message: format!("Deleted {} components, {} failed. Errors: {:?}", deleted_count, errors.len(), errors),
+            message: format!(
+                "Deleted {} components, {} failed. Errors: {:?}",
+                deleted_count,
+                errors.len(),
+                errors
+            ),
             data: Some(deleted_count),
         };
         (StatusCode::MULTI_STATUS, Json(response))

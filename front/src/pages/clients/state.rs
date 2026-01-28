@@ -1,7 +1,7 @@
-use std::rc::Rc;
+use crate::types::{Client, FilterOptions, PaginatedResult, Person, Project, Rack};
 use std::collections::HashSet;
+use std::rc::Rc;
 use yew::prelude::*;
-use crate::types::{Client, FilterOptions, Person, Project, Rack, PaginatedResult};
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
@@ -29,9 +29,9 @@ pub enum ClientsAction {
 // 简化筛选状态结构
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct FilterState {
-    pub status: String, // 在线状态: online, offline
+    pub status: String,        // 在线状态: online, offline
     pub client_status: String, // 设备状态: Active, Maintenance, etc.
-    pub environment: String, // 环境: Prod, Dev, etc.
+    pub environment: String,   // 环境: Prod, Dev, etc.
     pub rack_id: String,
     pub project_id: String,
     pub owner_id: String,
@@ -51,45 +51,45 @@ pub struct FilterState {
 
 impl FilterState {
     pub fn is_empty(&self) -> bool {
-        self.status.is_empty() &&
-        self.client_status.is_empty() &&
-        self.environment.is_empty() &&
-        self.rack_id.is_empty() &&
-        self.project_id.is_empty() &&
-        self.owner_id.is_empty() &&
-        self.os.is_empty() &&
-        self.os_kernel.is_empty() &&
-        self.server_vendor.is_empty() &&
-        self.cpu_vendor.is_empty() &&
-        self.cpu_model.is_empty() &&
-        self.gpu_vendor.is_empty() &&
-        self.gpu_model.is_empty() &&
-        self.memory_min.is_empty() &&
-        self.memory_max.is_empty() &&
-        self.network_type.is_empty() &&
-        self.network_model.is_empty() &&
-        self.storage_type.is_empty()
+        self.status.is_empty()
+            && self.client_status.is_empty()
+            && self.environment.is_empty()
+            && self.rack_id.is_empty()
+            && self.project_id.is_empty()
+            && self.owner_id.is_empty()
+            && self.os.is_empty()
+            && self.os_kernel.is_empty()
+            && self.server_vendor.is_empty()
+            && self.cpu_vendor.is_empty()
+            && self.cpu_model.is_empty()
+            && self.gpu_vendor.is_empty()
+            && self.gpu_model.is_empty()
+            && self.memory_min.is_empty()
+            && self.memory_max.is_empty()
+            && self.network_type.is_empty()
+            && self.network_model.is_empty()
+            && self.storage_type.is_empty()
     }
 
     pub fn has_api_filters(&self) -> bool {
-        !self.os.is_empty() ||
-        !self.os_kernel.is_empty() ||
-        !self.server_vendor.is_empty() ||
-        !self.cpu_vendor.is_empty() ||
-        !self.cpu_model.is_empty() ||
-        !self.gpu_vendor.is_empty() ||
-        !self.gpu_model.is_empty() ||
-        !self.memory_min.is_empty() ||
-        !self.memory_max.is_empty() ||
-        !self.network_type.is_empty() ||
-        !self.network_model.is_empty() ||
-        !self.storage_type.is_empty() ||
-        !self.status.is_empty() ||
-        !self.client_status.is_empty() ||
-        !self.environment.is_empty() ||
-        !self.rack_id.is_empty() ||
-        !self.project_id.is_empty() ||
-        !self.owner_id.is_empty()
+        !self.os.is_empty()
+            || !self.os_kernel.is_empty()
+            || !self.server_vendor.is_empty()
+            || !self.cpu_vendor.is_empty()
+            || !self.cpu_model.is_empty()
+            || !self.gpu_vendor.is_empty()
+            || !self.gpu_model.is_empty()
+            || !self.memory_min.is_empty()
+            || !self.memory_max.is_empty()
+            || !self.network_type.is_empty()
+            || !self.network_model.is_empty()
+            || !self.storage_type.is_empty()
+            || !self.status.is_empty()
+            || !self.client_status.is_empty()
+            || !self.environment.is_empty()
+            || !self.rack_id.is_empty()
+            || !self.project_id.is_empty()
+            || !self.owner_id.is_empty()
     }
 
     pub fn clear(&mut self) {
@@ -187,7 +187,10 @@ impl Reducible for ClientsState {
                 new_state.filter_options = options;
             }
             ClientsAction::ClearAllFilters => {
-                if !new_state.filters.is_empty() || !new_state.search_term.is_empty() || new_state.current_page != 1 {
+                if !new_state.filters.is_empty()
+                    || !new_state.search_term.is_empty()
+                    || new_state.current_page != 1
+                {
                     new_state.search_term.clear();
                     new_state.filters.clear();
                     new_state.current_page = 1;
@@ -222,7 +225,8 @@ impl Reducible for ClientsState {
             ClientsAction::SelectAll(select) => {
                 if select {
                     // Select all visible clients
-                    new_state.selected_clients = new_state.clients.iter().map(|c| c.id.clone()).collect();
+                    new_state.selected_clients =
+                        new_state.clients.iter().map(|c| c.id.clone()).collect();
                 } else {
                     new_state.selected_clients.clear();
                 }

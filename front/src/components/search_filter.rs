@@ -1,10 +1,10 @@
-use yew::prelude::*;
-use web_sys::HtmlInputElement;
+use crate::components::ui::badge::{Badge, BadgeVariant};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent};
 use crate::components::ui::input::Input;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::badge::{Badge, BadgeVariant};
 use lucide_yew::{Search, X};
+use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchFilter {
@@ -39,11 +39,11 @@ pub struct SearchFilterProps {
 #[function_component(SearchFilterComponent)]
 pub fn search_filter_component(props: &SearchFilterProps) -> Html {
     let search_input_ref = use_node_ref();
-    
+
     let on_search_input = {
         let filter = props.filter.clone();
         let on_filter_change = props.on_filter_change.clone();
-        
+
         Callback::from(move |val: String| {
             let new_filter = SearchFilter {
                 search_text: val,
@@ -59,7 +59,7 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
     let on_os_change = {
         let filter = props.filter.clone();
         let on_filter_change = props.on_filter_change.clone();
-        
+
         Callback::from(move |e: Event| {
             if let Some(select) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                 let os_filter = select.value();
@@ -78,7 +78,7 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
     let on_status_change = {
         let filter = props.filter.clone();
         let on_filter_change = props.on_filter_change.clone();
-        
+
         Callback::from(move |e: Event| {
             if let Some(select) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                 let status_filter = select.value();
@@ -97,13 +97,13 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
     let on_clear_filters = {
         let on_filter_change = props.on_filter_change.clone();
         let search_input_ref = search_input_ref.clone();
-        
+
         Callback::from(move |_: MouseEvent| {
             // 清空搜索框
             if let Some(input) = search_input_ref.cast::<HtmlInputElement>() {
                 input.set_value("");
             }
-            
+
             let new_filter = SearchFilter::default();
             on_filter_change.emit(new_filter);
         })
@@ -112,7 +112,7 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
     let on_auto_refresh_change = {
         let filter = props.filter.clone();
         let on_filter_change = props.on_filter_change.clone();
-        
+
         Callback::from(move |e: Event| {
             if let Some(input) = e.target_dyn_into::<web_sys::HtmlInputElement>() {
                 let auto_refresh = input.checked();
@@ -131,7 +131,7 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
     let on_refresh_interval_change = {
         let filter = props.filter.clone();
         let on_filter_change = props.on_filter_change.clone();
-        
+
         Callback::from(move |e: Event| {
             if let Some(select) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                 if let Ok(refresh_interval) = select.value().parse::<u32>() {
@@ -148,8 +148,8 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
         })
     };
 
-    let has_active_filters = !props.filter.search_text.is_empty() 
-        || props.filter.os_filter != "all" 
+    let has_active_filters = !props.filter.search_text.is_empty()
+        || props.filter.os_filter != "all"
         || props.filter.status_filter != "all";
 
     let select_class = "flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 bg-slate-950/50";
@@ -161,7 +161,7 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
                     // Search Input
                     <div class="md:col-span-4 relative">
                         <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
+                        <Input
                             node_ref={search_input_ref}
                             class="pl-9"
                             value={props.filter.search_text.clone()}
@@ -173,7 +173,7 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
                     // OS Filter
                     <div class="md:col-span-2">
                         <label class="text-xs font-medium text-muted-foreground mb-1.5 block">{"操作系统"}</label>
-                        <select 
+                        <select
                             class={select_class}
                             value={props.filter.os_filter.clone()}
                             onchange={on_os_change}
@@ -190,7 +190,7 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
                     // Status Filter
                     <div class="md:col-span-2">
                         <label class="text-xs font-medium text-muted-foreground mb-1.5 block">{"状态"}</label>
-                        <select 
+                        <select
                             class={select_class}
                             value={props.filter.status_filter.clone()}
                             onchange={on_status_change}
@@ -207,18 +207,18 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
                             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 {"自动刷新"}
                             </label>
-                            <input 
-                                type="checkbox" 
+                            <input
+                                type="checkbox"
                                 class="h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500 bg-slate-950"
                                 checked={props.filter.auto_refresh}
                                 onchange={on_auto_refresh_change}
                             />
                         </div>
-                        
+
                         {
                             if props.filter.auto_refresh {
                                 html! {
-                                    <select 
+                                    <select
                                         class={format!("{} w-24", select_class)}
                                         value={props.filter.refresh_interval.to_string()}
                                         onchange={on_refresh_interval_change}
@@ -241,7 +241,7 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
                     <div class="text-sm text-muted-foreground">
                         {"显示 "}<span class="text-foreground font-medium">{props.filtered_count}</span>{" / " }{props.total_count}{" 台设备"}
                     </div>
-                    
+
                     <div class="flex items-center space-x-2">
                         {
                             if has_active_filters {
@@ -289,8 +289,8 @@ pub fn search_filter_component(props: &SearchFilterProps) -> Html {
                                                 }
                                             }
                                         </div>
-                                        <Button 
-                                            variant={ButtonVariant::Ghost} 
+                                        <Button
+                                            variant={ButtonVariant::Ghost}
                                             size={ButtonSize::Sm}
                                             onclick={on_clear_filters}
                                             class="h-8 px-2 lg:px-3"

@@ -1,12 +1,12 @@
+use crate::components::ui::badge::{Badge, BadgeVariant};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::hooks::use_trans::use_trans;
+use crate::routes::Route;
+use crate::types::Client;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::types::Client;
-use crate::routes::Route;
-use crate::components::ui::card::{Card, CardHeader, CardTitle, CardDescription, CardContent};
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
-use crate::components::ui::badge::{Badge, BadgeVariant};
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::hooks::use_trans::use_trans;
 
 #[derive(Properties, PartialEq)]
 pub struct ClientStatusListProps {

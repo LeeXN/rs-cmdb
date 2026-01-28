@@ -1,16 +1,18 @@
+use crate::repository::user_repository::UserRepository;
+use crate::service::auth_service::{AuthService, validate_password_complexity};
 use axum::{
     extract::{Extension, Json},
     http::StatusCode,
     response::IntoResponse,
 };
-use std::sync::Arc;
-use uuid::Uuid;
 use chrono::Utc;
+use common::entity::user::{
+    ChangePasswordRequest, CreateUserRequest, LoginRequest, LoginResponse, Role, User, UserResponse,
+};
 use common::models::ApiResponse;
-use common::entity::user::{User, Role, LoginRequest, LoginResponse, CreateUserRequest, ChangePasswordRequest, UserResponse};
-use crate::repository::user_repository::UserRepository;
-use crate::service::auth_service::AuthService;
+use std::sync::Arc;
 use tracing::error;
+use uuid::Uuid;
 
 pub async fn change_password(
     Extension(user_repo): Extension<Arc<UserRepository>>,
@@ -18,9 +20,21 @@ pub async fn change_password(
     Extension(current_user): Extension<User>,
     Json(payload): Json<ChangePasswordRequest>,
 ) -> impl IntoResponse {
+    // Validate new password complexity
+    if let Err(e) = validate_password_complexity(&payload.new_password) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<()> {
+                status: 400,
+                message: e.to_string(),
+                data: None,
+            }),
+        );
+    }
+
     // Verify old password
     match auth_service.verify_password(&payload.old_password, &current_user.password_hash) {
-        Ok(true) => {},
+        Ok(true) => {}
         _ => {
             return (
                 StatusCode::BAD_REQUEST,
@@ -169,6 +183,18 @@ pub async fn register(
     Extension(auth_service): Extension<Arc<AuthService>>,
     Json(payload): Json<CreateUserRequest>,
 ) -> impl IntoResponse {
+    // Validate password complexity
+    if let Err(e) = validate_password_complexity(&payload.password) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<UserResponse> {
+                status: 400,
+                message: e.to_string(),
+                data: None,
+            }),
+        );
+    }
+
     // Check if user exists
     match user_repo.find_by_username(&payload.username).await {
         Ok(Some(_)) => {
@@ -243,9 +269,7 @@ pub async fn register(
     }
 }
 
-pub async fn me(
-    Extension(current_user): Extension<User>,
-) -> impl IntoResponse {
+pub async fn me(Extension(current_user): Extension<User>) -> impl IntoResponse {
     (
         StatusCode::OK,
         Json(ApiResponse {

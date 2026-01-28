@@ -1,14 +1,14 @@
 use gloo_net::http::Request;
-use log::info;
-use wasm_bindgen_futures::spawn_local;
-use yew::Callback;
 use gloo_storage::{LocalStorage, Storage};
-use web_sys::window;
+use log::info;
 use urlencoding;
+use wasm_bindgen_futures::spawn_local;
+use web_sys::window;
+use yew::Callback;
 
-use common::models::{Component, PaginatedResult, ComponentStatus};
-use crate::types::ApiResponse;
 use crate::stores::auth_store::AuthStore;
+use crate::types::ApiResponse;
+use common::models::{Component, ComponentStatus, PaginatedResult};
 
 const API_BASE_URL: &str = "/api/v1/components";
 
@@ -36,7 +36,10 @@ async fn request_get(url: &str) -> Result<gloo_net::http::Response, gloo_net::Er
     Ok(response)
 }
 
-async fn request_put<T: serde::Serialize>(url: &str, body: &T) -> Result<gloo_net::http::Response, gloo_net::Error> {
+async fn request_put<T: serde::Serialize>(
+    url: &str,
+    body: &T,
+) -> Result<gloo_net::http::Response, gloo_net::Error> {
     let mut req = Request::put(url);
     if let Some(auth) = get_auth_header() {
         req = req.header("Authorization", &auth);
@@ -46,7 +49,10 @@ async fn request_put<T: serde::Serialize>(url: &str, body: &T) -> Result<gloo_ne
     Ok(response)
 }
 
-async fn request_post<T: serde::Serialize>(url: &str, body: &T) -> Result<gloo_net::http::Response, gloo_net::Error> {
+async fn request_post<T: serde::Serialize>(
+    url: &str,
+    body: &T,
+) -> Result<gloo_net::http::Response, gloo_net::Error> {
     let mut req = Request::post(url);
     if let Some(auth) = get_auth_header() {
         req = req.header("Authorization", &auth);
@@ -59,8 +65,8 @@ async fn request_post<T: serde::Serialize>(url: &str, body: &T) -> Result<gloo_n
 fn check_auth_error(response: &gloo_net::http::Response) {
     if response.status() == 401 {
         info!("Received 401 Unauthorized, redirecting to login...");
-        let _ = LocalStorage::delete("auth_store");
-        let _ = LocalStorage::delete("AuthStore");
+        LocalStorage::delete("auth_store");
+        LocalStorage::delete("AuthStore");
         if let Some(win) = window() {
             let _ = win.location().set_href("/login");
         }
@@ -119,7 +125,10 @@ pub async fn fetch_components(
     match request_get(&url).await {
         Ok(response) => {
             if response.status() == 200 {
-                match response.json::<ApiResponse<PaginatedResult<Component>>>().await {
+                match response
+                    .json::<ApiResponse<PaginatedResult<Component>>>()
+                    .await
+                {
                     Ok(data) => Ok(data.data.unwrap_or_else(|| PaginatedResult {
                         items: vec![],
                         total: 0,
@@ -127,13 +136,19 @@ pub async fn fetch_components(
                         page_size: 10,
                         total_pages: 0,
                     })),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse components: {}", err) }),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse components: {}", err),
+                    }),
                 }
             } else {
-                Err(ApiError { message: format!("Failed to fetch components: HTTP {}", response.status()) })
+                Err(ApiError {
+                    message: format!("Failed to fetch components: HTTP {}", response.status()),
+                })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -144,14 +159,22 @@ pub async fn get_component(id: &str) -> Result<Component, ApiError> {
         Ok(response) => {
             if response.status() == 200 {
                 match response.json::<ApiResponse<Component>>().await {
-                    Ok(data) => Ok(data.data.ok_or(ApiError { message: "No data returned".to_string() })?),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse component: {}", err) }),
+                    Ok(data) => Ok(data.data.ok_or(ApiError {
+                        message: "No data returned".to_string(),
+                    })?),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse component: {}", err),
+                    }),
                 }
             } else {
-                Err(ApiError { message: format!("Failed to get component: HTTP {}", response.status()) })
+                Err(ApiError {
+                    message: format!("Failed to get component: HTTP {}", response.status()),
+                })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -160,14 +183,22 @@ pub async fn create_component(component: &Component) -> Result<Component, ApiErr
         Ok(response) => {
             if response.status() == 201 {
                 match response.json::<ApiResponse<Component>>().await {
-                    Ok(data) => Ok(data.data.ok_or(ApiError { message: "No data returned".to_string() })?),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse created component: {}", err) }),
+                    Ok(data) => Ok(data.data.ok_or(ApiError {
+                        message: "No data returned".to_string(),
+                    })?),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse created component: {}", err),
+                    }),
                 }
             } else {
-                Err(ApiError { message: format!("Failed to create component: HTTP {}", response.status()) })
+                Err(ApiError {
+                    message: format!("Failed to create component: HTTP {}", response.status()),
+                })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -177,18 +208,29 @@ pub async fn update_component(id: &str, component: &Component) -> Result<Compone
         Ok(response) => {
             if response.status() == 200 {
                 match response.json::<ApiResponse<Component>>().await {
-                    Ok(data) => Ok(data.data.ok_or(ApiError { message: "No data returned".to_string() })?),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse updated component: {}", err) }),
+                    Ok(data) => Ok(data.data.ok_or(ApiError {
+                        message: "No data returned".to_string(),
+                    })?),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse updated component: {}", err),
+                    }),
                 }
             } else {
-                Err(ApiError { message: format!("Failed to update component: HTTP {}", response.status()) })
+                Err(ApiError {
+                    message: format!("Failed to update component: HTTP {}", response.status()),
+                })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
-pub async fn batch_update_components(ids: Vec<String>, status: Option<ComponentStatus>) -> Result<usize, ApiError> {
+pub async fn batch_update_components(
+    ids: Vec<String>,
+    status: Option<ComponentStatus>,
+) -> Result<usize, ApiError> {
     let url = format!("{}/batch/update", API_BASE_URL);
     let body = serde_json::json!({ "ids": ids, "status": status });
     match request_post(&url, &body).await {
@@ -196,13 +238,19 @@ pub async fn batch_update_components(ids: Vec<String>, status: Option<ComponentS
             if response.status() == 200 || response.status() == 207 {
                 match response.json::<ApiResponse<usize>>().await {
                     Ok(data) => Ok(data.data.unwrap_or(0)),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse response: {}", err) }),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse response: {}", err),
+                    }),
                 }
             } else {
-                Err(ApiError { message: format!("Failed to batch update: HTTP {}", response.status()) })
+                Err(ApiError {
+                    message: format!("Failed to batch update: HTTP {}", response.status()),
+                })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -214,13 +262,19 @@ pub async fn batch_create_components(components: Vec<Component>) -> Result<usize
             if response.status() == 200 || response.status() == 207 {
                 match response.json::<ApiResponse<usize>>().await {
                     Ok(data) => Ok(data.data.unwrap_or(0)),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse response: {}", err) }),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse response: {}", err),
+                    }),
                 }
             } else {
-                Err(ApiError { message: format!("Failed to batch create: HTTP {}", response.status()) })
+                Err(ApiError {
+                    message: format!("Failed to batch create: HTTP {}", response.status()),
+                })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -233,13 +287,19 @@ pub async fn batch_delete_components(ids: Vec<String>) -> Result<usize, ApiError
             if response.status() == 200 || response.status() == 207 {
                 match response.json::<ApiResponse<usize>>().await {
                     Ok(data) => Ok(data.data.unwrap_or(0)),
-                    Err(err) => Err(ApiError { message: format!("Failed to parse response: {}", err) }),
+                    Err(err) => Err(ApiError {
+                        message: format!("Failed to parse response: {}", err),
+                    }),
                 }
             } else {
-                Err(ApiError { message: format!("Failed to batch delete: HTTP {}", response.status()) })
+                Err(ApiError {
+                    message: format!("Failed to batch delete: HTTP {}", response.status()),
+                })
             }
-        },
-        Err(err) => Err(ApiError { message: format!("Network error: {}", err) }),
+        }
+        Err(err) => Err(ApiError {
+            message: format!("Network error: {}", err),
+        }),
     }
 }
 
@@ -251,7 +311,7 @@ pub fn get_components(
     component_type: Option<String>,
     status: Option<String>,
     q: Option<String>,
-    callback: Callback<Result<PaginatedResult<Component>, ApiError>>
+    callback: Callback<Result<PaginatedResult<Component>, ApiError>>,
 ) {
     spawn_local(async move {
         let result = fetch_components(page, page_size, client_id, component_type, status, q).await;

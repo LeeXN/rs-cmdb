@@ -1,9 +1,11 @@
-use std::sync::Arc;
-use common::error::{CmdbResult, CmdbError};
-use common::models::{PullResponse, ClientHardwareInfo};
-use crate::repository::{client_repository::ClientRepository, hardware_repository::HardwareRepository};
-use crate::service::component_service::ComponentService;
 use crate::queue::MessageQueue;
+use crate::repository::{
+    client_repository::ClientRepository, hardware_repository::HardwareRepository,
+};
+use crate::service::component_service::ComponentService;
+use common::error::{CmdbError, CmdbResult};
+use common::models::{ClientHardwareInfo, PullResponse};
+use std::sync::Arc;
 
 #[cfg(test)]
 use crate::tests::fixtures::*;
@@ -32,63 +34,95 @@ impl HardwareService {
             message_queue,
         }
     }
-    
+
     /// Process hardware info from a client
     pub async fn process_hardware_info(&self, hardware_info: ClientHardwareInfo) -> CmdbResult<()> {
         let client_id = &hardware_info.client_id;
-        
+
         // Check if client exists
         if let Ok(false) = self.client_repo.exists(client_id).await {
-            return Err(CmdbError::NotFound(format!("Client {} not found", client_id)));
+            return Err(CmdbError::NotFound(format!(
+                "Client {} not found",
+                client_id
+            )));
         }
-        
+
         // Update last seen timestamp
         self.client_repo.update_last_seen(client_id).await?;
-        
+
         // Save hardware info if available
         if let Some(hardware) = hardware_info.hardware {
-            self.hardware_repo.save_hardware_with_timestamp(client_id, &hardware, true, Some(&hardware_info.collected_at)).await?;
-            
+            self.hardware_repo
+                .save_hardware_with_timestamp(
+                    client_id,
+                    &hardware,
+                    true,
+                    Some(&hardware_info.collected_at),
+                )
+                .await?;
+
             // Extract and update components
-            if let Err(e) = self.component_service.process_hardware_info(client_id, &hardware).await {
-                eprintln!("Error processing components for client {}: {}", client_id, e);
+            if let Err(e) = self
+                .component_service
+                .process_hardware_info(client_id, &hardware)
+                .await
+            {
+                eprintln!(
+                    "Error processing components for client {}: {}",
+                    client_id, e
+                );
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Process a pull response from a client
     pub async fn process_pull_response(&self, response: PullResponse) -> CmdbResult<()> {
         // Extract request ID and client ID from response
         let request_id = &response.request_id;
-        
+
         // In a real-world scenario, we would look up the original pull request
         // to get the client ID. For simplicity, we assume it's embedded in the request ID.
         let parts: Vec<&str> = request_id.split(':').collect();
         if parts.len() < 2 {
-            return Err(CmdbError::Validation(format!("Invalid request ID format: {}", request_id)));
+            return Err(CmdbError::Validation(format!(
+                "Invalid request ID format: {}",
+                request_id
+            )));
         }
-        
+
         let client_id = parts[0];
-        
+
         // Check if client exists
         if let Ok(false) = self.client_repo.exists(client_id).await {
-            return Err(CmdbError::NotFound(format!("Client {} not found", client_id)));
+            return Err(CmdbError::NotFound(format!(
+                "Client {} not found",
+                client_id
+            )));
         }
-        
+
         // Update last seen timestamp
         self.client_repo.update_last_seen(client_id).await?;
-        
+
         // Save hardware info if available and status is success
-        if response.status == "success" {
-            if let Some(hardware) = response.hardware {
-                self.hardware_repo.save_hardware(client_id, &hardware, true).await?;
-                
-                // Extract and update components
-                if let Err(e) = self.component_service.process_hardware_info(client_id, &hardware).await {
-                    eprintln!("Error processing components for client {}: {}", client_id, e);
-                }
+        if response.status == "success"
+            && let Some(hardware) = response.hardware
+        {
+            self.hardware_repo
+                .save_hardware(client_id, &hardware, true)
+                .await?;
+
+            // Extract and update components
+            if let Err(e) = self
+                .component_service
+                .process_hardware_info(client_id, &hardware)
+                .await
+            {
+                eprintln!(
+                    "Error processing components for client {}: {}",
+                    client_id, e
+                );
             }
         }
 
@@ -99,16 +133,11 @@ impl HardwareService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
     use crate::repository::{
-        client_repository::ClientRepository,
+        client_repository::ClientRepository, component_repository::ComponentRepository,
         hardware_repository::HardwareRepository,
-        component_repository::ComponentRepository,
-        project_repository::ProjectRepository,
-        rack_repository::RackRepository,
-        person_repository::PersonRepository
     };
-    use crate::tests::fixtures::*;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_hardware_service_creation() {
@@ -122,8 +151,10 @@ mod tests {
         let _service = HardwareService::new(
             client_repo,
             hardware_repo,
-            Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc))))),
-            mock_queue
+            Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(
+                Arc::clone(&db_arc),
+            )))),
+            mock_queue,
         );
     }
 
@@ -133,14 +164,16 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
         let service = HardwareService::new(
             client_repo.clone(),
             hardware_repo,
             component_service,
-            mock_queue
+            mock_queue,
         );
 
         let client = create_test_client("client-1");
@@ -158,15 +191,13 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
-        let service = HardwareService::new(
-            client_repo,
-            hardware_repo,
-            component_service,
-            mock_queue
-        );
+        let service =
+            HardwareService::new(client_repo, hardware_repo, component_service, mock_queue);
 
         let hardware_info = create_client_hardware_info("nonexistent");
         let result = service.process_hardware_info(hardware_info).await;
@@ -180,14 +211,16 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
         let service = HardwareService::new(
             client_repo.clone(),
             hardware_repo,
             component_service,
-            mock_queue
+            mock_queue,
         );
 
         let client = create_test_client("client-1");
@@ -213,14 +246,16 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
         let service = HardwareService::new(
             client_repo.clone(),
             hardware_repo.clone(),
             component_service,
-            mock_queue
+            mock_queue,
         );
 
         let client = create_test_client("client-1");
@@ -239,14 +274,16 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
         let service = HardwareService::new(
             client_repo.clone(),
             hardware_repo.clone(),
             component_service,
-            mock_queue
+            mock_queue,
         );
 
         let client = create_test_client("client-1");
@@ -266,14 +303,16 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
         let service = HardwareService::new(
             client_repo.clone(),
             hardware_repo.clone(),
             component_service,
-            mock_queue
+            mock_queue,
         );
 
         let client = create_test_client("client-1");
@@ -294,14 +333,16 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
         let service = HardwareService::new(
             client_repo.clone(),
             hardware_repo.clone(),
             component_service,
-            mock_queue
+            mock_queue,
         );
 
         let client = create_test_client("client-1");
@@ -322,15 +363,13 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
-        let service = HardwareService::new(
-            client_repo,
-            hardware_repo,
-            component_service,
-            mock_queue
-        );
+        let service =
+            HardwareService::new(client_repo, hardware_repo, component_service, mock_queue);
 
         let pull_response = PullResponse {
             request_id: "invalid-request-id".to_string(),
@@ -350,15 +389,13 @@ mod tests {
         let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
         let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
-        let component_service = Arc::new(ComponentService::new(Arc::new(ComponentRepository::new(Arc::clone(&db_arc)))));
+        let component_service = Arc::new(ComponentService::new(Arc::new(
+            ComponentRepository::new(Arc::clone(&db_arc)),
+        )));
         let mock_queue = Arc::new(crate::queue::mock_queue::MockMessageQueue::new());
 
-        let service = HardwareService::new(
-            client_repo,
-            hardware_repo,
-            component_service,
-            mock_queue
-        );
+        let service =
+            HardwareService::new(client_repo, hardware_repo, component_service, mock_queue);
 
         let pull_response = create_pull_response("nonexistent", "success");
         let result = service.process_pull_response(pull_response).await;
@@ -366,4 +403,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
- 

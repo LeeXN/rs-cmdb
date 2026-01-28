@@ -1,7 +1,7 @@
-use yew::prelude::*;
-use yewdux::prelude::*;
 use crate::stores::auth_store::AuthStore;
 use crate::types::Role;
+use yew::prelude::*;
+use yewdux::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct PermissionGuardProps {
@@ -14,7 +14,7 @@ pub struct PermissionGuardProps {
 #[function_component(PermissionGuard)]
 pub fn permission_guard(props: &PermissionGuardProps) -> Html {
     let (auth_store, _) = use_store::<AuthStore>();
-    
+
     let has_permission = if let Some(user) = &auth_store.user {
         user.role >= props.min_role
     } else {

@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use crate::components::ui::card::{Card, CardContent};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct StatsCardProps {

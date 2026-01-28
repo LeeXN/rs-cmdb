@@ -12,7 +12,7 @@ pub struct CardProps {
 pub fn card(props: &CardProps) -> Html {
     html! {
         <div class={classes!(
-            "rounded-lg", "border", "border-border", "bg-card", "text-card-foreground", "shadow-sm", "backdrop-blur-sm", "bg-opacity-90", 
+            "rounded-lg", "border", "border-border", "bg-card", "text-card-foreground", "shadow-sm", "backdrop-blur-sm", "bg-opacity-90",
             "transition-all", "duration-300", "hover:shadow-[0_0_20px_rgba(6,182,212,0.15)]", "hover:border-primary/50",
             props.class.clone()
         )}>

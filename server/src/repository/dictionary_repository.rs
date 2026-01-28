@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use common::error::{CmdbResult, CmdbError};
-use common::entity::dictionary::Dictionary;
-use serde_json;
 use crate::db::Database;
+use common::entity::dictionary::Dictionary;
+use common::error::{CmdbError, CmdbResult};
+use serde_json;
+use std::sync::Arc;
 
 /// Repository for dictionary operations
 pub struct DictionaryRepository {
@@ -18,56 +18,62 @@ impl DictionaryRepository {
             key_prefix: "dictionary:".to_string(),
         }
     }
-    
+
     /// Get dictionary key in database
     fn get_key(&self, id: &str) -> String {
         format!("{}{}", self.key_prefix, id)
     }
-    
+
     /// Save a dictionary item to the database
     pub async fn save(&self, item: &Dictionary) -> CmdbResult<()> {
-        let json = serde_json::to_vec(item)
-            .map_err(|e| CmdbError::Serialization(format!("Failed to serialize dictionary item: {}", e)))?;
-        
+        let json = serde_json::to_vec(item).map_err(|e| {
+            CmdbError::Serialization(format!("Failed to serialize dictionary item: {}", e))
+        })?;
+
         self.db.set(&self.get_key(&item.id), &json).await
     }
-    
+
     /// Get a dictionary item by ID
     pub async fn get(&self, id: &str) -> CmdbResult<Option<Dictionary>> {
         let data = match self.db.get(&self.get_key(id)).await? {
             Some(data) => data,
             None => return Ok(None),
         };
-        
-        let item = serde_json::from_slice(&data)
-            .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize dictionary item: {}", e)))?;
-            
+
+        let item = serde_json::from_slice(&data).map_err(|e| {
+            CmdbError::Serialization(format!("Failed to deserialize dictionary item: {}", e))
+        })?;
+
         Ok(Some(item))
     }
-    
+
     /// Delete a dictionary item
     pub async fn delete(&self, id: &str) -> CmdbResult<()> {
         self.db.delete(&self.get_key(id)).await
     }
-    
+
     /// List all dictionary items
     pub async fn list_all(&self) -> CmdbResult<Vec<Dictionary>> {
         let values = self.db.list_values(&self.key_prefix).await?;
         let mut items = Vec::with_capacity(values.len());
-        
+
         for data in values {
-            let item = serde_json::from_slice(&data)
-                .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize dictionary item: {}", e)))?;
+            let item = serde_json::from_slice(&data).map_err(|e| {
+                CmdbError::Serialization(format!("Failed to deserialize dictionary item: {}", e))
+            })?;
             items.push(item);
         }
-        
+
         Ok(items)
     }
 
     /// List items by category
     pub async fn list_by_category(&self, category: &str) -> CmdbResult<Vec<Dictionary>> {
         let all = self.list_all().await?;
-            Ok(all.into_iter().filter(|item| item.category == category).collect())
+        Ok(all
+            .into_iter()
+            .filter(|item| item.category == category)
+            .collect())
     }
 }
 
@@ -97,7 +103,10 @@ mod tests {
 
         let result = repo.save(&dict).await;
 
-        assert!(result.is_ok(), "Save should succeed with valid dictionary data");
+        assert!(
+            result.is_ok(),
+            "Save should succeed with valid dictionary data"
+        );
     }
 
     #[tokio::test]
@@ -143,7 +152,10 @@ mod tests {
         assert!(delete_result.is_ok(), "Delete should succeed");
 
         let get_result = repo.get("dict-003").await;
-        assert!(get_result.unwrap().is_none(), "Dictionary should be deleted");
+        assert!(
+            get_result.unwrap().is_none(),
+            "Dictionary should be deleted"
+        );
     }
 
     #[tokio::test]
@@ -161,9 +173,27 @@ mod tests {
         let db = setup_test_db().unwrap();
         let repo = DictionaryRepository::new(std::sync::Arc::new(db));
 
-        repo.save(&create_test_dictionary("dict-004", "Hardware", "CPU", "Intel Xeon")).await.unwrap();
-        repo.save(&create_test_dictionary("dict-005", "OS", "kernel", "5.15.0")).await.unwrap();
-        repo.save(&create_test_dictionary("dict-006", "Department", "HR", "IT")).await.unwrap();
+        repo.save(&create_test_dictionary(
+            "dict-004",
+            "Hardware",
+            "CPU",
+            "Intel Xeon",
+        ))
+        .await
+        .unwrap();
+        repo.save(&create_test_dictionary(
+            "dict-005", "OS", "kernel", "5.15.0",
+        ))
+        .await
+        .unwrap();
+        repo.save(&create_test_dictionary(
+            "dict-006",
+            "Department",
+            "HR",
+            "IT",
+        ))
+        .await
+        .unwrap();
 
         let result = repo.list_all().await;
 
@@ -188,9 +218,21 @@ mod tests {
         let db = setup_test_db().unwrap();
         let repo = DictionaryRepository::new(std::sync::Arc::new(db));
 
-        repo.save(&create_test_dictionary("dict-007", "Hardware", "CPU", "Intel")).await.unwrap();
-        repo.save(&create_test_dictionary("dict-008", "Hardware", "Disk", "SSD")).await.unwrap();
-        repo.save(&create_test_dictionary("dict-009", "OS", "kernel", "5.15.0")).await.unwrap();
+        repo.save(&create_test_dictionary(
+            "dict-007", "Hardware", "CPU", "Intel",
+        ))
+        .await
+        .unwrap();
+        repo.save(&create_test_dictionary(
+            "dict-008", "Hardware", "Disk", "SSD",
+        ))
+        .await
+        .unwrap();
+        repo.save(&create_test_dictionary(
+            "dict-009", "OS", "kernel", "5.15.0",
+        ))
+        .await
+        .unwrap();
 
         let result = repo.list_by_category("Hardware").await;
 
@@ -204,12 +246,19 @@ mod tests {
         let db = setup_test_db().unwrap();
         let repo = DictionaryRepository::new(std::sync::Arc::new(db));
 
-        repo.save(&create_test_dictionary("dict-010", "OS", "kernel", "5.15.0")).await.unwrap();
+        repo.save(&create_test_dictionary(
+            "dict-010", "OS", "kernel", "5.15.0",
+        ))
+        .await
+        .unwrap();
 
         let result = repo.list_by_category("Department").await;
 
         assert!(result.is_ok(), "List by category should succeed");
-        assert!(result.unwrap().is_empty(), "Should return empty for non-existent category");
+        assert!(
+            result.unwrap().is_empty(),
+            "Should return empty for non-existent category"
+        );
     }
 
     #[tokio::test]
@@ -230,6 +279,9 @@ mod tests {
 
         let retrieved = repo.get("dict-011").await.unwrap().unwrap();
         assert_eq!(retrieved.value, "Engineering", "Value should be updated");
-        assert_ne!(retrieved.updated_at, dict.created_at, "Updated timestamp should differ");
+        assert_ne!(
+            retrieved.updated_at, dict.created_at,
+            "Updated timestamp should differ"
+        );
     }
 }

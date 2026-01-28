@@ -1,12 +1,62 @@
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use chrono::{Duration, Utc};
 use common::entity::user::{Role, User};
 use common::error::{CmdbError, CmdbResult};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
+
+/// Validate password complexity requirements.
+///
+/// Requirements:
+/// - Minimum 12 characters
+/// - At least one uppercase letter (A-Z)
+/// - At least one lowercase letter (a-z)
+/// - At least one number (0-9)
+/// - At least one special character
+pub fn validate_password_complexity(password: &str) -> CmdbResult<()> {
+    // Check minimum length
+    if password.len() < 12 {
+        return Err(CmdbError::Validation(
+            "Password must be at least 12 characters".to_string(),
+        ));
+    }
+
+    // Check for uppercase letter
+    if !password.chars().any(|c| c.is_ascii_uppercase()) {
+        return Err(CmdbError::Validation(
+            "Password must contain at least one uppercase letter (A-Z)".to_string(),
+        ));
+    }
+
+    // Check for lowercase letter
+    if !password.chars().any(|c| c.is_ascii_lowercase()) {
+        return Err(CmdbError::Validation(
+            "Password must contain at least one lowercase letter (a-z)".to_string(),
+        ));
+    }
+
+    // Check for number
+    if !password.chars().any(|c| c.is_ascii_digit()) {
+        return Err(CmdbError::Validation(
+            "Password must contain at least one number (0-9)".to_string(),
+        ));
+    }
+
+    // Check for special character
+    if !password
+        .chars()
+        .any(|c| c.is_ascii_punctuation() || !c.is_alphanumeric())
+    {
+        return Err(CmdbError::Validation(
+            "Password must contain at least one special character".to_string(),
+        ));
+    }
+
+    Ok(())
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -273,5 +323,60 @@ mod tests {
         let auth_service = AuthService::new("test_secret".to_string());
         let result = auth_service.verify_token("invalid.token.string");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_password_complexity_valid_password() {
+        let password = "SecureP@ssword123";
+        let result = validate_password_complexity(password);
+        assert!(result.is_ok(), "Valid password should pass validation");
+    }
+
+    #[test]
+    fn test_validate_password_complexity_too_short() {
+        let password = "Short1!";
+        let result = validate_password_complexity(password);
+        assert!(result.is_err(), "Password too short should fail");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("at least 12 characters"));
+    }
+
+    #[test]
+    fn test_validate_password_complexity_missing_uppercase() {
+        let password = "lowercase123!";
+        let result = validate_password_complexity(password);
+        assert!(result.is_err(), "Password without uppercase should fail");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("uppercase letter"));
+    }
+
+    #[test]
+    fn test_validate_password_complexity_missing_lowercase() {
+        let password = "UPPERCASE123!";
+        let result = validate_password_complexity(password);
+        assert!(result.is_err(), "Password without lowercase should fail");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("lowercase letter"));
+    }
+
+    #[test]
+    fn test_validate_password_complexity_missing_number() {
+        let password = "NoNumbersHere!";
+        let result = validate_password_complexity(password);
+        assert!(result.is_err(), "Password without number should fail");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("number"));
+    }
+
+    #[test]
+    fn test_validate_password_complexity_missing_special() {
+        let password = "NoSpecialChars123";
+        let result = validate_password_complexity(password);
+        assert!(
+            result.is_err(),
+            "Password without special character should fail"
+        );
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("special character"));
     }
 }

@@ -1,20 +1,20 @@
-use yew::prelude::*;
-use wasm_bindgen::JsCast;
 use log::info;
+use wasm_bindgen::JsCast;
+use yew::prelude::*;
 
-use crate::pages::clients::state::{ClientsState, ClientsAction};
-use crate::pages::clients::filters::has_active_filters;
-use crate::types::{ClientHardwareExport, Role};
-use crate::services::api::{self, ApiError};
-use crate::utils::export::{export_to_csv, export_to_json};
 use crate::components::permission_guard::PermissionGuard;
 use crate::hooks::use_trans::use_trans;
+use crate::pages::clients::filters::has_active_filters;
+use crate::pages::clients::state::{ClientsAction, ClientsState};
+use crate::services::api::{self, ApiError};
+use crate::types::{ClientHardwareExport, Role};
+use crate::utils::export::{export_to_csv, export_to_json};
 
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
 use crate::components::ui::input::Input;
 use crate::components::ui::select::Select;
-use lucide_yew::{Funnel, Search, X, FileDown, FileCode, FileInput, LoaderCircle};
+use lucide_yew::{FileCode, FileDown, FileInput, Funnel, LoaderCircle, Search, X};
 
 #[derive(Properties, PartialEq)]
 pub struct SearchBarProps {
@@ -83,7 +83,7 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
         let dispatcher = dispatcher.clone();
         Callback::from(move |_: MouseEvent| {
             dispatcher.dispatch(ClientsAction::ClearAllFilters);
-            
+
             // 清除DOM状态
             if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
@@ -91,18 +91,24 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
                     if let Ok(selects) = document.query_selector_all("select") {
                         for i in 0..selects.length() {
                             if let Some(select) = selects.item(i) {
-                                if let Some(select_element) = select.dyn_ref::<web_sys::HtmlSelectElement>() {
+                                if let Some(select_element) =
+                                    select.dyn_ref::<web_sys::HtmlSelectElement>()
+                                {
                                     select_element.set_selected_index(0);
                                 }
                             }
                         }
                     }
-                    
+
                     // 重置输入框
-                    if let Ok(inputs) = document.query_selector_all("input[type='number'], input[type='text']") {
+                    if let Ok(inputs) =
+                        document.query_selector_all("input[type='number'], input[type='text']")
+                    {
                         for i in 0..inputs.length() {
                             if let Some(input) = inputs.item(i) {
-                                if let Some(input_element) = input.dyn_ref::<web_sys::HtmlInputElement>() {
+                                if let Some(input_element) =
+                                    input.dyn_ref::<web_sys::HtmlInputElement>()
+                                {
                                     input_element.set_value("");
                                 }
                             }
@@ -131,7 +137,7 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
                     <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t.t("clients.search.keyword_label")}</label>
                     <div class="relative">
                         <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
+                        <Input
                             class="pl-8"
                             value={state.search_term.clone()}
                             oninput={on_search}
@@ -140,17 +146,17 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
                     </div>
                     <p class="text-xs text-muted-foreground">{t.t("clients.search.hint")}</p>
                 </div>
-                
+
                 // 筛选状态显示
                 {render_filter_status(state, clear_filters.clone(), &t)}
-                
+
                 // 筛选选项
                 {render_filter_options(state, create_filter_callback, &t)}
-                
+
                 // 操作按钮
                 <div class="flex flex-wrap justify-between items-center gap-4 mt-6">
                     <div class="flex gap-2">
-                        <Button 
+                        <Button
                             variant={ButtonVariant::Default}
                             size={ButtonSize::Sm}
                             onclick={apply_filters}
@@ -173,7 +179,7 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
                                 }
                             }
                         </Button>
-                        <Button 
+                        <Button
                             variant={ButtonVariant::Outline}
                             size={ButtonSize::Sm}
                             onclick={clear_filters}
@@ -183,7 +189,7 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
                         </Button>
                     </div>
                     <div class="flex gap-2">
-                        <Button 
+                        <Button
                             variant={ButtonVariant::Outline}
                             size={ButtonSize::Sm}
                             onclick={export_csv}
@@ -191,7 +197,7 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
                         >
                             <FileDown class="h-4 w-4 mr-2" />{t.t("clients.search.export_csv")}
                         </Button>
-                        <Button 
+                        <Button
                             variant={ButtonVariant::Outline}
                             size={ButtonSize::Sm}
                             onclick={export_json}
@@ -200,7 +206,7 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
                             <FileCode class="h-4 w-4 mr-2" />{t.t("clients.search.export_json")}
                         </Button>
                         <PermissionGuard min_role={Role::User}>
-                            <Button 
+                            <Button
                                 variant={ButtonVariant::Outline}
                                 size={ButtonSize::Sm}
                                 onclick={on_import_click.clone()}
@@ -217,14 +223,18 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
 
 use crate::i18n::I18n;
 
-fn render_filter_status(state: &ClientsState, clear_callback: Callback<MouseEvent>, t: &I18n) -> Html {
+fn render_filter_status(
+    state: &ClientsState,
+    clear_callback: Callback<MouseEvent>,
+    t: &I18n,
+) -> Html {
     if has_active_filters(&state.search_term, &state.filters) {
         html! {
             <div class="flex items-center justify-between mb-4 p-2 bg-muted/50 rounded-lg">
                 <span class="text-sm text-primary font-bold">
                     {format!("{} {} {}", t.t("clients.stats.filtered_results"), state.total_items, t.t("dashboard.unit_machines"))}
                 </span>
-                <Button 
+                <Button
                     variant={ButtonVariant::Ghost}
                     size={ButtonSize::Sm}
                     onclick={clear_callback}
@@ -239,8 +249,8 @@ fn render_filter_status(state: &ClientsState, clear_callback: Callback<MouseEven
     }
 }
 
-fn render_filter_options<F>(state: &ClientsState, create_callback: F, t: &I18n) -> Html 
-where 
+fn render_filter_options<F>(state: &ClientsState, create_callback: F, t: &I18n) -> Html
+where
     F: Fn(&'static str) -> Callback<String>,
 {
     html! {
@@ -277,7 +287,7 @@ fn render_client_status_filter(current_value: &str, callback: Callback<String>, 
     html! {
         <div class="space-y-2">
             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t.t("clients.filter.status")}</label>
-            <Select 
+            <Select
                 value={current_value.to_string()}
                 onchange={callback}
             >
@@ -295,7 +305,7 @@ fn render_environment_filter(current_value: &str, callback: Callback<String>, t:
     html! {
         <div class="space-y-2">
             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t.t("clients.filter.environment")}</label>
-            <Select 
+            <Select
                 value={current_value.to_string()}
                 onchange={callback}
             >
@@ -309,11 +319,16 @@ fn render_environment_filter(current_value: &str, callback: Callback<String>, t:
     }
 }
 
-fn render_rack_filter(current_value: &str, racks: &[crate::types::Rack], callback: Callback<String>, t: &I18n) -> Html {
+fn render_rack_filter(
+    current_value: &str,
+    racks: &[crate::types::Rack],
+    callback: Callback<String>,
+    t: &I18n,
+) -> Html {
     html! {
         <div class="space-y-2">
             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t.t("clients.filter.rack")}</label>
-            <Select 
+            <Select
                 value={current_value.to_string()}
                 onchange={callback}
             >
@@ -332,11 +347,16 @@ fn render_rack_filter(current_value: &str, racks: &[crate::types::Rack], callbac
     }
 }
 
-fn render_project_filter(current_value: &str, projects: &[crate::types::Project], callback: Callback<String>, t: &I18n) -> Html {
+fn render_project_filter(
+    current_value: &str,
+    projects: &[crate::types::Project],
+    callback: Callback<String>,
+    t: &I18n,
+) -> Html {
     html! {
         <div class="space-y-2">
             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t.t("clients.filter.project")}</label>
-            <Select 
+            <Select
                 value={current_value.to_string()}
                 onchange={callback}
             >
@@ -355,11 +375,16 @@ fn render_project_filter(current_value: &str, projects: &[crate::types::Project]
     }
 }
 
-fn render_owner_filter(current_value: &str, persons: &[crate::types::Person], callback: Callback<String>, t: &I18n) -> Html {
+fn render_owner_filter(
+    current_value: &str,
+    persons: &[crate::types::Person],
+    callback: Callback<String>,
+    t: &I18n,
+) -> Html {
     html! {
         <div class="space-y-2">
             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t.t("clients.filter.owner")}</label>
-            <Select 
+            <Select
                 value={current_value.to_string()}
                 onchange={callback}
             >
@@ -382,7 +407,7 @@ fn render_status_filter(current_value: &str, callback: Callback<String>, t: &I18
     html! {
         <div class="space-y-2">
             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t.t("dashboard.status")}</label>
-            <Select 
+            <Select
                 value={current_value.to_string()}
                 onchange={callback}
             >
@@ -394,13 +419,19 @@ fn render_status_filter(current_value: &str, callback: Callback<String>, t: &I18
     }
 }
 
-fn render_select_filter(label: &str, current_value: &str, options: &[String], callback: Callback<String>, t: &I18n) -> Html {
+fn render_select_filter(
+    label: &str,
+    current_value: &str,
+    options: &[String],
+    callback: Callback<String>,
+    t: &I18n,
+) -> Html {
     let label_str = label.to_string();
-    
+
     html! {
         <div class="space-y-2">
             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{label_str}</label>
-            <Select 
+            <Select
                 value={current_value.to_string()}
                 onchange={callback}
             >
@@ -419,15 +450,21 @@ fn render_select_filter(label: &str, current_value: &str, options: &[String], ca
     }
 }
 
-fn render_input_filter(label: &str, input_type: &str, current_value: &str, placeholder: &str, callback: Callback<String>) -> Html {
+fn render_input_filter(
+    label: &str,
+    input_type: &str,
+    current_value: &str,
+    placeholder: &str,
+    callback: Callback<String>,
+) -> Html {
     let label_str = label.to_string();
     let input_type_str = input_type.to_string();
     let placeholder_str = placeholder.to_string();
-    
+
     html! {
         <div class="space-y-2">
             <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{label_str}</label>
-            <Input 
+            <Input
                 type_={input_type_str}
                 value={current_value.to_string()}
                 oninput={callback}
@@ -438,17 +475,17 @@ fn render_input_filter(label: &str, input_type: &str, current_value: &str, place
 }
 
 fn create_export_callback(
-    dispatcher: UseReducerDispatcher<ClientsState>, 
-    filtered_clients: &[crate::types::Client], 
-    format: &str
+    dispatcher: UseReducerDispatcher<ClientsState>,
+    filtered_clients: &[crate::types::Client],
+    format: &str,
 ) -> Callback<MouseEvent> {
     let dispatcher = dispatcher.clone();
     let client_ids: Vec<String> = filtered_clients.iter().map(|c| c.id.clone()).collect();
     let format = format.to_string();
-    
+
     Callback::from(move |_: MouseEvent| {
         dispatcher.dispatch(ClientsAction::SetExporting(true));
-        
+
         if !client_ids.is_empty() {
             api::get_export_data(Callback::from({
                 let dispatcher = dispatcher.clone();
@@ -458,21 +495,25 @@ fn create_export_callback(
                     dispatcher.dispatch(ClientsAction::SetExporting(false));
                     match result {
                         Ok(all_data) => {
-                            let filtered_data: Vec<ClientHardwareExport> = all_data.into_iter()
+                            let filtered_data: Vec<ClientHardwareExport> = all_data
+                                .into_iter()
                                 .filter(|item| client_ids.contains(&item.client_id))
                                 .collect();
-                            
+
                             let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
                             let filename = format!("cmdb_filtered_export_{}.{}", timestamp, format);
-                            
+
                             let result = if format == "csv" {
                                 export_to_csv(&filtered_data, &filename)
                             } else {
                                 export_to_json(&filtered_data, &filename)
                             };
-                            
+
                             if let Err(err) = result {
-                                dispatcher.dispatch(ClientsAction::SetError(Some(format!("Export failed: {:?}", err))));
+                                dispatcher.dispatch(ClientsAction::SetError(Some(format!(
+                                    "Export failed: {:?}",
+                                    err
+                                ))));
                             }
                         }
                         Err(err) => {

@@ -1,12 +1,12 @@
-use std::sync::Arc;
-use std::collections::HashSet;
-use common::error::CmdbResult;
-use common::models::{Component, ComponentType, ComponentStatus};
-use common::entity::hardware::Hardware;
-use crate::repository::component_repository::ComponentRepository;
 use crate::config::get_config;
-use uuid::Uuid;
+use crate::repository::component_repository::ComponentRepository;
 use chrono::Utc;
+use common::entity::hardware::Hardware;
+use common::error::CmdbResult;
+use common::models::{Component, ComponentStatus, ComponentType};
+use std::collections::HashSet;
+use std::sync::Arc;
+use uuid::Uuid;
 
 #[cfg(test)]
 use crate::tests::fixtures::*;
@@ -29,7 +29,11 @@ impl ComponentService {
     }
 
     /// Process hardware info to extract and update components
-    pub async fn process_hardware_info(&self, client_id: &str, hardware: &Hardware) -> CmdbResult<()> {
+    pub async fn process_hardware_info(
+        &self,
+        client_id: &str,
+        hardware: &Hardware,
+    ) -> CmdbResult<()> {
         let mut seen_serials = HashSet::new();
         let now = Utc::now().to_rfc3339();
 
@@ -42,8 +46,9 @@ impl ComponentService {
                 Some(&gpu.vendor),
                 ComponentType::GPU,
                 client_id,
-                &now
-            ).await?;
+                &now,
+            )
+            .await?;
             seen_serials.insert(serial);
         }
 
@@ -56,8 +61,9 @@ impl ComponentService {
                 Some(&disk.vendor),
                 ComponentType::Disk,
                 client_id,
-                &now
-            ).await?;
+                &now,
+            )
+            .await?;
             seen_serials.insert(serial);
         }
 
@@ -70,22 +76,24 @@ impl ComponentService {
                 Some(&module.vendor),
                 ComponentType::Memory,
                 client_id,
-                &now
-            ).await?;
+                &now,
+            )
+            .await?;
             seen_serials.insert(serial);
         }
 
         // 4. NICs (Use MAC as Serial)
         for nic in &hardware.nics {
-             if !nic.mac_address.is_empty() {
+            if !nic.mac_address.is_empty() {
                 self.upsert_component(
                     &nic.mac_address,
                     &nic.model,
                     Some(&nic.vendor),
                     ComponentType::NetworkCard,
                     client_id,
-                    &now
-                ).await?;
+                    &now,
+                )
+                .await?;
                 seen_serials.insert(nic.mac_address.clone());
             }
         }
@@ -97,15 +105,17 @@ impl ComponentService {
         for comp in existing_components {
             if !seen_serials.contains(&comp.serial_number) {
                 let mut updated = comp.clone();
-                
+
                 if let Some(missing_since_str) = &updated.missing_since {
                     // Already marked as missing, check if grace period expired
-                    if let Ok(missing_since) = chrono::DateTime::parse_from_rfc3339(missing_since_str) {
+                    if let Ok(missing_since) =
+                        chrono::DateTime::parse_from_rfc3339(missing_since_str)
+                    {
                         let duration = Utc::now().signed_duration_since(missing_since);
                         if duration.num_hours() >= grace_period as i64 {
                             // Expired, detach
                             updated.client_id = None;
-                            updated.status = ComponentStatus::Unknown; 
+                            updated.status = ComponentStatus::Unknown;
                             updated.location = Some("Unknown".to_string());
                             updated.missing_since = None;
                             updated.updated_at = now.clone();
@@ -125,18 +135,21 @@ impl ComponentService {
     }
 
     async fn upsert_component(
-        &self, 
-        serial: &str, 
-        model: &str, 
-        vendor: Option<&str>, 
-        ctype: ComponentType, 
+        &self,
+        serial: &str,
+        model: &str,
+        vendor: Option<&str>,
+        ctype: ComponentType,
         client_id: &str,
-        now: &str
+        now: &str,
     ) -> CmdbResult<()> {
         if let Some(mut comp) = self.repo.find_by_serial(serial).await? {
             // Update existing
             // Only update if something changed to avoid unnecessary writes
-            if comp.client_id.as_deref() != Some(client_id) || comp.status != ComponentStatus::InUse || comp.missing_since.is_some() {
+            if comp.client_id.as_deref() != Some(client_id)
+                || comp.status != ComponentStatus::InUse
+                || comp.missing_since.is_some()
+            {
                 comp.client_id = Some(client_id.to_string());
                 comp.status = ComponentStatus::InUse;
                 comp.updated_at = now.to_string();
@@ -173,10 +186,10 @@ impl ComponentService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
     use crate::repository::component_repository::ComponentRepository;
-    use crate::tests::fixtures::*;
-    use common::models::{Component, ComponentType, ComponentStatus};
+    use std::sync::Arc;
+
+    use common::models::{Component, ComponentStatus, ComponentType};
     use uuid::Uuid;
 
     fn create_test_component(serial: &str, client_id: &str) -> Component {
@@ -247,10 +260,14 @@ mod tests {
         let service = ComponentService::new(repo.clone());
 
         let hardware = create_test_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware)
+            .await
+            .unwrap();
 
         let components = repo.find_by_client_id("client-1").await.unwrap();
-        let gpu_components: Vec<_> = components.iter()
+        let gpu_components: Vec<_> = components
+            .iter()
             .filter(|c| c.component_type == ComponentType::GPU)
             .collect();
 
@@ -267,10 +284,14 @@ mod tests {
         let service = ComponentService::new(repo.clone());
 
         let hardware = create_test_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware)
+            .await
+            .unwrap();
 
         let components = repo.find_by_client_id("client-1").await.unwrap();
-        let disk_components: Vec<_> = components.iter()
+        let disk_components: Vec<_> = components
+            .iter()
             .filter(|c| c.component_type == ComponentType::Disk)
             .collect();
 
@@ -286,10 +307,14 @@ mod tests {
         let service = ComponentService::new(repo.clone());
 
         let hardware = create_test_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware)
+            .await
+            .unwrap();
 
         let components = repo.find_by_client_id("client-1").await.unwrap();
-        let memory_components: Vec<_> = components.iter()
+        let memory_components: Vec<_> = components
+            .iter()
             .filter(|c| c.component_type == ComponentType::Memory)
             .collect();
 
@@ -305,10 +330,14 @@ mod tests {
         let service = ComponentService::new(repo.clone());
 
         let hardware = create_test_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware)
+            .await
+            .unwrap();
 
         let components = repo.find_by_client_id("client-1").await.unwrap();
-        let nic_components: Vec<_> = components.iter()
+        let nic_components: Vec<_> = components
+            .iter()
             .filter(|c| c.component_type == ComponentType::NetworkCard)
             .collect();
 
@@ -323,12 +352,18 @@ mod tests {
         let service = ComponentService::new(repo.clone());
 
         let hardware = create_test_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware)
+            .await
+            .unwrap();
 
         let components = repo.find_by_client_id("client-1").await.unwrap();
         let component_count = components.len();
 
-        service.process_hardware_info("client-1", &hardware).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware)
+            .await
+            .unwrap();
 
         let components_after = repo.find_by_client_id("client-1").await.unwrap();
         assert_eq!(components_after.len(), component_count);
@@ -342,13 +377,20 @@ mod tests {
         let service = ComponentService::new(repo.clone());
 
         let hardware1 = create_test_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware1).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware1)
+            .await
+            .unwrap();
 
         let hardware2 = create_minimal_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware2).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware2)
+            .await
+            .unwrap();
 
         let components = repo.find_by_client_id("client-1").await.unwrap();
-        let missing_components: Vec<_> = components.iter()
+        let missing_components: Vec<_> = components
+            .iter()
             .filter(|c| c.missing_since.is_some())
             .collect();
 
@@ -363,7 +405,10 @@ mod tests {
         let service = ComponentService::new(repo.clone());
 
         let hardware1 = create_test_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware1).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware1)
+            .await
+            .unwrap();
 
         let components = repo.find_by_client_id("client-1").await.unwrap();
         if let Some(comp) = components.first() {
@@ -374,10 +419,14 @@ mod tests {
         }
 
         let hardware2 = create_minimal_hardware_info("client-1");
-        service.process_hardware_info("client-1", &hardware2).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware2)
+            .await
+            .unwrap();
 
         let all_components = repo.list_all().await.unwrap();
-        let detached: Vec<_> = all_components.iter()
+        let detached: Vec<_> = all_components
+            .iter()
             .filter(|c| c.client_id.is_none())
             .collect();
 
@@ -405,19 +454,20 @@ mod tests {
         let service = ComponentService::new(repo.clone());
 
         let mut hardware = create_test_hardware_info("client-1");
-        hardware.nics = vec![
-            hardware.nics[0].clone(),
-            {
-                let mut nic = hardware.nics[0].clone();
-                nic.mac_address = "00:11:22:33:44:66".to_string();
-                nic
-            },
-        ];
+        hardware.nics = vec![hardware.nics[0].clone(), {
+            let mut nic = hardware.nics[0].clone();
+            nic.mac_address = "00:11:22:33:44:66".to_string();
+            nic
+        }];
 
-        service.process_hardware_info("client-1", &hardware).await.unwrap();
+        service
+            .process_hardware_info("client-1", &hardware)
+            .await
+            .unwrap();
 
         let components = repo.find_by_client_id("client-1").await.unwrap();
-        let nic_components: Vec<_> = components.iter()
+        let nic_components: Vec<_> = components
+            .iter()
             .filter(|c| c.component_type == ComponentType::NetworkCard)
             .collect();
 

@@ -1,15 +1,15 @@
-use std::sync::Arc;
+use crate::repository::dictionary_repository::DictionaryRepository;
 use axum::{
-    extract::{Path, Extension, Json, Query},
+    extract::{Extension, Json, Path, Query},
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::Utc;
 use common::entity::dictionary::Dictionary;
 use common::models::ApiResponse;
-use crate::repository::dictionary_repository::DictionaryRepository;
-use uuid::Uuid;
-use chrono::Utc;
 use serde::Deserialize;
+use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct ListParams {
@@ -89,12 +89,12 @@ pub async fn create_dictionary(
     if item.id.is_empty() {
         item.id = Uuid::new_v4().to_string();
     }
-    
+
     // Set timestamps
     let now = Utc::now().to_rfc3339();
     item.created_at = now.clone();
     item.updated_at = now;
-    
+
     match repo.save(&item).await {
         Ok(_) => {
             let response = ApiResponse {
@@ -128,7 +128,7 @@ pub async fn update_dictionary(
             item.id = id;
             item.created_at = existing_item.created_at;
             item.updated_at = Utc::now().to_rfc3339();
-            
+
             match repo.save(&item).await {
                 Ok(_) => {
                     let response = ApiResponse {

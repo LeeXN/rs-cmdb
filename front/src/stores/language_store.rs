@@ -1,6 +1,6 @@
-use yewdux::prelude::*;
-use serde::{Deserialize, Serialize};
 use crate::i18n::Language;
+use serde::{Deserialize, Serialize};
+use yewdux::prelude::*;
 
 #[derive(Store, Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[store(storage = "local", storage_tab_sync)]

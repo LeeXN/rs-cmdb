@@ -1,8 +1,11 @@
-use std::sync::Arc;
-use common::error::{CmdbResult, CmdbError};
+use crate::repository::{
+    client_repository::ClientRepository, hardware_repository::HardwareRepository,
+    rack_repository::RackRepository,
+};
+use common::error::{CmdbError, CmdbResult};
 use common::models::Client;
-use crate::repository::{client_repository::ClientRepository, hardware_repository::HardwareRepository, rack_repository::RackRepository};
-use tracing::{info, warn, instrument};
+use std::sync::Arc;
+use tracing::{info, instrument, warn};
 
 #[cfg(test)]
 use crate::tests::fixtures::*;
@@ -16,58 +19,72 @@ pub struct ClientService {
 
 impl ClientService {
     /// Create a new client service
-    pub fn new(client_repo: Arc<ClientRepository>, hardware_repo: Arc<HardwareRepository>, rack_repo: Arc<RackRepository>) -> Self {
+    pub fn new(
+        client_repo: Arc<ClientRepository>,
+        hardware_repo: Arc<HardwareRepository>,
+        rack_repo: Arc<RackRepository>,
+    ) -> Self {
         Self {
             client_repo,
             hardware_repo,
             rack_repo,
         }
     }
-    
+
     /// Import clients from a list
     #[instrument(skip(self, clients))]
     pub async fn import_clients(&self, clients: Vec<Client>) -> CmdbResult<usize> {
         let mut count = 0;
         for client in clients {
             // Validate Rack Assignment
-            if let Some(rack_id) = &client.rack {
-                if !rack_id.is_empty() {
-                    // Check if rack exists
-                    let rack = self.rack_repo.get(rack_id).await?;
-                    if rack.is_none() {
-                        return Err(CmdbError::Validation(format!("Rack {} not found for client {}", rack_id, client.hostname)));
+            if let Some(rack_id) = &client.rack
+                && !rack_id.is_empty()
+            {
+                // Check if rack exists
+                let rack = self.rack_repo.get(rack_id).await?;
+                if rack.is_none() {
+                    return Err(CmdbError::Validation(format!(
+                        "Rack {} not found for client {}",
+                        rack_id, client.hostname
+                    )));
+                }
+                let rack = rack.unwrap();
+
+                // Check if unit position is valid
+                if let Some(pos_str) = &client.unit_position
+                    && let Ok(pos) = pos_str.parse::<u32>()
+                {
+                    let height = client.u_height.unwrap_or(1);
+                    if pos + height - 1 > rack.height_u {
+                        return Err(CmdbError::Validation(format!(
+                            "Client {} exceeds rack height",
+                            client.hostname
+                        )));
                     }
-                    let rack = rack.unwrap();
-                    
-                    // Check if unit position is valid
-                    if let Some(pos_str) = &client.unit_position {
-                        if let Ok(pos) = pos_str.parse::<u32>() {
-                            let height = client.u_height.unwrap_or(1);
-                            if pos + height - 1 > rack.height_u {
-                                return Err(CmdbError::Validation(format!("Client {} exceeds rack height", client.hostname)));
-                            }
-                            
-                            // Check for overlap with existing clients
-                            // This is expensive, we should optimize it in a real system
-                            let all_clients = self.client_repo.list_all().await?;
-                            for other in all_clients {
-                                if other.id == client.id { continue; } // Skip self
-                                if other.rack.as_ref() == Some(rack_id) {
-                                    if let Some(other_pos_str) = &other.unit_position {
-                                        if let Ok(other_pos) = other_pos_str.parse::<u32>() {
-                                            let other_height = other.u_height.unwrap_or(1);
-                                            // Check overlap
-                                            let start1 = pos;
-                                            let end1 = pos + height - 1;
-                                            let start2 = other_pos;
-                                            let end2 = other_pos + other_height - 1;
-                                            
-                                            if std::cmp::max(start1, start2) <= std::cmp::min(end1, end2) {
-                                                return Err(CmdbError::Validation(format!("Rack position overlap: {} overlaps with {}", client.hostname, other.hostname)));
-                                            }
-                                        }
-                                    }
-                                }
+
+                    // Check for overlap with existing clients
+                    // This is expensive, we should optimize it in a real system
+                    let all_clients = self.client_repo.list_all().await?;
+                    for other in all_clients {
+                        if other.id == client.id {
+                            continue;
+                        } // Skip self
+                        if other.rack.as_ref() == Some(rack_id)
+                            && let Some(other_pos_str) = &other.unit_position
+                            && let Ok(other_pos) = other_pos_str.parse::<u32>()
+                        {
+                            let other_height = other.u_height.unwrap_or(1);
+                            // Check overlap
+                            let start1 = pos;
+                            let end1 = pos + height - 1;
+                            let start2 = other_pos;
+                            let end2 = other_pos + other_height - 1;
+
+                            if std::cmp::max(start1, start2) <= std::cmp::min(end1, end2) {
+                                return Err(CmdbError::Validation(format!(
+                                    "Rack position overlap: {} overlaps with {}",
+                                    client.hostname, other.hostname
+                                )));
                             }
                         }
                     }
@@ -91,26 +108,49 @@ impl ClientService {
         }
         Ok(count)
     }
-    
+
     /// Register a new client
-    /// 
+    ///
     /// If client_id is provided, it will be used. Otherwise, a new UUID will be generated.
-    #[instrument(skip(self, hostname, ip_address, sys_vendor, product_name, serial_number, os), fields(client_id))]
-    pub async fn register_client(&self, hostname: &str, ip_address: &str, sys_vendor: &str, product_name: &str, serial_number: &str, os: &str, client_id: Option<String>) -> CmdbResult<Client> {
+    #[instrument(
+        skip(
+            self,
+            hostname,
+            ip_address,
+            sys_vendor,
+            product_name,
+            serial_number,
+            os
+        ),
+        fields(client_id)
+    )]
+    pub async fn register_client(
+        &self,
+        hostname: &str,
+        ip_address: &str,
+        sys_vendor: &str,
+        product_name: &str,
+        serial_number: &str,
+        os: &str,
+        client_id: Option<String>,
+    ) -> CmdbResult<Client> {
         // Create a new client with given or generated ID
         let mut client = Client::new(hostname.to_string(), ip_address.to_string());
-        
+
         // Use provided client ID if available
         if let Some(id) = client_id {
             client.id = id;
         } else {
             // Try to find existing client by serial number if client_id is not provided
             if let Ok(Some(existing)) = self.client_repo.find_by_serial(serial_number).await {
-                info!("Found existing client by serial number: {} -> {}", serial_number, existing.id);
+                info!(
+                    "Found existing client by serial number: {} -> {}",
+                    serial_number, existing.id
+                );
                 client.id = existing.id;
             }
         }
-        
+
         // Check if client already exists
         if let Ok(true) = self.client_repo.exists(&client.id).await {
             // Update the client information
@@ -122,20 +162,23 @@ impl ClientService {
                 existing_client.serial_number = Some(serial_number.to_string());
                 existing_client.os = Some(os.to_string());
                 existing_client.update_last_seen();
-                
+
                 self.client_repo.save(&existing_client).await?;
-                info!("Client updated: {} ({})", existing_client.hostname, existing_client.id);
+                info!(
+                    "Client updated: {} ({})",
+                    existing_client.hostname, existing_client.id
+                );
                 return Ok(existing_client);
             }
         }
-        
+
         // Save the new client
         self.client_repo.save(&client).await?;
         info!("New client registered: {} ({})", client.hostname, client.id);
-        
+
         Ok(client)
     }
-    
+
     /// Delete a client and associated hardware information
     /// Also attempts to stop the client service remotely
     #[instrument(skip(self))]
@@ -143,73 +186,112 @@ impl ClientService {
         // Get client information first
         let client = match self.client_repo.get(client_id).await? {
             Some(client) => client,
-            None => return Err(CmdbError::NotFound(format!("Client {} not found", client_id))),
+            None => {
+                return Err(CmdbError::NotFound(format!(
+                    "Client {} not found",
+                    client_id
+                )));
+            }
         };
-        
-        info!("Deleting client: {} ({})", client.hostname, client.ip_address);
-        
+
+        info!(
+            "Deleting client: {} ({})",
+            client.hostname, client.ip_address
+        );
+
         // Attempt to stop the client service remotely
         if let Err(e) = self.stop_client_service(&client).await {
-            warn!("Failed to stop client service for {}: {}", client.hostname, e);
+            warn!(
+                "Failed to stop client service for {}: {}",
+                client.hostname, e
+            );
             // Continue with deletion even if we can't stop the service
         }
-        
+
         // Delete hardware data
         match self.hardware_repo.delete_hardware(client_id).await {
             Ok(_) => info!("Hardware data deleted for client {}", client_id),
-            Err(e) => warn!("Failed to delete hardware data for client {}: {}", client_id, e),
+            Err(e) => warn!(
+                "Failed to delete hardware data for client {}: {}",
+                client_id, e
+            ),
         }
-        
+
         // Delete client from database
         self.client_repo.delete(client_id).await?;
         info!("Client {} deleted successfully from database", client_id);
-        
+
         Ok(())
     }
-    
+
     /// Attempt to stop the client service remotely
     #[instrument(skip(self, client), fields(hostname = %client.hostname, ip = %client.ip_address))]
     async fn stop_client_service(&self, client: &Client) -> CmdbResult<()> {
         info!("Attempting to stop service on client");
-        
+
         // For Linux systems, try to stop systemd service via SSH
-        if client.os.as_ref().map_or(false, |os| os.to_lowercase().contains("linux")) {
+        if client
+            .os
+            .as_ref()
+            .is_some_and(|os| os.to_lowercase().contains("linux"))
+        {
             return self.stop_linux_service(client).await;
         }
-        
+
         // For Windows systems, try to stop service via PowerShell remoting
-        if client.os.as_ref().map_or(false, |os| os.to_lowercase().contains("windows")) {
+        if client
+            .os
+            .as_ref()
+            .is_some_and(|os| os.to_lowercase().contains("windows"))
+        {
             return self.stop_windows_service(client).await;
         }
-        
-        warn!("Unsupported OS for remote service management: {:?}", client.os);
+
+        warn!(
+            "Unsupported OS for remote service management: {:?}",
+            client.os
+        );
         Ok(())
     }
-    
+
     /// Stop Linux service via SSH (if configured)
     async fn stop_linux_service(&self, client: &Client) -> CmdbResult<()> {
-        // This is a simplified implementation
-        // In production, you might want to use SSH keys or other authentication methods
-        
+        // This implementation uses secure SSH configuration
+        // Host key verification is enabled - hosts must be in known_hosts file
+
         let commands = vec![
             "systemctl stop rs-cmdb-client",
             "systemctl disable rs-cmdb-client",
         ];
-        
+
+        // Get SSH known_hosts file path from config
+        let config = crate::config::get_config();
+        let known_hosts_file = config.ssh_known_hosts_file.as_deref();
+
         for cmd in commands {
             info!("Executing on {}: {}", client.hostname, cmd);
-            
-            // Use tokio::process to execute SSH command
-            let output = tokio::process::Command::new("ssh")
+
+            // Build SSH command with security options
+            let mut ssh_cmd = tokio::process::Command::new("ssh");
+            ssh_cmd
                 .arg("-o")
-                .arg("ConnectTimeout=10")
+                .arg("ConnectTimeout=30") // Increased timeout to 30 seconds
                 .arg("-o")
-                .arg("StrictHostKeyChecking=no")
-                .arg(&client.ip_address)
-                .arg(cmd)
-                .output()
-                .await;
-                
+                .arg("BatchMode=yes") // Never ask for passwords
+                .arg("-o")
+                .arg("StrictHostKeyChecking=yes"); // Enable host key verification
+
+            // Add known_hosts file path if configured
+            if let Some(known_hosts) = known_hosts_file {
+                ssh_cmd
+                    .arg("-o")
+                    .arg(format!("UserKnownHostsFile={}", known_hosts));
+            }
+
+            ssh_cmd.arg(&client.ip_address).arg(cmd);
+
+            let output = ssh_cmd.output().await;
+
             match output {
                 Ok(result) => {
                     if result.status.success() {
@@ -217,40 +299,60 @@ impl ClientService {
                     } else {
                         let stderr = String::from_utf8_lossy(&result.stderr);
                         warn!("Command failed on {}: {}", client.hostname, stderr);
+
+                        // Check if this is a host key verification error
+                        if stderr.contains("Host key verification failed")
+                            || stderr.contains("Could not resolve hostname")
+                        {
+                            return Err(CmdbError::Validation(format!(
+                                "SSH host key verification failed for {}. Please add the host to your known_hosts file.",
+                                client.hostname
+                            )));
+                        }
                     }
                 }
                 Err(e) => {
-                    warn!("SSH connection failed to {}: {}", client.hostname, e);
+                    let error_msg = format!("SSH connection failed to {}: {}", client.hostname, e);
+                    warn!("{}", error_msg);
+
+                    // Provide helpful error message
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        return Err(CmdbError::Validation("SSH command not found. Please ensure OpenSSH client is installed to manage remote services.".to_string()));
+                    }
+                    return Err(CmdbError::Internal(error_msg));
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Stop Windows service via PowerShell remoting (if configured)
     async fn stop_windows_service(&self, client: &Client) -> CmdbResult<()> {
         info!("Attempting to stop Windows service on {}", client.hostname);
-        
+
         // This would require PowerShell remoting to be configured
         // For now, just log that we attempted it
-        warn!("Windows service stopping not implemented yet for {}", client.hostname);
-        
+        warn!(
+            "Windows service stopping not implemented yet for {}",
+            client.hostname
+        );
+
         Ok(())
     }
-    
+
     /// Get a client by ID
     #[allow(dead_code)]
     pub async fn get_client(&self, client_id: &str) -> CmdbResult<Option<Client>> {
         self.client_repo.get(client_id).await
     }
-    
+
     /// List all clients
     #[allow(dead_code)]
     pub async fn list_clients(&self) -> CmdbResult<Vec<Client>> {
         self.client_repo.list_all().await
     }
-    
+
     /// Update client last seen timestamp
     pub async fn update_last_seen(&self, client_id: &str) -> CmdbResult<()> {
         self.client_repo.update_last_seen(client_id).await
@@ -260,15 +362,11 @@ impl ClientService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
     use crate::repository::{
-        client_repository::ClientRepository,
-        hardware_repository::HardwareRepository,
-        project_repository::ProjectRepository,
+        client_repository::ClientRepository, hardware_repository::HardwareRepository,
         rack_repository::RackRepository,
-        person_repository::PersonRepository
     };
-    use crate::tests::fixtures::*;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_client_service_creation() {
@@ -289,7 +387,11 @@ mod tests {
         let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
         let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
 
-        let service = ClientService::new(client_repo.clone(), hardware_repo.clone(), rack_repo.clone());
+        let service = ClientService::new(
+            client_repo.clone(),
+            hardware_repo.clone(),
+            rack_repo.clone(),
+        );
 
         let rack = create_test_rack("rack-1");
         rack_repo.save(&rack).await.unwrap();
@@ -406,15 +508,17 @@ mod tests {
 
         let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
 
-        let client = service.register_client(
-            "test-host",
-            "192.168.1.1",
-            "Dell",
-            "PowerEdge",
-            "SN12345",
-            "Linux",
-            None
-        ).await;
+        let client = service
+            .register_client(
+                "test-host",
+                "192.168.1.1",
+                "Dell",
+                "PowerEdge",
+                "SN12345",
+                "Linux",
+                None,
+            )
+            .await;
 
         assert!(client.is_ok());
         let client = client.unwrap();
@@ -433,15 +537,17 @@ mod tests {
         let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
 
         let custom_id = "custom-client-id-123".to_string();
-        let client = service.register_client(
-            "test-host",
-            "192.168.1.1",
-            "Dell",
-            "PowerEdge",
-            "SN12345",
-            "Linux",
-            Some(custom_id.clone())
-        ).await;
+        let client = service
+            .register_client(
+                "test-host",
+                "192.168.1.1",
+                "Dell",
+                "PowerEdge",
+                "SN12345",
+                "Linux",
+                Some(custom_id.clone()),
+            )
+            .await;
 
         assert!(client.is_ok());
         assert_eq!(client.unwrap().id, custom_id);
@@ -461,15 +567,17 @@ mod tests {
         client.serial_number = Some("SN12345".to_string());
         client_repo.save(&client).await.unwrap();
 
-        let result = service.register_client(
-            "new-hostname",
-            "192.168.1.2",
-            "Dell",
-            "PowerEdge",
-            "SN12345",
-            "Linux",
-            None
-        ).await;
+        let result = service
+            .register_client(
+                "new-hostname",
+                "192.168.1.2",
+                "Dell",
+                "PowerEdge",
+                "SN12345",
+                "Linux",
+                None,
+            )
+            .await;
 
         assert!(result.is_ok());
         let client = result.unwrap();
@@ -594,7 +702,10 @@ mod tests {
         client_repo.save(&client).await.unwrap();
 
         let hardware = create_test_hardware_info("test-client");
-        hardware_repo.save_hardware("test-client", &hardware, true).await.unwrap();
+        hardware_repo
+            .save_hardware("test-client", &hardware, true)
+            .await
+            .unwrap();
 
         service.delete_client("test-client").await.unwrap();
 
@@ -618,4 +729,3 @@ mod tests {
         assert_eq!(result.unwrap(), 0);
     }
 }
- 

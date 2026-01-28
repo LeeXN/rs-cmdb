@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct InputProps {
@@ -35,8 +35,12 @@ pub struct InputProps {
 
 #[function_component(Input)]
 pub fn input(props: &InputProps) -> Html {
-    let type_ = if props.type_.is_empty() { "text".to_string() } else { props.type_.clone() };
-    
+    let type_ = if props.type_.is_empty() {
+        "text".to_string()
+    } else {
+        props.type_.clone()
+    };
+
     let oninput = {
         let oninput = props.oninput.clone();
         Callback::from(move |e: InputEvent| {

@@ -1,7 +1,7 @@
+use common::entity::hardware::CPU;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use common::entity::hardware::CPU;
 
 const CPUINFO_FILE: &str = "/proc/cpuinfo";
 
@@ -72,12 +72,16 @@ pub fn get_cpu_info() -> CPU {
                 }
             }
             "flags" if !flags_found => {
-                cpu.flags = value.split_whitespace().map(|s| s.to_string()).collect::<Vec<String>>();
+                cpu.flags = value
+                    .split_whitespace()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>();
                 flags_found = true;
             }
             "cpu cores" if !cores_per_cpu_parsed => {
                 if let Ok(c) = value.parse::<u32>() {
-                    if c > 0 { // Only accept a valid, positive number of cores
+                    if c > 0 {
+                        // Only accept a valid, positive number of cores
                         cores_per_physical_cpu = c;
                         cores_per_cpu_parsed = true;
                     }
@@ -125,10 +129,10 @@ pub fn get_cpu_info() -> CPU {
     // Final sanity checks to ensure logical consistency
     cpu.cpus = cpu.cpus.max(1); // Should be at least one physical CPU package.
     cpu.cores = cpu.cores.max(cpu.cpus); // Total cores must be at least the number of CPU packages.
-    cpu.cores = cpu.cores.max(1);        // At least one core.
+    cpu.cores = cpu.cores.max(1); // At least one core.
     cpu.threads = cpu.threads.max(cpu.cores); // Logical threads must be >= total physical cores.
-    cpu.threads = cpu.threads.max(1);       // At least one thread.
-    
+    cpu.threads = cpu.threads.max(1); // At least one thread.
+
     cpu
 }
 // get cpu speed by /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq if cpu enable cpufreq
@@ -140,7 +144,7 @@ fn get_cpu_speed() -> u32 {
     };
     let mut reader = BufReader::new(file);
     let mut line = String::new();
-    if let Ok(_) = reader.read_line(&mut line) {
+    if reader.read_line(&mut line).is_ok() {
         if let Ok(speed) = line.trim().parse::<u32>() {
             println!("cpu speed: {}", speed);
             return speed / 1000;

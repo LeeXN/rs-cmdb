@@ -1,8 +1,9 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Role {
+    #[default]
     Viewer,
     User,
     Admin,
@@ -15,12 +16,6 @@ impl fmt::Display for Role {
             Role::User => write!(f, "User"),
             Role::Viewer => write!(f, "Viewer"),
         }
-    }
-}
-
-impl Default for Role {
-    fn default() -> Self {
-        Role::Viewer
     }
 }
 
@@ -62,6 +57,7 @@ impl From<User> for UserResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json;
 
     #[test]
     fn test_role_display() {
@@ -79,6 +75,64 @@ mod tests {
     fn test_role_ordering() {
         assert!(Role::Viewer < Role::User);
         assert!(Role::User < Role::Admin);
+    }
+
+    #[test]
+    fn test_user_response_excludes_password_hash() {
+        let user = User {
+            id: "user-123".to_string(),
+            username: "testuser".to_string(),
+            password_hash: "hashed_password_value".to_string(),
+            role: Role::Admin,
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            last_login: None,
+            is_active: true,
+        };
+
+        let user_response = UserResponse::from(user);
+        let json = serde_json::to_string(&user_response).unwrap();
+
+        // Verify password_hash is not in the serialized output
+        assert!(
+            !json.contains("password_hash"),
+            "password_hash should not be in UserResponse serialization"
+        );
+        assert!(
+            !json.contains("hashed_password_value"),
+            "password value should not be in UserResponse serialization"
+        );
+
+        // Verify other fields are present
+        assert!(json.contains("user-123"), "id should be in UserResponse");
+        assert!(
+            json.contains("testuser"),
+            "username should be in UserResponse"
+        );
+    }
+
+    #[test]
+    fn test_user_response_from_user() {
+        let user = User {
+            id: "user-456".to_string(),
+            username: "testuser2".to_string(),
+            password_hash: "another_hash".to_string(),
+            role: Role::User,
+            created_at: "2024-01-02T00:00:00Z".to_string(),
+            last_login: Some("2024-01-03T00:00:00Z".to_string()),
+            is_active: true,
+        };
+
+        let user_response = UserResponse::from(user);
+
+        assert_eq!(user_response.id, "user-456");
+        assert_eq!(user_response.username, "testuser2");
+        assert_eq!(user_response.role, Role::User);
+        assert_eq!(user_response.created_at, "2024-01-02T00:00:00Z");
+        assert_eq!(
+            user_response.last_login,
+            Some("2024-01-03T00:00:00Z".to_string())
+        );
+        assert!(user_response.is_active);
     }
 }
 

@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use yewdux::prelude::*;
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Store)]
 #[store(storage = "local", storage_tab_sync)]

@@ -1,6 +1,6 @@
+use common::entity::hardware::GPU;
 use std::fs;
 use std::path::{Path, PathBuf};
-use common::entity::hardware::GPU;
 use std::process::Command;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -17,7 +17,7 @@ const BLACK_LIST_GPU_VENDOR_IDS: &[(u16, &str)] = &[
     (0x102b, "Matrox"),
     (0x1a03, "ASPEED"),
     (0x1db7, "Phytium"), // Phytium E2000s is bmc
-    (0x1234, "qemu")
+    (0x1234, "qemu"),
 ];
 
 const NVIDIA_DRIVER_VERSION_CMD: &str = "nvidia-smi";
@@ -34,9 +34,7 @@ const KUNLUN_GPU_DEVICE_IDS: &[(u16, &str)] = &[
     (0x3688, "P800"),
 ];
 
-const ILUVATAR_GPU_DEVICE_IDS: &[(u16, &str)] = &[
-    (0x0003, "BI-V150")
-];
+const ILUVATAR_GPU_DEVICE_IDS: &[(u16, &str)] = &[(0x0003, "BI-V150")];
 
 // 用于缓存 SMI 命令输出的结构
 struct SmiCache {
@@ -67,19 +65,19 @@ impl SmiCache {
                     self.nvidia_smi_output = run_command(NVIDIA_SN_CMD);
                 }
                 self.nvidia_smi_output.as_ref()
-            },
+            }
             "Iluvatar" => {
                 if self.iluvatar_smi_output.is_none() {
                     self.iluvatar_smi_output = run_command(ILUVATAR_SN_CMD);
                 }
                 self.iluvatar_smi_output.as_ref()
-            },
+            }
             "Baidu" => {
                 if self.kunlun_smi_output.is_none() {
                     self.kunlun_smi_output = run_command(KUNLUN_SN_CMD);
                 }
                 self.kunlun_smi_output.as_ref()
-            },
+            }
             _ => None,
         }
     }
@@ -93,7 +91,7 @@ impl SmiCache {
                     self.nvidia_driver_output = Some(driver_output);
                 }
                 self.nvidia_driver_output.as_ref()
-            },
+            }
             "Iluvatar" => {
                 if self.iluvatar_driver_output.is_none() {
                     let smi_output = run_command(ILUVATAR_DRIVER_VERSION_CMD)?;
@@ -101,7 +99,7 @@ impl SmiCache {
                     self.iluvatar_driver_output = Some(driver_output);
                 }
                 self.iluvatar_driver_output.as_ref()
-            },
+            }
             "Baidu" => {
                 if self.kunlun_driver_output.is_none() {
                     let smi_output = run_command(KUNLUN_DRIVER_VERSION_CMD)?;
@@ -109,7 +107,7 @@ impl SmiCache {
                     self.kunlun_driver_output = Some(driver_output);
                 }
                 self.kunlun_driver_output.as_ref()
-            },
+            }
             _ => None,
         }
     }
@@ -150,13 +148,21 @@ fn grep_driver_version(output: &str) -> Option<String> {
 
 fn get_special_gpu_name(gpu_vendor_name: &str, device_id: u16) -> Option<String> {
     match gpu_vendor_name {
-        "NVIDIA" => KUNLUN_GPU_DEVICE_IDS.iter().find(|&&(id, _)| id == device_id).map(|&(_, name)| name.to_string()),
-        "Iluvatar" => ILUVATAR_GPU_DEVICE_IDS.iter().find(|&&(id, _)| id == device_id).map(|&(_, name)| name.to_string()),
-        "Baidu" => KUNLUN_GPU_DEVICE_IDS.iter().find(|&&(id, _)| id == device_id).map(|&(_, name)| name.to_string()),
+        "NVIDIA" => KUNLUN_GPU_DEVICE_IDS
+            .iter()
+            .find(|&&(id, _)| id == device_id)
+            .map(|&(_, name)| name.to_string()),
+        "Iluvatar" => ILUVATAR_GPU_DEVICE_IDS
+            .iter()
+            .find(|&&(id, _)| id == device_id)
+            .map(|&(_, name)| name.to_string()),
+        "Baidu" => KUNLUN_GPU_DEVICE_IDS
+            .iter()
+            .find(|&&(id, _)| id == device_id)
+            .map(|&(_, name)| name.to_string()),
         _ => None,
     }
 }
-
 
 // 从pci.ids文件中获取设备名称
 fn get_device_name_from_pci_ids(vendor_id: u16, device_id: u16) -> Option<String> {
@@ -219,9 +225,7 @@ fn get_pci_sysfs_paths() -> Vec<PathBuf> {
 
 // 读取sysfs文件的值
 fn read_sysfs_value(path: &Path) -> Option<String> {
-    fs::read_to_string(path)
-        .ok()
-        .map(|s| s.trim().to_string())
+    fs::read_to_string(path).ok().map(|s| s.trim().to_string())
 }
 
 // 检查是否为显示控制器
@@ -229,7 +233,10 @@ fn is_display_controller(path: &Path) -> bool {
     // 先检查是否在黑名单中
     if let Some(vendor_id_str) = read_sysfs_value(&path.join("vendor")) {
         if let Ok(vendor_id) = u16::from_str_radix(&vendor_id_str[2..], 16) {
-            if BLACK_LIST_GPU_VENDOR_IDS.iter().any(|(id, _)| *id == vendor_id) {
+            if BLACK_LIST_GPU_VENDOR_IDS
+                .iter()
+                .any(|(id, _)| *id == vendor_id)
+            {
                 return false;
             }
         }
@@ -245,7 +252,9 @@ fn is_display_controller(path: &Path) -> bool {
         // 0x03xxxx - 标准显示控制器
         // 0x078000 - 昆仑芯 P800 GPU
         // 0x120000 - 其他处理器
-        class.starts_with("0x03") || class == "0x120000" || (class == "0x078000" && vendor_id == 0x1d22)
+        class.starts_with("0x03")
+            || class == "0x120000"
+            || (class == "0x078000" && vendor_id == 0x1d22)
     } else {
         false
     }
@@ -265,29 +274,32 @@ fn get_gpu_sn(gpu_vendor_name: &str, original_pci_bus_id: &str) -> Option<String
             if line.trim().is_empty() {
                 continue;
             }
-            
+
             // 提取 PCI ID 和序列号
             let pci_id = if gpu_vendor_name == "Baidu" {
                 line.split(" ").next().unwrap_or("")
             } else {
                 line.split(",").next().unwrap_or("")
             };
-            
+
             if pci_id.is_empty() {
                 continue;
             }
 
             let pci_id_without_prefix = pci_id.split(":").collect::<Vec<&str>>()[1..].join(":");
-            let original_pci_bus_id_without_prefix = original_pci_bus_id.split(":").collect::<Vec<&str>>()[1..].join(":");
-            
+            let original_pci_bus_id_without_prefix =
+                original_pci_bus_id.split(":").collect::<Vec<&str>>()[1..].join(":");
+
             // 获取序列号
             let sn = if gpu_vendor_name == "Baidu" {
-                line.split(" ").nth(3).unwrap_or("").trim()  
+                line.split(" ").nth(3).unwrap_or("").trim()
             } else {
                 line.split(",").nth(1).unwrap_or("").trim()
             };
-            
-            if original_pci_bus_id_without_prefix.to_uppercase() == pci_id_without_prefix.to_uppercase() {
+
+            if original_pci_bus_id_without_prefix.to_uppercase()
+                == pci_id_without_prefix.to_uppercase()
+            {
                 return Some(sn.to_string());
             }
         }
@@ -302,7 +314,7 @@ fn get_driver_version(gpu_vendor_name: &str) -> Option<String> {
         Some(output) => output.clone(),
         None => return None,
     };
-    
+
     let lines: Vec<&str> = output.lines().collect();
     if !lines.is_empty() {
         let line = lines[0].trim();
@@ -311,7 +323,7 @@ fn get_driver_version(gpu_vendor_name: &str) -> Option<String> {
             // 从"Driver Version:"后开始
             let version_part = &line[pos + "Driver Version:".len()..];
             // 提取版本号直到下一个空格序列
-            if let Some(ver) = version_part.trim().split_whitespace().next() {
+            if let Some(ver) = version_part.split_whitespace().next() {
                 return Some(ver.to_string());
             }
         }
@@ -329,7 +341,10 @@ pub fn collect_gpus() -> Vec<GPU> {
                         u16::from_str_radix(&vendor_id_str[2..], 16),
                         u16::from_str_radix(&device_id_str[2..], 16),
                     ) {
-                        if BLACK_LIST_GPU_VENDOR_IDS.iter().any(|(id, _)| *id == vendor_id) {
+                        if BLACK_LIST_GPU_VENDOR_IDS
+                            .iter()
+                            .any(|(id, _)| *id == vendor_id)
+                        {
                             continue;
                         }
                         let vendor_name = GPU_VENDOR_IDS
@@ -346,14 +361,19 @@ pub fn collect_gpus() -> Vec<GPU> {
                                 model = special_gpu_name;
                             }
                         }
-                        let pci_bus_id = path.to_string_lossy().split("/").nth(5).unwrap().to_string();
+                        let pci_bus_id = path
+                            .to_string_lossy()
+                            .split("/")
+                            .nth(5)
+                            .unwrap()
+                            .to_string();
                         let sn = get_gpu_sn(&vendor_name, &pci_bus_id);
-                        let driver_version = get_driver_version(&vendor_name).unwrap_or_else(|| "".to_string());
+                        let driver_version = get_driver_version(&vendor_name).unwrap_or_default();
                         gpus.push(GPU {
                             vendor: vendor_name,
                             model,
                             device_id: pci_bus_id.to_string(),
-                            serial_number: sn.unwrap_or_else(|| "".to_string()),
+                            serial_number: sn.unwrap_or_default(),
                             driver_version,
                         });
                     }

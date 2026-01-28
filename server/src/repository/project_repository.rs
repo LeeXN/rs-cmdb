@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use common::error::{CmdbResult, CmdbError};
+use crate::db::Database;
+use common::error::{CmdbError, CmdbResult};
 use common::models::Project;
 use serde_json;
-use crate::db::Database;
+use std::sync::Arc;
 
 /// Repository for project operations
 pub struct ProjectRepository {
@@ -18,54 +18,56 @@ impl ProjectRepository {
             key_prefix: "project:".to_string(),
         }
     }
-    
+
     /// Get project key in database
     fn get_key(&self, project_id: &str) -> String {
         format!("{}{}", self.key_prefix, project_id)
     }
-    
+
     /// Save a project to the database
     pub async fn save(&self, project: &Project) -> CmdbResult<()> {
         let project_json = serde_json::to_vec(project)
             .map_err(|e| CmdbError::Serialization(format!("Failed to serialize project: {}", e)))?;
-        
+
         self.db.set(&self.get_key(&project.id), &project_json).await
     }
-    
+
     /// Get a project by ID
     pub async fn get(&self, project_id: &str) -> CmdbResult<Option<Project>> {
         let project_data = match self.db.get(&self.get_key(project_id)).await? {
             Some(data) => data,
             None => return Ok(None),
         };
-        
-        let project = serde_json::from_slice(&project_data)
-            .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize project: {}", e)))?;
-            
+
+        let project = serde_json::from_slice(&project_data).map_err(|e| {
+            CmdbError::Serialization(format!("Failed to deserialize project: {}", e))
+        })?;
+
         Ok(Some(project))
     }
-    
+
     /// Check if a project exists
     pub async fn exists(&self, project_id: &str) -> CmdbResult<bool> {
         self.db.exists(&self.get_key(project_id)).await
     }
-    
+
     /// Delete a project
     pub async fn delete(&self, project_id: &str) -> CmdbResult<()> {
         self.db.delete(&self.get_key(project_id)).await
     }
-    
+
     /// List all projects
     pub async fn list_all(&self) -> CmdbResult<Vec<Project>> {
         let values = self.db.list_values(&self.key_prefix).await?;
         let mut projects = Vec::with_capacity(values.len());
-        
+
         for data in values {
-            let project = serde_json::from_slice(&data)
-                .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize project: {}", e)))?;
+            let project = serde_json::from_slice(&data).map_err(|e| {
+                CmdbError::Serialization(format!("Failed to deserialize project: {}", e))
+            })?;
             projects.push(project);
         }
-        
+
         Ok(projects)
     }
 
@@ -86,7 +88,7 @@ impl ProjectRepository {
 mod tests {
     use super::*;
     use crate::tests::fixtures::setup_test_db;
-    use common::models::{Project, ProjectQuery};
+    use common::models::Project;
 
     fn create_test_project(id: &str, name: &str) -> Project {
         Project {
@@ -136,7 +138,10 @@ mod tests {
         let result = repo.get("nonexistent").await;
 
         assert!(result.is_ok(), "Get should not return error");
-        assert!(result.unwrap().is_none(), "Should return None for non-existent project");
+        assert!(
+            result.unwrap().is_none(),
+            "Should return None for non-existent project"
+        );
     }
 
     #[tokio::test]
@@ -161,7 +166,10 @@ mod tests {
         let result = repo.exists("nonexistent").await;
 
         assert!(result.is_ok(), "Exists should not return error");
-        assert!(!result.unwrap(), "Should return false for non-existent project");
+        assert!(
+            !result.unwrap(),
+            "Should return false for non-existent project"
+        );
     }
 
     #[tokio::test]
@@ -217,7 +225,10 @@ mod tests {
         let result = repo.list_all().await;
 
         assert!(result.is_ok(), "List all should not return error");
-        assert!(result.unwrap().is_empty(), "Should return empty vec for empty db");
+        assert!(
+            result.unwrap().is_empty(),
+            "Should return empty vec for empty db"
+        );
     }
 
     #[tokio::test]
@@ -236,7 +247,11 @@ mod tests {
         assert!(result.is_ok(), "Get should not return error");
         let retrieved = result.unwrap();
         assert!(retrieved.is_some(), "Should return Some(project)");
-        assert_eq!(retrieved.unwrap().code, Some("PROJ-UPDATED".to_string()), "Should have updated code");
+        assert_eq!(
+            retrieved.unwrap().code,
+            Some("PROJ-UPDATED".to_string()),
+            "Should have updated code"
+        );
     }
 
     #[tokio::test]
@@ -265,8 +280,18 @@ mod tests {
         let project2_updated = repo.get("project-010").await.unwrap().unwrap();
         let project3_updated = repo.get("project-011").await.unwrap().unwrap();
 
-        assert!(project1_updated.manager_id.is_none(), "Project A manager should be null");
-        assert!(project2_updated.manager_id.is_none(), "Project B manager should be null");
-        assert_eq!(project3_updated.manager_id, Some("other-manager".to_string()), "Project C manager should not be null");
+        assert!(
+            project1_updated.manager_id.is_none(),
+            "Project A manager should be null"
+        );
+        assert!(
+            project2_updated.manager_id.is_none(),
+            "Project B manager should be null"
+        );
+        assert_eq!(
+            project3_updated.manager_id,
+            Some("other-manager".to_string()),
+            "Project C manager should not be null"
+        );
     }
 }

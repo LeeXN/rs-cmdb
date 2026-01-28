@@ -1,16 +1,16 @@
-use yew::prelude::*;
+use crate::hooks::use_trans::use_trans;
 use gloo::net::http::Request;
 use serde::Deserialize;
-use std::rc::Rc;
-use crate::hooks::use_trans::use_trans;
 use std::collections::HashMap;
+use std::rc::Rc;
+use yew::prelude::*;
 
-use crate::components::loading::Loading;
 use crate::components::error::ErrorDisplay;
-use crate::components::ui::card::{Card, CardHeader, CardBody};
+use crate::components::loading::Loading;
+use crate::components::ui::card::{Card, CardBody, CardHeader};
 use crate::components::ui::select::{Select, SelectOption};
+use lucide_yew::{CircleCheck, Download, FileText, Info};
 use wasm_bindgen_futures;
-use lucide_yew::{Download, CircleCheck, FileText, Info};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ClientInfo {
@@ -54,51 +54,41 @@ impl Reducible for ClientSetupState {
 
     fn reduce(self: Rc<Self>, action: Self::Action) -> Rc<Self> {
         match action {
-            ClientSetupAction::SetClientInfo(info) => {
-                Rc::new(Self {
-                    client_info: Some(info),
-                    loading: false,
-                    error: None,
-                    platform: self.platform.clone(),
-                    arch: self.arch.clone(),
-                })
-            }
-            ClientSetupAction::SetLoading(loading) => {
-                Rc::new(Self {
-                    client_info: self.client_info.clone(),
-                    loading,
-                    error: if loading { None } else { self.error.clone() },
-                    platform: self.platform.clone(),
-                    arch: self.arch.clone(),
-                })
-            }
-            ClientSetupAction::SetError(error) => {
-                Rc::new(Self {
-                    client_info: self.client_info.clone(),
-                    loading: false,
-                    error,
-                    platform: self.platform.clone(),
-                    arch: self.arch.clone(),
-                })
-            }
-            ClientSetupAction::SetPlatform(platform) => {
-                Rc::new(Self {
-                    client_info: None,
-                    loading: true,
-                    error: None,
-                    platform,
-                    arch: self.arch.clone(),
-                })
-            }
-            ClientSetupAction::SetArch(arch) => {
-                Rc::new(Self {
-                    client_info: None,
-                    loading: true,
-                    error: None,
-                    platform: self.platform.clone(),
-                    arch,
-                })
-            }
+            ClientSetupAction::SetClientInfo(info) => Rc::new(Self {
+                client_info: Some(info),
+                loading: false,
+                error: None,
+                platform: self.platform.clone(),
+                arch: self.arch.clone(),
+            }),
+            ClientSetupAction::SetLoading(loading) => Rc::new(Self {
+                client_info: self.client_info.clone(),
+                loading,
+                error: if loading { None } else { self.error.clone() },
+                platform: self.platform.clone(),
+                arch: self.arch.clone(),
+            }),
+            ClientSetupAction::SetError(error) => Rc::new(Self {
+                client_info: self.client_info.clone(),
+                loading: false,
+                error,
+                platform: self.platform.clone(),
+                arch: self.arch.clone(),
+            }),
+            ClientSetupAction::SetPlatform(platform) => Rc::new(Self {
+                client_info: None,
+                loading: true,
+                error: None,
+                platform,
+                arch: self.arch.clone(),
+            }),
+            ClientSetupAction::SetArch(arch) => Rc::new(Self {
+                client_info: None,
+                loading: true,
+                error: None,
+                platform: self.platform.clone(),
+                arch,
+            }),
         }
     }
 }
@@ -120,34 +110,57 @@ pub fn client_setup_page() -> Html {
                     let platform = platform.clone();
                     let arch = arch.clone();
                     let t = t.clone();
-                    
+
                     wasm_bindgen_futures::spawn_local(async move {
-                        let url = format!("/api/v1/download/info?platform={}&arch={}", platform, arch);
-                        
+                        let url =
+                            format!("/api/v1/download/info?platform={}&arch={}", platform, arch);
+
                         match Request::get(&url).send().await {
                             Ok(response) => {
                                 if response.ok() {
                                     match response.json::<ClientInfo>().await {
                                         Ok(info) => {
-                                            state_clone.dispatch(ClientSetupAction::SetClientInfo(info));
+                                            state_clone
+                                                .dispatch(ClientSetupAction::SetClientInfo(info));
                                         }
                                         Err(e) => {
-                                            state_clone.dispatch(ClientSetupAction::SetError(Some(t.t_with_args("client_setup.parse_error", &HashMap::from([("error".to_string(), e.to_string())])))));
+                                            state_clone.dispatch(ClientSetupAction::SetError(
+                                                Some(t.t_with_args(
+                                                    "client_setup.parse_error",
+                                                    &HashMap::from([(
+                                                        "error".to_string(),
+                                                        e.to_string(),
+                                                    )]),
+                                                )),
+                                            ));
                                         }
                                     }
                                 } else {
-                                    state_clone.dispatch(ClientSetupAction::SetError(Some(t.t_with_args("client_setup.request_failed", &HashMap::from([("status".to_string(), response.status().to_string())])))));
+                                    state_clone.dispatch(ClientSetupAction::SetError(Some(
+                                        t.t_with_args(
+                                            "client_setup.request_failed",
+                                            &HashMap::from([(
+                                                "status".to_string(),
+                                                response.status().to_string(),
+                                            )]),
+                                        ),
+                                    )));
                                 }
                             }
                             Err(e) => {
-                                state_clone.dispatch(ClientSetupAction::SetError(Some(t.t_with_args("client_setup.network_error", &HashMap::from([("error".to_string(), e.to_string())])))));
+                                state_clone.dispatch(ClientSetupAction::SetError(Some(
+                                    t.t_with_args(
+                                        "client_setup.network_error",
+                                        &HashMap::from([("error".to_string(), e.to_string())]),
+                                    ),
+                                )));
                             }
                         }
                     });
                 }
-                
+
                 || ()
-            }
+            },
         );
     }
 
@@ -172,13 +185,20 @@ pub fn client_setup_page() -> Html {
         })
     };
 
-    let platform_options = vec![
-        SelectOption { value: "linux".to_string(), label: "Linux".to_string() },
-    ];
+    let platform_options = vec![SelectOption {
+        value: "linux".to_string(),
+        label: "Linux".to_string(),
+    }];
 
     let arch_options = vec![
-        SelectOption { value: "x86_64".to_string(), label: "x86_64".to_string() },
-        SelectOption { value: "aarch64".to_string(), label: "aarch64".to_string() },
+        SelectOption {
+            value: "x86_64".to_string(),
+            label: "x86_64".to_string(),
+        },
+        SelectOption {
+            value: "aarch64".to_string(),
+            label: "aarch64".to_string(),
+        },
     ];
 
     if state.loading {
@@ -215,7 +235,7 @@ pub fn client_setup_page() -> Html {
                             <div class="row mb-4">
                                 <div class="col-md-6 mb-3">
                                     <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("client_setup.select_platform")}</label>
-                                    <Select 
+                                    <Select
                                         options={platform_options}
                                         value={state.platform.clone()}
                                         onchange={on_platform_change}
@@ -223,7 +243,7 @@ pub fn client_setup_page() -> Html {
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("client_setup.select_arch")}</label>
-                                    <Select 
+                                    <Select
                                         options={arch_options}
                                         value={state.arch.clone()}
                                         onchange={on_arch_change}
@@ -353,7 +373,7 @@ pub fn client_setup_page() -> Html {
                                             }
                                         }
                                     }
-                                    
+
                                     <div class="d-flex align-items-center mb-2">
                                         <FileText class="w-5 h-5 me-2" />
                                         <span class="font-weight-bold">{t.t("client_setup.check_logs")}</span>
@@ -372,7 +392,7 @@ pub fn client_setup_page() -> Html {
                                         }
                                     }
                                 </div>
-                                
+
                                 <div class="alert alert-secondary text-white mt-3 flex items-center" role="alert">
                                     <Info class="w-4 h-4 me-2" />
                                     <span class="text-sm">{t.t("client_setup.install_complete_prefix")}</span>

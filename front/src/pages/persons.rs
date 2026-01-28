@@ -1,23 +1,23 @@
-use yew::prelude::*;
-use common::models::Person;
-use common::entity::dictionary::Dictionary;
-use crate::services::person::{get_persons, create_person, update_person, delete_person};
-use crate::services::api::fetch_dictionaries;
-use crate::components::loading::Loading;
 use crate::components::error::ErrorDisplay;
+use crate::components::loading::Loading;
+use crate::components::notification::{Notification, NotificationType};
 use crate::components::permission_guard::PermissionGuard;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::table_action::TableActions;
-use crate::components::ui::card::{Card, CardHeader, CardBody};
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardBody, CardHeader};
+use crate::components::ui::confirm_modal::ConfirmModal;
 use crate::components::ui::input::Input;
 use crate::components::ui::select::{Select, SelectOption};
-use crate::components::ui::confirm_modal::ConfirmModal;
-use crate::components::notification::{Notification, NotificationType};
-use crate::types::Role;
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::components::ui::table_action::TableActions;
 use crate::hooks::use_trans::use_trans;
-use wasm_bindgen_futures::spawn_local;
+use crate::services::api::fetch_dictionaries;
+use crate::services::person::{create_person, delete_person, get_persons, update_person};
+use crate::types::Role;
+use common::entity::dictionary::Dictionary;
+use common::models::Person;
 use lucide_yew::Plus;
+use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct PersonFormProps {
@@ -29,14 +29,44 @@ pub struct PersonFormProps {
 #[function_component(PersonForm)]
 pub fn person_form(props: &PersonFormProps) -> Html {
     let t = use_trans();
-    let name = use_state(|| props.person.as_ref().map(|p| p.name.clone()).unwrap_or_default());
-    let email = use_state(|| props.person.as_ref().map(|p| p.email.clone()).unwrap_or_default());
-    let department = use_state(|| props.person.as_ref().and_then(|p| p.department.clone()).unwrap_or_default());
-    let phone = use_state(|| props.person.as_ref().and_then(|p| p.phone.clone()).unwrap_or_default());
-    let title = use_state(|| props.person.as_ref().and_then(|p| p.title.clone()).unwrap_or_default());
+    let name = use_state(|| {
+        props
+            .person
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_default()
+    });
+    let email = use_state(|| {
+        props
+            .person
+            .as_ref()
+            .map(|p| p.email.clone())
+            .unwrap_or_default()
+    });
+    let department = use_state(|| {
+        props
+            .person
+            .as_ref()
+            .and_then(|p| p.department.clone())
+            .unwrap_or_default()
+    });
+    let phone = use_state(|| {
+        props
+            .person
+            .as_ref()
+            .and_then(|p| p.phone.clone())
+            .unwrap_or_default()
+    });
+    let title = use_state(|| {
+        props
+            .person
+            .as_ref()
+            .and_then(|p| p.title.clone())
+            .unwrap_or_default()
+    });
 
-    let departments = use_state(|| Vec::<Dictionary>::new());
-    let titles = use_state(|| Vec::<Dictionary>::new());
+    let departments = use_state(Vec::<Dictionary>::new);
+    let titles = use_state(Vec::<Dictionary>::new);
 
     {
         let departments = departments.clone();
@@ -72,21 +102,45 @@ pub fn person_form(props: &PersonFormProps) -> Html {
             let mut person = props_person.clone().unwrap_or_default();
             person.name = (*name).clone();
             person.email = (*email).clone();
-            person.department = if (*department).is_empty() { None } else { Some((*department).clone()) };
-            person.phone = if (*phone).is_empty() { None } else { Some((*phone).clone()) };
-            person.title = if (*title).is_empty() { None } else { Some((*title).clone()) };
-            
+            person.department = if (*department).is_empty() {
+                None
+            } else {
+                Some((*department).clone())
+            };
+            person.phone = if (*phone).is_empty() {
+                None
+            } else {
+                Some((*phone).clone())
+            };
+            person.title = if (*title).is_empty() {
+                None
+            } else {
+                Some((*title).clone())
+            };
+
             on_save.emit(person);
         })
     };
 
-    let department_options: Vec<SelectOption> = std::iter::once(SelectOption { value: "".to_string(), label: t.t("persons.select_department") })
-        .chain(departments.iter().map(|d| SelectOption { value: d.value.clone(), label: d.value.clone() }))
-        .collect();
+    let department_options: Vec<SelectOption> = std::iter::once(SelectOption {
+        value: "".to_string(),
+        label: t.t("persons.select_department"),
+    })
+    .chain(departments.iter().map(|d| SelectOption {
+        value: d.value.clone(),
+        label: d.value.clone(),
+    }))
+    .collect();
 
-    let title_options: Vec<SelectOption> = std::iter::once(SelectOption { value: "".to_string(), label: t.t("persons.select_title") })
-        .chain(titles.iter().map(|t| SelectOption { value: t.value.clone(), label: t.value.clone() }))
-        .collect();
+    let title_options: Vec<SelectOption> = std::iter::once(SelectOption {
+        value: "".to_string(),
+        label: t.t("persons.select_title"),
+    })
+    .chain(titles.iter().map(|t| SelectOption {
+        value: t.value.clone(),
+        label: t.value.clone(),
+    }))
+    .collect();
 
     html! {
         <Card class="shadow-xl">
@@ -99,7 +153,7 @@ pub fn person_form(props: &PersonFormProps) -> Html {
                 <form {onsubmit}>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("persons.name")}</label>
-                        <Input 
+                        <Input
                             type_="text"
                             oninput={Callback::from(move |val: String| name.set(val))}
                             required=true
@@ -107,7 +161,7 @@ pub fn person_form(props: &PersonFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("persons.email")}</label>
-                        <Input 
+                        <Input
                             type_="email"
                             value={(*email).clone()}
                             oninput={Callback::from(move |val: String| email.set(val))}
@@ -116,7 +170,7 @@ pub fn person_form(props: &PersonFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("persons.department")}</label>
-                        <Select 
+                        <Select
                             options={department_options}
                             value={(*department).clone()}
                             onchange={Callback::from(move |val: String| department.set(val))}
@@ -124,14 +178,14 @@ pub fn person_form(props: &PersonFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("persons.phone")}</label>
-                        <Input 
+                        <Input
                             value={(*phone).clone()}
                             oninput={Callback::from(move |val: String| phone.set(val))}
                         />
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("persons.title")}</label>
-                        <Select 
+                        <Select
                             options={title_options}
                             value={(*title).clone()}
                             onchange={Callback::from(move |val: String| title.set(val))}
@@ -150,7 +204,7 @@ pub fn person_form(props: &PersonFormProps) -> Html {
 #[function_component(Persons)]
 pub fn persons() -> Html {
     let t = use_trans();
-    let persons = use_state(|| Vec::<Person>::new());
+    let persons = use_state(Vec::<Person>::new);
     let loading = use_state(|| true);
     let error = use_state(|| None::<String>);
     let show_form = use_state(|| false);
@@ -169,13 +223,15 @@ pub fn persons() -> Html {
             let loading = loading.clone();
             let error = error.clone();
             loading.set(true);
-            get_persons(Callback::from(move |result: Result<Vec<Person>, crate::services::person::ApiError>| {
-                loading.set(false);
-                match result {
-                    Ok(data) => persons.set(data),
-                    Err(err) => error.set(Some(err.message)),
-                }
-            }));
+            get_persons(Callback::from(
+                move |result: Result<Vec<Person>, crate::services::person::ApiError>| {
+                    loading.set(false);
+                    match result {
+                        Ok(data) => persons.set(data),
+                        Err(err) => error.set(Some(err.message)),
+                    }
+                },
+            ));
         })
     };
 
@@ -232,7 +288,7 @@ pub fn persons() -> Html {
             let notification = notification.clone();
             let delete_error = delete_error.clone();
             let t = t.clone();
-            
+
             if let Some(id) = (*person_to_delete).clone() {
                 spawn_local(async move {
                     match delete_person(&id).await {
@@ -240,9 +296,12 @@ pub fn persons() -> Html {
                             delete_modal_open.set(false);
                             person_to_delete.set(None);
                             delete_error.set(None);
-                            notification.set(Some((NotificationType::Success, t.t("persons.delete_success"))));
+                            notification.set(Some((
+                                NotificationType::Success,
+                                t.t("persons.delete_success"),
+                            )));
                             fetch_data.emit(());
-                        },
+                        }
                         Err(e) => {
                             delete_error.set(Some(e.message));
                         }
@@ -283,12 +342,18 @@ pub fn persons() -> Html {
                 match result {
                     Ok(_) => {
                         show_form.set(false);
-                        notification.set(Some((NotificationType::Success, t.t("persons.save_success"))));
+                        notification.set(Some((
+                            NotificationType::Success,
+                            t.t("persons.save_success"),
+                        )));
                         fetch_data.emit(());
-                    },
+                    }
                     Err(e) => {
-                        notification.set(Some((NotificationType::Error, t.t("persons.save_failed").replace("{}", &e.message))));
-                    },
+                        notification.set(Some((
+                            NotificationType::Error,
+                            t.t("persons.save_failed").replace("{}", &e.message),
+                        )));
+                    }
                 }
             });
         })
@@ -323,10 +388,10 @@ pub fn persons() -> Html {
                         <CardBody class="px-0 pb-2">
                             if let Some((type_, msg)) = (*notification).clone() {
                                 <div class="px-4">
-                                    <Notification 
-                                        notification_type={type_} 
-                                        message={msg} 
-                                        show={true} 
+                                    <Notification
+                                        notification_type={type_}
+                                        message={msg}
+                                        show={true}
                                         on_close={close_notification.clone()}
                                     />
                                 </div>
@@ -376,7 +441,7 @@ pub fn persons() -> Html {
                                                             </TableCell>
                                                             <TableCell class="align-middle text-center">
                                                                 <PermissionGuard min_role={Role::User}>
-                                                                    <TableActions 
+                                                                    <TableActions
                                                                         on_edit={
                                                                             let on_edit = on_edit.clone();
                                                                             let p_edit = p_edit.clone();
@@ -402,7 +467,7 @@ pub fn persons() -> Html {
                     </Card>
                 </div>
             </div>
-            <ConfirmModal 
+            <ConfirmModal
                 is_open={*delete_modal_open}
                 title={t.t("persons.confirm_delete")}
                 message={t.t("persons.confirm_delete_msg")}

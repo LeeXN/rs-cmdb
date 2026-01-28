@@ -1,8 +1,8 @@
+use crate::i18n::I18n;
+use crate::stores::language_store::LanguageStore;
+use std::rc::Rc;
 use yew::prelude::*;
 use yewdux::prelude::*;
-use std::rc::Rc;
-use crate::stores::language_store::LanguageStore;
-use crate::i18n::I18n;
 
 /// A hook that provides translation capabilities and triggers re-renders on language change.
 #[hook]

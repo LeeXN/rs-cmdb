@@ -1,24 +1,24 @@
+use crate::components::error::ErrorDisplay;
+use crate::components::loading::Loading;
+use crate::components::notification::{Notification, NotificationType};
+use crate::components::permission_guard::PermissionGuard;
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::ui::card::{Card, CardContent, CardHeader};
+use crate::components::ui::confirm_modal::ConfirmModal;
+use crate::components::ui::input::Input;
+use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::components::ui::table_action::TableActions;
+use crate::hooks::use_trans::use_trans;
+use crate::routes::Route;
+use crate::services::api::{create_rack, delete_rack, fetch_clients, fetch_racks, update_rack};
+use crate::types::Client;
+use common::entity::user::Role;
+use common::models::Rack;
+use lucide_yew::{Grid3X3, LayoutGrid, List, Plus, Rows3};
+use std::collections::HashMap;
+use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use common::models::Rack;
-use crate::routes::Route;
-use crate::services::api::{fetch_racks, create_rack, update_rack, delete_rack, fetch_clients};
-use crate::components::loading::Loading;
-use crate::components::error::ErrorDisplay;
-use crate::components::permission_guard::PermissionGuard;
-use crate::components::ui::button::{Button, ButtonVariant, ButtonSize};
-use crate::components::ui::table_action::TableActions;
-use crate::components::ui::card::{Card, CardHeader, CardContent};
-use crate::components::ui::table::{Table, TableHeader, TableBody, TableRow, TableHead, TableCell};
-use crate::components::ui::input::Input;
-use crate::components::ui::confirm_modal::ConfirmModal;
-use crate::components::notification::{Notification, NotificationType};
-use common::entity::user::Role;
-use crate::types::Client;
-use wasm_bindgen_futures::spawn_local;
-use lucide_yew::{List, LayoutGrid, Plus, Rows3, Grid3X3};
-use crate::hooks::use_trans::use_trans;
-use std::collections::HashMap;
 
 #[derive(Properties, PartialEq)]
 pub struct RackFormProps {
@@ -30,11 +30,29 @@ pub struct RackFormProps {
 #[function_component(RackForm)]
 pub fn rack_form(props: &RackFormProps) -> Html {
     let t = use_trans();
-    let name = use_state(|| props.rack.as_ref().map(|r| r.name.clone()).unwrap_or_default());
-    let location = use_state(|| props.rack.as_ref().and_then(|r| r.location.clone()).unwrap_or_default());
+    let name = use_state(|| {
+        props
+            .rack
+            .as_ref()
+            .map(|r| r.name.clone())
+            .unwrap_or_default()
+    });
+    let location = use_state(|| {
+        props
+            .rack
+            .as_ref()
+            .and_then(|r| r.location.clone())
+            .unwrap_or_default()
+    });
     let height_u = use_state(|| props.rack.as_ref().map(|r| r.height_u).unwrap_or(42));
     let power_limit = use_state(|| props.rack.as_ref().and_then(|r| r.power_limit));
-    let description = use_state(|| props.rack.as_ref().and_then(|r| r.description.clone()).unwrap_or_default());
+    let description = use_state(|| {
+        props
+            .rack
+            .as_ref()
+            .and_then(|r| r.description.clone())
+            .unwrap_or_default()
+    });
 
     let onsubmit = {
         let name = name.clone();
@@ -49,11 +67,19 @@ pub fn rack_form(props: &RackFormProps) -> Html {
             e.prevent_default();
             let mut rack = props_rack.clone().unwrap_or_default();
             rack.name = (*name).clone();
-            rack.location = if (*location).is_empty() { None } else { Some((*location).clone()) };
+            rack.location = if (*location).is_empty() {
+                None
+            } else {
+                Some((*location).clone())
+            };
             rack.height_u = *height_u;
             rack.power_limit = *power_limit;
-            rack.description = if (*description).is_empty() { None } else { Some((*description).clone()) };
-            
+            rack.description = if (*description).is_empty() {
+                None
+            } else {
+                Some((*description).clone())
+            };
+
             on_save.emit(rack);
         })
     };
@@ -69,7 +95,7 @@ pub fn rack_form(props: &RackFormProps) -> Html {
                 <form {onsubmit}>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("racks.rack_name")}</label>
-                        <Input 
+                        <Input
                             value={(*name).clone()}
                             oninput={Callback::from(move |val: String| {
                                 name.set(val);
@@ -79,7 +105,7 @@ pub fn rack_form(props: &RackFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("racks.location")}</label>
-                        <Input 
+                        <Input
                             value={(*location).clone()}
                             oninput={Callback::from(move |val: String| {
                                 location.set(val);
@@ -88,7 +114,7 @@ pub fn rack_form(props: &RackFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("racks.height_u")}</label>
-                        <Input 
+                        <Input
                             type_="number"
                             value={(*height_u).to_string()}
                             oninput={Callback::from(move |val: String| {
@@ -102,7 +128,7 @@ pub fn rack_form(props: &RackFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("racks.power_limit_w")}</label>
-                        <Input 
+                        <Input
                             type_="number"
                             value={(*power_limit).map(|v| v.to_string()).unwrap_or_default()}
                             oninput={Callback::from(move |val: String| {
@@ -117,7 +143,7 @@ pub fn rack_form(props: &RackFormProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-slate-400 mb-1">{t.t("racks.description")}</label>
-                        <Input 
+                        <Input
                             value={(*description).clone()}
                             oninput={Callback::from(move |val: String| {
                                 description.set(val);
@@ -158,12 +184,12 @@ pub fn rack_visual(props: &RackVisualProps) -> Html {
                     let rack_clients: Vec<&Client> = props.clients.iter()
                         .filter(|c| c.rack.as_ref() == Some(&rack.id))
                         .collect();
-                    
+
                     let total_u = rack.height_u;
                     let used_u: u32 = rack_clients.iter().map(|c| c.u_height.unwrap_or(1)).sum();
-                    let free_u = if total_u >= used_u { total_u - used_u } else { 0 };
+                    let free_u = total_u.saturating_sub(used_u);
                     let usage_percent = if total_u > 0 { (used_u as f64 / total_u as f64) * 100.0 } else { 0.0 };
-                    
+
                     let used_power: u32 = rack_clients.iter().map(|c| c.power_consumption.unwrap_or(0)).sum();
                     let power_limit = rack.power_limit.unwrap_or(0);
                     let power_percent = if power_limit > 0 { (used_power as f64 / power_limit as f64) * 100.0 } else { 0.0 };
@@ -199,13 +225,13 @@ pub fn rack_visual(props: &RackVisualProps) -> Html {
                                     <h3 class="font-bold text-lg truncate mr-2" title={rack.name.clone()}>{ &rack.name }</h3>
                                     <span class="text-xs bg-[#1e293b] px-2 py-1 rounded border border-[#334155] whitespace-nowrap">{ rack.location.clone().unwrap_or_default() }</span>
                                 </div>
-                                
+
                                 // The Rack Grid
                                 <div class="flex-1 bg-[#0b1121] border border-[#334155] rounded relative overflow-y-auto custom-scrollbar flex flex-col">
                                     {
                                         for (1..=total_u).rev().map(|u| {
                                             let client_opt = occupied_units.get(&u);
-                                            
+
                                             // Check if this U is the TOP of a client
                                             let is_top = if let Some(client) = client_opt {
                                                 let start_pos = client.unit_position.as_ref().and_then(|p| p.parse::<u32>().ok()).unwrap_or(0);
@@ -224,7 +250,7 @@ pub fn rack_visual(props: &RackVisualProps) -> Html {
                                                 // Render Client Block
                                                 let height = client.u_height.unwrap_or(1);
                                                 let height_px = height * 24; // Base height per U
-                                                
+
                                                 let status_color = match client.status {
                                                     Some(crate::types::ClientStatus::Active) => "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]",
                                                     Some(crate::types::ClientStatus::Maintenance) => "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]",
@@ -235,20 +261,20 @@ pub fn rack_visual(props: &RackVisualProps) -> Html {
 
                                                 html! {
                                                     <div style={format!("height: {}px;", height_px)} class="w-full">
-                                                        <Link<Route> to={Route::ClientDetail { id: client.id.clone() }} 
+                                                        <Link<Route> to={Route::ClientDetail { id: client.id.clone() }}
                                                              classes="w-full h-full border-b border-[#1e293b] bg-[#1e293b] hover:bg-[#2d3b4e] transition-colors relative group flex items-center px-2 block text-decoration-none">
                                                             // U Number
                                                             <span class="absolute left-1 top-1 text-[9px] text-slate-600 font-mono select-none">{u}</span>
-                                                            
+
                                                             // Status Indicator
                                                             <div class={format!("h-3/4 w-1 rounded-full mr-3 {}", status_color)}></div>
-                                                            
+
                                                             // Content
                                                             <div class="flex flex-col overflow-hidden">
                                                                 <span class="text-xs font-bold text-slate-200 truncate leading-tight">{ &client.hostname }</span>
                                                                 <span class="text-[10px] text-slate-500 truncate">{ &client.ip_address }</span>
                                                             </div>
-                                                            
+
                                                             // Tooltip or Hover Details
                                                             <div class="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <i class="fas fa-info-circle text-slate-400"></i>
@@ -299,7 +325,7 @@ pub fn rack_visual(props: &RackVisualProps) -> Html {
                                                 <progress class={classes!("progress", "w-full", "h-2", "bg-slate-700", if power_percent > 90.0 { "progress-error" } else { "progress-success" })} value={power_percent.to_string()} max="100"></progress>
                                                 <div class="flex justify-between mt-2 text-[10px] text-slate-400">
                                                     <span>{format!("{} W {}", used_power, t.t("racks.used"))}</span>
-                                                    <span>{format!("{} W {}", if power_limit >= used_power { power_limit - used_power } else { 0 }, t.t("racks.free"))}</span>
+                                                    <span>{format!("{} W {}", power_limit.saturating_sub(used_power), t.t("racks.free"))}</span>
                                                 </div>
                                             </div>
                                         }
@@ -331,7 +357,7 @@ pub fn rack_visual(props: &RackVisualProps) -> Html {
                                         <span class="text-sm font-mono text-slate-200">{rack_clients.len()}</span>
                                     </div>
                                 </div>
-                                
+
                                 // Legend
                                 <div class="mt-auto">
                                     <h4 class="text-[10px] uppercase text-slate-600 font-bold mb-2">{t.t("racks.status")}</h4>
@@ -359,8 +385,8 @@ pub enum ViewMode {
 #[function_component(Racks)]
 pub fn racks() -> Html {
     let t = use_trans();
-    let racks = use_state(|| Vec::<Rack>::new());
-    let clients = use_state(|| Vec::<Client>::new());
+    let racks = use_state(Vec::<Rack>::new);
+    let clients = use_state(Vec::<Client>::new);
     let loading = use_state(|| true);
     let error = use_state(|| None::<String>);
     let show_form = use_state(|| false);
@@ -393,7 +419,7 @@ pub fn racks() -> Html {
                         return;
                     }
                 }
-                
+
                 // Fetch clients for visualization
                 match fetch_clients(1, 1000, None, None, None).await {
                     Ok(data) => clients.set(data.items),
@@ -401,7 +427,7 @@ pub fn racks() -> Html {
                         // Ignore client fetch error for now, just show empty racks
                     }
                 }
-                
+
                 loading.set(false);
             });
         })
@@ -461,7 +487,7 @@ pub fn racks() -> Html {
             let notification = notification.clone();
             let delete_error = delete_error.clone();
             let t = t.clone();
-            
+
             if let Some(id) = (*rack_to_delete).clone() {
                 spawn_local(async move {
                     match delete_rack(&id).await {
@@ -469,9 +495,12 @@ pub fn racks() -> Html {
                             delete_modal_open.set(false);
                             rack_to_delete.set(None);
                             delete_error.set(None);
-                            notification.set(Some((NotificationType::Success, t.t("racks.delete_success"))));
+                            notification.set(Some((
+                                NotificationType::Success,
+                                t.t("racks.delete_success"),
+                            )));
                             fetch_data.emit(());
-                        },
+                        }
                         Err(e) => {
                             delete_error.set(Some(e.message));
                         }
@@ -512,12 +541,19 @@ pub fn racks() -> Html {
                 match result {
                     Ok(_) => {
                         show_form.set(false);
-                        notification.set(Some((NotificationType::Success, t.t("racks.save_success"))));
+                        notification
+                            .set(Some((NotificationType::Success, t.t("racks.save_success"))));
                         fetch_data.emit(());
-                    },
+                    }
                     Err(e) => {
-                        notification.set(Some((NotificationType::Error, t.t_with_args("racks.save_failed", &HashMap::from([("val".to_string(), e.message)])))));
-                    },
+                        notification.set(Some((
+                            NotificationType::Error,
+                            t.t_with_args(
+                                "racks.save_failed",
+                                &HashMap::from([("val".to_string(), e.message)]),
+                            ),
+                        )));
+                    }
                 }
             });
         })
@@ -543,7 +579,7 @@ pub fn racks() -> Html {
                         <CardHeader class="flex flex-row justify-start items-center">
                             <div class="flex gap-2 mr-3">
                                 <div class="btn-group flex gap-1">
-                                    <Button 
+                                    <Button
                                         variant={if *view_mode == ViewMode::List { ButtonVariant::Default } else { ButtonVariant::Outline }}
                                         size={ButtonSize::Sm}
                                         onclick={
@@ -554,7 +590,7 @@ pub fn racks() -> Html {
                                         <List class="h-4 w-4 mr-1" />
                                         {t.t("racks.list_view")}
                                     </Button>
-                                    <Button 
+                                    <Button
                                         variant={if *view_mode == ViewMode::Visual { ButtonVariant::Default } else { ButtonVariant::Outline }}
                                         size={ButtonSize::Sm}
                                         onclick={
@@ -568,7 +604,7 @@ pub fn racks() -> Html {
                                 </div>
 
                                 if *view_mode == ViewMode::Visual {
-                                    <Button 
+                                    <Button
                                         variant={ButtonVariant::Outline}
                                         size={ButtonSize::Sm}
                                         class="ms-2"
@@ -597,10 +633,10 @@ pub fn racks() -> Html {
                         <CardContent class="px-0 pb-2">
                             if let Some((type_, msg)) = (*notification).clone() {
                                 <div class="px-4">
-                                    <Notification 
-                                        notification_type={type_} 
-                                        message={msg} 
-                                        show={true} 
+                                    <Notification
+                                        notification_type={type_}
+                                        message={msg}
+                                        show={true}
                                         on_close={close_notification.clone()}
                                     />
                                 </div>
@@ -635,14 +671,14 @@ pub fn racks() -> Html {
                                                         let r_delete = rack.clone();
                                                         let on_edit = on_edit_click.clone();
                                                         let on_delete = on_delete_click.clone();
-                                                        
+
                                                         // Calculate Capacity
                                                         let rack_clients: Vec<&Client> = clients.iter()
                                                             .filter(|c| c.rack.as_ref() == Some(&rack.id))
                                                             .collect();
                                                         let total_u = rack.height_u;
                                                         let used_u: u32 = rack_clients.iter().map(|c| c.u_height.unwrap_or(1)).sum();
-                                                        let free_u = if total_u >= used_u { total_u - used_u } else { 0 };
+                                                        let free_u = total_u.saturating_sub(used_u);
                                                         let usage_percent = if total_u > 0 { (used_u as f64 / total_u as f64) * 100.0 } else { 0.0 };
 
                                                         html! {
@@ -673,10 +709,10 @@ pub fn racks() -> Html {
                                                                     {
                                                                         if let Some(limit) = rack.power_limit {
                                                                             let used_power: u32 = rack_clients.iter().map(|c| c.power_consumption.unwrap_or(0)).sum();
-                                                                            let free_power = if limit >= used_power { limit - used_power } else { 0 };
+                                                                            let free_power = limit.saturating_sub(used_power);
                                                                             let power_percent = if limit > 0 { (used_power as f64 / limit as f64) * 100.0 } else { 0.0 };
                                                                             let color_class = if power_percent > 90.0 { "progress-error" } else { "progress-success" };
-                                                                            
+
                                                                             html! {
                                                                                 <div class="w-full px-4" style="min-width: 150px;">
                                                                                     <div class="flex justify-between text-[10px] mb-1">
@@ -699,7 +735,7 @@ pub fn racks() -> Html {
                                                                 </TableCell>
                                                                 <TableCell class="align-middle text-center">
                                                                     <PermissionGuard min_role={Role::User}>
-                                                                        <TableActions 
+                                                                        <TableActions
                                                                             on_edit={
                                                                                 let on_edit = on_edit.clone();
                                                                                 let r_edit = r_edit.clone();
@@ -728,7 +764,7 @@ pub fn racks() -> Html {
                     </Card>
                 </div>
             </div>
-            <ConfirmModal 
+            <ConfirmModal
                 is_open={*delete_modal_open}
                 title={t.t("racks.confirm_delete")}
                 message={t.t("racks.confirm_delete_msg")}

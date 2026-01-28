@@ -6,27 +6,27 @@ pub enum CmdbError {
     /// Database operation error
     #[error("Database error: {0}")]
     Database(String),
-    
+
     /// Client error
     #[error("Client error: {0}")]
     Client(String),
-    
+
     /// Server error
     #[error("Server error: {0}")]
     Server(String),
-    
+
     /// Serialization/Deserialization error
     #[error("Serialization error: {0}")]
     Serialization(String),
-    
+
     /// Network error
     #[error("Network error: {0}")]
     Network(String),
-    
+
     /// Resource not found
     #[error("Not found: {0}")]
     NotFound(String),
-    
+
     /// Validation error
     #[error("Validation error: {0}")]
     Validation(String),
@@ -42,7 +42,7 @@ pub enum CmdbError {
     /// Internal error
     #[error("Internal error: {0}")]
     Internal(String),
-    
+
     /// Generic error
     #[error("{0}")]
     Other(String),
@@ -65,4 +65,4 @@ impl CmdbError {
 }
 
 /// Result type for CMDB operations
-pub type CmdbResult<T> = Result<T, CmdbError>; 
+pub type CmdbResult<T> = Result<T, CmdbError>;
