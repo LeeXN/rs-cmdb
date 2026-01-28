@@ -3,6 +3,9 @@ name = "client"
 version = "0.1.0"
 edition = "2021"
 
+[dev-dependencies]
+tokio-test = "0.4"
+
 [dependencies]
 sysinfo = "0.35.1"
 common = { path = "../common" }

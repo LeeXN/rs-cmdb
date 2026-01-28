@@ -1,3 +1,11 @@
+# ai tools
+.claude/
+.github/prompts/
+.opencode/
+AGENTS.md
+CLAUDE.md
+openspec/
+
 /target
 .cargo
 

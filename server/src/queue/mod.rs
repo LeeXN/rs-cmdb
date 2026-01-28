@@ -1,7 +1,8 @@
 pub mod message_queue;
+pub mod mock_queue;
 
 use common::error::CmdbResult;
-use common::models::{ClientHardwareInfo, Client, PullRequest, PullResponse};
+use common::models::{Client, ClientHardwareInfo, PullRequest, PullResponse};
 use std::time::Duration;
 
 /// Message types for the message queue
@@ -24,11 +25,11 @@ pub enum Message {
 pub trait MessageQueue: Send + Sync + 'static {
     /// Send a message to the queue
     fn send_message(&self, message: Message) -> CmdbResult<()>;
-    
+
     /// Receive a message from the queue with timeout
     fn receive_message(&self, timeout: Duration) -> CmdbResult<Option<Message>>;
-    
+
     /// Check if the queue is empty
     #[allow(dead_code)]
     fn is_empty(&self) -> bool;
-} 
+}

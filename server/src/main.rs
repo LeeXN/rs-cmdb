@@ -6,6 +6,8 @@ mod repository;
 mod service;
 mod constants;
 mod middleware;
+#[cfg(test)]
+mod tests;
 
 use std::path::Path;
 use std::sync::Arc;

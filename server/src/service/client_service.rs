@@ -4,6 +4,9 @@ use common::models::Client;
 use crate::repository::{client_repository::ClientRepository, hardware_repository::HardwareRepository, rack_repository::RackRepository};
 use tracing::{info, warn, instrument};
 
+#[cfg(test)]
+use crate::tests::fixtures::*;
+
 /// Service for client operations
 pub struct ClientService {
     client_repo: Arc<ClientRepository>,
@@ -252,4 +255,367 @@ impl ClientService {
     pub async fn update_last_seen(&self, client_id: &str) -> CmdbResult<()> {
         self.client_repo.update_last_seen(client_id).await
     }
-} 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use crate::repository::{
+        client_repository::ClientRepository,
+        hardware_repository::HardwareRepository,
+        project_repository::ProjectRepository,
+        rack_repository::RackRepository,
+        person_repository::PersonRepository
+    };
+    use crate::tests::fixtures::*;
+
+    #[tokio::test]
+    async fn test_client_service_creation() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let _service = ClientService::new(client_repo, hardware_repo, rack_repo);
+    }
+
+    #[tokio::test]
+    async fn test_import_clients_with_valid_data() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo.clone(), rack_repo.clone());
+
+        let rack = create_test_rack("rack-1");
+        rack_repo.save(&rack).await.unwrap();
+
+        let client = create_test_client("client-1");
+        let result = service.import_clients(vec![client]).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_import_clients_with_nonexistent_rack() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo, hardware_repo, rack_repo);
+
+        let mut client = create_test_client("client-1");
+        client.rack = Some("nonexistent-rack".to_string());
+
+        let result = service.import_clients(vec![client]).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_import_clients_with_valid_unit_position() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo.clone());
+
+        let mut rack = create_test_rack("rack-1");
+        rack.height_u = 10;
+        rack_repo.save(&rack).await.unwrap();
+
+        let mut client = create_test_client("client-1");
+        client.rack = Some("rack-1".to_string());
+        client.unit_position = Some("5".to_string());
+        client.u_height = Some(2);
+
+        let result = service.import_clients(vec![client]).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_import_clients_with_invalid_unit_position() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo.clone());
+
+        let rack = create_test_rack("rack-1");
+        rack_repo.save(&rack).await.unwrap();
+
+        let mut client = create_test_client("client-1");
+        client.rack = Some("rack-1".to_string());
+        client.unit_position = Some("40".to_string());
+        client.u_height = Some(5);
+
+        let result = service.import_clients(vec![client]).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_import_clients_with_overlapping_positions() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo.clone());
+
+        let rack = create_test_rack("rack-1");
+        rack_repo.save(&rack).await.unwrap();
+
+        let mut client1 = create_test_client("client-1");
+        client1.rack = Some("rack-1".to_string());
+        client1.unit_position = Some("1".to_string());
+        client1.u_height = Some(2);
+
+        let mut client2 = create_test_client("client-2");
+        client2.rack = Some("rack-1".to_string());
+        client2.unit_position = Some("2".to_string());
+        client2.u_height = Some(2);
+
+        client_repo.save(&client1).await.unwrap();
+
+        let result = service.import_clients(vec![client2]).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_register_new_client() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+
+        let client = service.register_client(
+            "test-host",
+            "192.168.1.1",
+            "Dell",
+            "PowerEdge",
+            "SN12345",
+            "Linux",
+            None
+        ).await;
+
+        assert!(client.is_ok());
+        let client = client.unwrap();
+        assert_eq!(client.hostname, "test-host");
+        assert_eq!(client.ip_address, "192.168.1.1");
+    }
+
+    #[tokio::test]
+    async fn test_register_client_with_provided_id() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+
+        let custom_id = "custom-client-id-123".to_string();
+        let client = service.register_client(
+            "test-host",
+            "192.168.1.1",
+            "Dell",
+            "PowerEdge",
+            "SN12345",
+            "Linux",
+            Some(custom_id.clone())
+        ).await;
+
+        assert!(client.is_ok());
+        assert_eq!(client.unwrap().id, custom_id);
+    }
+
+    #[tokio::test]
+    async fn test_register_existing_client_by_serial() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+
+        let mut client = create_test_client("test-client");
+        client.serial_number = Some("SN12345".to_string());
+        client_repo.save(&client).await.unwrap();
+
+        let result = service.register_client(
+            "new-hostname",
+            "192.168.1.2",
+            "Dell",
+            "PowerEdge",
+            "SN12345",
+            "Linux",
+            None
+        ).await;
+
+        assert!(result.is_ok());
+        let client = result.unwrap();
+        assert_eq!(client.id, "test-client");
+        assert_eq!(client.hostname, "new-hostname");
+    }
+
+    #[tokio::test]
+    async fn test_get_client() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+
+        let client = create_test_client("test-client");
+        client_repo.save(&client).await.unwrap();
+
+        let result = service.get_client("test-client").await;
+
+        assert!(result.is_ok());
+        let retrieved = result.unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().id, "test-client");
+    }
+
+    #[tokio::test]
+    async fn test_list_clients() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+
+        let client1 = create_test_client("client-1");
+        let client2 = create_test_client("client-2");
+        client_repo.save(&client1).await.unwrap();
+        client_repo.save(&client2).await.unwrap();
+
+        let result = service.list_clients().await;
+
+        assert!(result.is_ok());
+        let clients = result.unwrap();
+        assert_eq!(clients.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_update_last_seen() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo, rack_repo);
+
+        let client = create_test_client("test-client");
+        client_repo.save(&client).await.unwrap();
+
+        let initial_client = client_repo.get("test-client").await.unwrap().unwrap();
+        let initial_last_seen = initial_client.last_seen.clone();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        service.update_last_seen("test-client").await.unwrap();
+
+        let updated_client = client_repo.get("test-client").await.unwrap().unwrap();
+        let updated_last_seen = updated_client.last_seen;
+
+        assert_ne!(initial_last_seen, updated_last_seen);
+    }
+
+    #[tokio::test]
+    async fn test_delete_client() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo.clone(), rack_repo);
+
+        let client = create_test_client("test-client");
+        client_repo.save(&client).await.unwrap();
+
+        let result = service.delete_client("test-client").await;
+
+        assert!(result.is_ok());
+        assert!(client_repo.get("test-client").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_nonexistent_client() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo.clone(), rack_repo);
+
+        let result = service.delete_client("nonexistent-client").await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_delete_client_removes_hardware() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo.clone(), hardware_repo.clone(), rack_repo);
+
+        let client = create_test_client("test-client");
+        client_repo.save(&client).await.unwrap();
+
+        let hardware = create_test_hardware_info("test-client");
+        hardware_repo.save_hardware("test-client", &hardware, true).await.unwrap();
+
+        service.delete_client("test-client").await.unwrap();
+
+        let hardware = hardware_repo.get_hardware("test-client").await.unwrap();
+        assert!(hardware.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_import_empty_clients_list() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(Arc::clone(&db_arc)));
+        let hardware_repo = Arc::new(HardwareRepository::new(Arc::clone(&db_arc)));
+        let rack_repo = Arc::new(RackRepository::new(Arc::clone(&db_arc)));
+
+        let service = ClientService::new(client_repo, hardware_repo, rack_repo);
+
+        let result = service.import_clients(vec![]).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+}
+ 

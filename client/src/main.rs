@@ -13,6 +13,8 @@ pub mod collector;
 pub mod config;
 pub mod service;
 pub mod display;
+#[cfg(test)]
+mod tests;
 
 // 命令行参数
 #[derive(Parser)]

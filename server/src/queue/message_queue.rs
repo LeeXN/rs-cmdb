@@ -1,8 +1,8 @@
+use super::{Message, MessageQueue};
+use common::error::{CmdbError, CmdbResult};
+use flume::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::time::Duration;
-use flume::{Sender, Receiver, RecvTimeoutError};
-use common::error::{CmdbResult, CmdbError};
-use super::{Message, MessageQueue};
 
 /// Flume-based implementation of MessageQueue
 pub struct FlumeMessageQueue {
@@ -16,13 +16,13 @@ impl FlumeMessageQueue {
         let (sender, receiver) = flume::unbounded();
         Self { sender, receiver }
     }
-    
+
     /// Get a cloned sender for this queue
     #[allow(dead_code)]
     pub fn get_sender(&self) -> Sender<Message> {
         self.sender.clone()
     }
-    
+
     /// Get a cloned receiver for this queue
     #[allow(dead_code)]
     pub fn get_receiver(&self) -> Receiver<Message> {
@@ -36,15 +36,18 @@ impl MessageQueue for FlumeMessageQueue {
             .send(message)
             .map_err(|e| CmdbError::Other(format!("Failed to send message: {}", e)))
     }
-    
+
     fn receive_message(&self, timeout: Duration) -> CmdbResult<Option<Message>> {
         match self.receiver.recv_timeout(timeout) {
             Ok(message) => Ok(Some(message)),
             Err(RecvTimeoutError::Timeout) => Ok(None),
-            Err(e) => Err(CmdbError::Other(format!("Failed to receive message: {}", e))),
+            Err(e) => Err(CmdbError::Other(format!(
+                "Failed to receive message: {}",
+                e
+            ))),
         }
     }
-    
+
     fn is_empty(&self) -> bool {
         self.receiver.is_empty()
     }
@@ -58,4 +61,4 @@ impl MessageQueueFactory {
     pub fn create_flume_queue() -> Arc<dyn MessageQueue> {
         Arc::new(FlumeMessageQueue::new())
     }
-} 
+}
