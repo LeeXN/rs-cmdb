@@ -1,6 +1,8 @@
 use lucide_yew::{CircleCheck, CircleX, Info, TriangleAlert, X};
 use yew::prelude::*;
 
+use crate::hooks::use_trans::use_trans;
+
 #[derive(Clone, PartialEq, Debug)]
 #[allow(dead_code)]
 pub enum NotificationType {
@@ -39,6 +41,7 @@ pub struct NotificationProps {
 #[function_component(Notification)]
 pub fn notification(props: &NotificationProps) -> Html {
     let show = use_state(|| props.show);
+    let t = use_trans();
 
     // 自动关闭逻辑
     {
@@ -80,10 +83,13 @@ pub fn notification(props: &NotificationProps) -> Html {
         return html! {};
     }
 
-    let title = props
-        .title
-        .clone()
-        .unwrap_or_else(|| props.notification_type.to_title().to_string());
+    let default_title = match props.notification_type {
+        NotificationType::Success => t.t("notification.success"),
+        NotificationType::Warning => t.t("notification.warning"),
+        NotificationType::Error => t.t("notification.error"),
+        NotificationType::Info => t.t("notification.info"),
+    };
+    let title = props.title.clone().unwrap_or(default_title);
 
     let (icon, color_class, border_class) = match props.notification_type {
         NotificationType::Success => (
@@ -122,7 +128,7 @@ pub fn notification(props: &NotificationProps) -> Html {
                         onclick={on_close_click}
                     >
                         <X class="h-4 w-4" />
-                        <span class="sr-only">{"Close"}</span>
+                        <span class="sr-only">{t.t("common.close")}</span>
                     </button>
                 }
             </div>
@@ -139,7 +145,13 @@ pub struct SimpleNotificationProps {
 
 #[function_component(SimpleNotification)]
 pub fn simple_notification(props: &SimpleNotificationProps) -> Html {
-    let title = props.notification_type.to_title();
+    let t = use_trans();
+    let title = match props.notification_type {
+        NotificationType::Success => t.t("notification.success"),
+        NotificationType::Warning => t.t("notification.warning"),
+        NotificationType::Error => t.t("notification.error"),
+        NotificationType::Info => t.t("notification.info"),
+    };
 
     let (icon, color_class, border_class) = match props.notification_type {
         NotificationType::Success => (

@@ -17,8 +17,9 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use common::entity::user::{Role, User};
-use common::entity::dictionary::Dictionary;
+// use common::entity::dictionary::Dictionary; // Removed unused import
 
+use crate::cache::{CacheConfigs, CachedClientRepository};
 use crate::api::create_router;
 use crate::config::{ServerConfig, DatabaseConfig, QueueConfig};
 use crate::db::redb_store::RedbStore;
@@ -32,7 +33,7 @@ use crate::repository::{
 use crate::service::{
     auth_service::AuthService, client_service::ClientService,
     client_filter_service::ClientFilterService, component_service::ComponentService,
-    hardware_service::HardwareService, stats_service::StatsService,
+    export_service::ExportService, hardware_service::HardwareService, stats_service::StatsService,
     validation_service::ValidationService,
 };
 use crate::dao::{ClientDao, RackDao};
@@ -60,7 +61,9 @@ async fn setup_test_app() -> TestApp {
     );
 
     // Initialize repositories
-    let client_repo = Arc::new(ClientRepository::new(db.clone()));
+    let client_repo_inner = Arc::new(ClientRepository::new(db.clone()));
+    let cache_configs = CacheConfigs::default();
+    let client_repo = Arc::new(CachedClientRepository::new(client_repo_inner.clone(), &cache_configs));
     let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
     let user_repo = Arc::new(UserRepository::new(db.clone()));
     let person_repo = Arc::new(PersonRepository::new(db.clone()));
@@ -72,8 +75,8 @@ async fn setup_test_app() -> TestApp {
     // Initialize services
     let auth_service = Arc::new(AuthService::new("test_secret_key_for_integration_tests_min_32_chars".to_string()));
 
-    let client_dao = Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone()));
-    let rack_dao = Arc::new(RackDao::new(rack_repo.clone(), client_repo.clone()));
+    let _client_dao = Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone()));
+    let _rack_dao = Arc::new(RackDao::new(rack_repo.clone(), client_repo.clone()));
     let client_service = Arc::new(ClientService::from_repositories(
         client_repo.clone(),
         hardware_repo.clone(),
@@ -81,7 +84,7 @@ async fn setup_test_app() -> TestApp {
     ));
 
     let component_service = Arc::new(ComponentService::new(component_repo.clone()));
-    let hardware_service = Arc::new(HardwareService::new(
+    let _hardware_service = Arc::new(HardwareService::new(
         client_repo.clone(),
         hardware_repo.clone(),
         component_service.clone(),
@@ -89,19 +92,24 @@ async fn setup_test_app() -> TestApp {
     ));
 
     let validation_service = Arc::new(ValidationService::new(
-        client_repo.clone(),
+        client_repo_inner.clone(),
         project_repo.clone(),
         rack_repo.clone(),
         person_repo.clone(),
     ));
 
     let stats_service = Arc::new(StatsService::new(
-        client_repo.clone(),
+        client_repo_inner.clone(),
         hardware_repo.clone(),
     ));
 
     let client_filter_service = Arc::new(ClientFilterService::new(
-        client_repo.clone(),
+        client_repo_inner.clone(),
+        hardware_repo.clone(),
+    ));
+
+    let export_service = Arc::new(ExportService::new(
+        client_repo_inner.clone(),
         hardware_repo.clone(),
     ));
 
@@ -158,7 +166,7 @@ async fn setup_test_app() -> TestApp {
 
     // Create router
     let router = create_router(
-        client_repo,
+        client_repo_inner,
         hardware_repo,
         user_repo,
         person_repo,
@@ -172,6 +180,7 @@ async fn setup_test_app() -> TestApp {
         validation_service,
         stats_service,
         client_filter_service,
+        export_service,
         config,
     );
 
@@ -544,7 +553,7 @@ async fn test_update_hardware_for_client() {
         }
     });
 
-    let (status, body) = make_request(
+    let (status, _body) = make_request(
         &app.router,
         Method::POST,
         &format!("/api/v1/clients/{}/hardware", client_id),

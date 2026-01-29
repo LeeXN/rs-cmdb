@@ -3,9 +3,8 @@
 //! Encapsulates data access operations related to racks and their clients,
 //! including position validation and overlap detection.
 
-use crate::repository::{
-    client_repository::ClientRepository, rack_repository::RackRepository,
-};
+use crate::cache::CachedClientRepository;
+use crate::repository::rack_repository::RackRepository;
 use common::error::{CmdbError, CmdbResult};
 use common::models::Client;
 use std::sync::Arc;
@@ -14,14 +13,14 @@ use tracing::instrument;
 /// Data Access Object for Rack operations
 pub struct RackDao {
     rack_repo: Arc<RackRepository>,
-    client_repo: Arc<ClientRepository>,
+    client_repo: Arc<CachedClientRepository>,
 }
 
 impl RackDao {
     /// Create a new RackDao
     pub fn new(
         rack_repo: Arc<RackRepository>,
-        client_repo: Arc<ClientRepository>,
+        client_repo: Arc<CachedClientRepository>,
     ) -> Self {
         Self {
             rack_repo,
@@ -56,7 +55,7 @@ impl RackDao {
     /// Get all clients in a rack
     #[instrument(skip(self))]
     pub async fn get_clients(&self, rack_id: &str) -> CmdbResult<Vec<Client>> {
-        let all_clients = self.client_repo.list_all().await?;
+        let all_clients: Vec<Client> = self.client_repo.list_all().await?;
         Ok(all_clients
             .into_iter()
             .filter(|c| c.rack.as_deref() == Some(rack_id))

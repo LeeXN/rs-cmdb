@@ -29,4 +29,14 @@ pub trait Database: Send + Sync + 'static {
 
     /// Check if a key exists
     async fn exists(&self, key: &str) -> CmdbResult<bool>;
+
+    /// Update entries matching a prefix transactionally.
+    /// The callback takes (key, value) and returns:
+    /// - Some(new_value) to update
+    /// - None to keep unchanged
+    async fn update_all(
+        &self,
+        prefix: &str,
+        callback: Box<dyn Fn(String, Vec<u8>) -> Option<Vec<u8>> + Send + Sync>,
+    ) -> CmdbResult<()>;
 }

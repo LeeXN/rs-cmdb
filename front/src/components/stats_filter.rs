@@ -1,5 +1,6 @@
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent};
+use crate::hooks::use_trans::use_trans;
 use crate::types::FilterCriteria;
 use lucide_yew::{Download, RefreshCw};
 use yew::prelude::*;
@@ -15,6 +16,7 @@ pub struct StatsFilterProps {
 #[function_component(StatsFilter)]
 pub fn stats_filter(props: &StatsFilterProps) -> Html {
     let filter = props.filter.clone();
+    let t = use_trans();
 
     // CPU厂商筛选
     let on_cpu_vendor_change = {
@@ -117,7 +119,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                             onchange={on_cpu_vendor_change}
                             value={filter.cpu_vendor.unwrap_or_default()}
                         >
-                            <option value="">{"CPU厂商"}</option>
+                            <option value="">{t.t("stats.filter.cpu_vendor")}</option>
                             <option value="Intel">{"Intel"}</option>
                             <option value="AMD">{"AMD"}</option>
                             <option value="ARM">{"ARM"}</option>
@@ -128,7 +130,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                             class={select_class}
                             onchange={on_memory_capacity_change}
                         >
-                            <option value="">{"内存容量"}</option>
+                            <option value="">{t.t("stats.filter.memory_capacity")}</option>
                             <option value="8gb">{"8GB"}</option>
                             <option value="16gb">{"16GB"}</option>
                             <option value="32gb">{"32GB"}</option>
@@ -141,7 +143,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                             onchange={on_gpu_vendor_change}
                             value={filter.gpu_vendor.unwrap_or_default()}
                         >
-                            <option value="">{"GPU厂商"}</option>
+                            <option value="">{t.t("stats.filter.gpu_vendor")}</option>
                             <option value="NVIDIA">{"NVIDIA"}</option>
                             <option value="AMD">{"AMD"}</option>
                             <option value="Intel">{"Intel"}</option>
@@ -153,7 +155,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                             onchange={on_os_change}
                             value={filter.os_name.unwrap_or_default()}
                         >
-                            <option value="">{"操作系统"}</option>
+                            <option value="">{t.t("stats.filter.os")}</option>
                             <option value="Linux">{"Linux"}</option>
                             <option value="Windows">{"Windows"}</option>
                             <option value="macOS">{"macOS"}</option>
@@ -167,7 +169,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                             onclick={on_reset_click}
                         >
                             <RefreshCw class="mr-2 h-4 w-4" />
-                            {"重置"}
+                            {t.t("common.reset")}
                         </Button>
                     </div>
                     <div>
@@ -178,7 +180,7 @@ pub fn stats_filter(props: &StatsFilterProps) -> Html {
                             onclick={on_export_click}
                         >
                             <Download class="mr-2 h-4 w-4" />
-                            {"导出"}
+                            {t.t("common.export")}
                         </Button>
                     </div>
                 </div>

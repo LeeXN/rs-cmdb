@@ -4,7 +4,7 @@
 //! and ensure data integrity.
 
 use common::error::{CmdbError, CmdbResult};
-use std::net::{IpAddr, AddrParseError};
+use std::net::IpAddr;
 use tracing::{debug, warn};
 
 /// Maximum length for hostname to prevent DoS
@@ -35,7 +35,9 @@ pub fn validate_ip_address(ip: &str) -> CmdbResult<String> {
 
     // Check for empty string
     if ip.is_empty() {
-        return Err(CmdbError::Validation("IP address cannot be empty".to_string()));
+        return Err(CmdbError::Validation(
+            "IP address cannot be empty".to_string(),
+        ));
     }
 
     // Parse as IP address to validate format
@@ -60,11 +62,11 @@ pub fn validate_ipv4(ip: &str) -> CmdbResult<String> {
     match validated.parse::<IpAddr>() {
         Ok(IpAddr::V4(_)) => Ok(validated),
         Ok(IpAddr::V6(_)) => Err(CmdbError::Validation(
-            "IPv6 address not allowed, expected IPv4".to_string()
+            "IPv6 address not allowed, expected IPv4".to_string(),
         )),
         Err(_) => Err(CmdbError::Validation(
-            "Invalid IPv4 address format".to_string()
-        ))
+            "Invalid IPv4 address format".to_string(),
+        )),
     }
 }
 
@@ -74,11 +76,11 @@ pub fn validate_ipv6(ip: &str) -> CmdbResult<String> {
     match validated.parse::<IpAddr>() {
         Ok(IpAddr::V6(_)) => Ok(validated),
         Ok(IpAddr::V4(_)) => Err(CmdbError::Validation(
-            "IPv4 address not allowed, expected IPv6".to_string()
+            "IPv4 address not allowed, expected IPv6".to_string(),
         )),
         Err(_) => Err(CmdbError::Validation(
-            "Invalid IPv6 address format".to_string()
-        ))
+            "Invalid IPv6 address format".to_string(),
+        )),
     }
 }
 
@@ -94,7 +96,9 @@ pub fn validate_hostname(hostname: &str) -> CmdbResult<String> {
     let hostname = hostname.trim();
 
     if hostname.is_empty() {
-        return Err(CmdbError::Validation("Hostname cannot be empty".to_string()));
+        return Err(CmdbError::Validation(
+            "Hostname cannot be empty".to_string(),
+        ));
     }
 
     if hostname.len() > MAX_HOSTNAME_LENGTH {
@@ -111,15 +115,18 @@ pub fn validate_hostname(hostname: &str) -> CmdbResult<String> {
 
     if !valid_chars {
         return Err(CmdbError::Validation(
-            "Hostname can only contain alphanumeric characters, hyphens, and dots".to_string()
+            "Hostname can only contain alphanumeric characters, hyphens, and dots".to_string(),
         ));
     }
 
     // Cannot start or end with hyphen or dot
-    if hostname.starts_with('-') || hostname.ends_with('-') ||
-       hostname.starts_with('.') || hostname.ends_with('.') {
+    if hostname.starts_with('-')
+        || hostname.ends_with('-')
+        || hostname.starts_with('.')
+        || hostname.ends_with('.')
+    {
         return Err(CmdbError::Validation(
-            "Hostname cannot start or end with a hyphen or dot".to_string()
+            "Hostname cannot start or end with a hyphen or dot".to_string(),
         ));
     }
 
@@ -127,139 +134,22 @@ pub fn validate_hostname(hostname: &str) -> CmdbResult<String> {
     for label in hostname.split('.') {
         if label.is_empty() {
             return Err(CmdbError::Validation(
-                "Hostname cannot contain consecutive dots".to_string()
+                "Hostname cannot contain consecutive dots".to_string(),
             ));
         }
         if label.len() > 63 {
             return Err(CmdbError::Validation(
-                "Each label in hostname must be 63 characters or less".to_string()
+                "Each label in hostname must be 63 characters or less".to_string(),
             ));
         }
         if label.starts_with('-') || label.ends_with('-') {
             return Err(CmdbError::Validation(
-                "Hostname labels cannot start or end with a hyphen".to_string()
+                "Hostname labels cannot start or end with a hyphen".to_string(),
             ));
         }
     }
 
     Ok(hostname.to_string())
-}
-
-/// IP address whitelist/blacklist for SSH access
-pub struct IpAllowList {
-    /// Allowed IP prefixes (e.g., "192.168.1.0/24")
-    allowed_ranges: Vec<ipnet::IpNet>,
-    /// Blocked specific IPs
-    blocked_ips: Vec<IpAddr>,
-}
-
-impl Default for IpAllowList {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl IpAllowList {
-    /// Create a new empty allow list
-    pub fn new() -> Self {
-        Self {
-            allowed_ranges: Vec::new(),
-            blocked_ips: Vec::new(),
-        }
-    }
-
-    /// Create an allow list from configuration
-    ///
-    /// # Arguments
-    /// * `allowed_ranges` - List of CIDR ranges to allow (e.g., ["192.168.1.0/24"])
-    /// * `blocked_ips` - List of specific IPs to block
-    pub fn from_config(allowed_ranges: &[String], blocked_ips: &[String]) -> CmdbResult<Self> {
-        let mut allow_list = Self::new();
-
-        for range in allowed_ranges {
-            match range.parse::<ipnet::IpNet>() {
-                Ok(net) => allow_list.allowed_ranges.push(net),
-                Err(e) => {
-                    return Err(CmdbError::Validation(format!(
-                        "Invalid IP range '{}': {}",
-                        range, e
-                    )));
-                }
-            }
-        }
-
-        for ip_str in blocked_ips {
-            match ip_str.parse::<IpAddr>() {
-                Ok(ip) => allow_list.blocked_ips.push(ip),
-                Err(e) => {
-                    return Err(CmdbError::Validation(format!(
-                        "Invalid blocked IP '{}': {}",
-                        ip_str, e
-                    )));
-                }
-            }
-        }
-
-        Ok(allow_list)
-    }
-
-    /// Check if an IP address is allowed
-    pub fn is_allowed(&self, ip: &str) -> bool {
-        // First check if explicitly blocked
-        if let Ok(ip_addr) = ip.parse::<IpAddr>() {
-            if self.blocked_ips.contains(&ip_addr) {
-                warn!("IP address is explicitly blocked: {}", ip);
-                return false;
-            }
-
-            // If no allowed ranges configured, allow all (except blocked)
-            if self.allowed_ranges.is_empty() {
-                return true;
-            }
-
-            // Check if IP matches any allowed range
-            for range in &self.allowed_ranges {
-                if range.contains(&ip_addr) {
-                    debug!("IP address allowed: {} matches range {}", ip, range);
-                    return true;
-                }
-            }
-
-            warn!("IP address not in allowed ranges: {}", ip);
-            false
-        } else {
-            warn!("Invalid IP address format for allow list check: {}", ip);
-            false
-        }
-    }
-
-    /// Add an allowed range
-    pub fn add_allowed_range(&mut self, range: &str) -> CmdbResult<()> {
-        match range.parse::<ipnet::IpNet>() {
-            Ok(net) => {
-                self.allowed_ranges.push(net);
-                Ok(())
-            }
-            Err(e) => Err(CmdbError::Validation(format!(
-                "Invalid IP range '{}': {}",
-                range, e
-            ))),
-        }
-    }
-
-    /// Add a blocked IP
-    pub fn add_blocked_ip(&mut self, ip: &str) -> CmdbResult<()> {
-        match ip.parse::<IpAddr>() {
-            Ok(addr) => {
-                self.blocked_ips.push(addr);
-                Ok(())
-            }
-            Err(e) => Err(CmdbError::Validation(format!(
-                "Invalid IP address '{}': {}",
-                ip, e
-            ))),
-        }
-    }
 }
 
 /// Validate SSH command argument
@@ -284,8 +174,7 @@ pub fn validate_ssh_argument(arg: &str) -> CmdbResult<String> {
 
     // Check for dangerous patterns
     let dangerous = [
-        ";", "&", "|", "$", "`", "(", ")", "\n", "\r",
-        "&&", "||", ">",
+        ";", "&", "|", "$", "`", "(", ")", "\n", "\r", "&&", "||", ">",
     ];
 
     for pattern in &dangerous {
@@ -298,26 +187,6 @@ pub fn validate_ssh_argument(arg: &str) -> CmdbResult<String> {
     }
 
     Ok(arg.to_string())
-}
-
-/// Sanitize a string for safe logging
-///
-/// Removes or escapes potentially sensitive information
-pub fn sanitize_for_logging(s: &str) -> String {
-    // Limit length
-    let sanitized = if s.len() > 100 {
-        format!("{}...", &s[..97])
-    } else {
-        s.to_string()
-    };
-
-    // Remove common sensitive patterns (basic implementation)
-    sanitized
-        .replace("password=", "password=***")
-        .replace("passwd=", "passwd=***")
-        .replace("pwd=", "pwd=***")
-        .replace("token=", "token=***")
-        .replace("key=", "key=***")
 }
 
 #[cfg(test)]
@@ -333,14 +202,8 @@ mod tests {
 
     #[test]
     fn test_validate_valid_ipv6() {
-        assert_eq!(
-            validate_ip_address("::1").unwrap(),
-            "::1"
-        );
-        assert_eq!(
-            validate_ip_address("2001:db8::1").unwrap(),
-            "2001:db8::1"
-        );
+        assert_eq!(validate_ip_address("::1").unwrap(), "::1");
+        assert_eq!(validate_ip_address("2001:db8::1").unwrap(), "2001:db8::1");
     }
 
     #[test]
@@ -387,23 +250,5 @@ mod tests {
         assert!(validate_ssh_argument("echo $(whoami)").is_err()); // Contains $()
         assert!(validate_ssh_argument("echo `whoami`").is_err()); // Contains backticks
         assert!(validate_ssh_argument("ls\nmalicious").is_err()); // Contains newline
-    }
-
-    #[test]
-    fn test_ip_allow_list() {
-        let mut allow_list = IpAllowList::new();
-
-        // Add allowed range
-        allow_list.add_allowed_range("192.168.1.0/24").unwrap();
-
-        // Test allowed IP
-        assert!(allow_list.is_allowed("192.168.1.100"));
-
-        // Test blocked IP (not in range)
-        assert!(!allow_list.is_allowed("10.0.0.1"));
-
-        // Test with blocked IP
-        allow_list.add_blocked_ip("192.168.1.50").unwrap();
-        assert!(!allow_list.is_allowed("192.168.1.50"));
     }
 }

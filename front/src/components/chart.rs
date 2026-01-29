@@ -220,17 +220,17 @@ fn draw_bar_chart(context: &CanvasRenderingContext2d, data: &[ChartData], width:
 }
 
 // 预定义的颜色方案
-// pub fn get_chart_colors() -> Vec<String> {
-//     vec![
-//         "#FF6384".to_string(),
-//         "#36A2EB".to_string(),
-//         "#FFCE56".to_string(),
-//         "#4BC0C0".to_string(),
-//         "#9966FF".to_string(),
-//         "#FF9F40".to_string(),
-//         "#FF6384".to_string(),
-//         "#C9CBCF".to_string(),
-//         "#4BC0C0".to_string(),
-//         "#FF6384".to_string(),
-//     ]
-// }
+pub fn get_chart_colors() -> Vec<String> {
+    vec![
+        "#FF6384".to_string(),
+        "#36A2EB".to_string(),
+        "#FFCE56".to_string(),
+        "#4BC0C0".to_string(),
+        "#9966FF".to_string(),
+        "#FF9F40".to_string(),
+        "#FF6384".to_string(),
+        "#C9CBCF".to_string(),
+        "#4BC0C0".to_string(),
+        "#FF6384".to_string(),
+    ]
+}

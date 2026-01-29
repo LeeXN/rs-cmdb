@@ -245,4 +245,61 @@ impl Database for RedbStore {
         let result = self.get(key).await?;
         Ok(result.is_some())
     }
+
+    async fn update_all(
+        &self,
+        prefix: &str,
+        callback: Box<dyn Fn(String, Vec<u8>) -> Option<Vec<u8>> + Send + Sync>,
+    ) -> CmdbResult<()> {
+        let db = self.db.clone();
+        let prefix = prefix.to_string();
+
+        tokio::task::spawn_blocking(move || {
+            let write_txn = db.begin_write().map_err(|e| {
+                CmdbError::Database(format!("Failed to start write transaction: {}", e))
+            })?;
+
+            {
+                let mut table = write_txn
+                    .open_table(KV_TABLE)
+                    .map_err(|e| CmdbError::Database(format!("Failed to open table: {}", e)))?;
+
+                // First collecting keys to avoid borrowing issues during iteration/update
+                let mut updates = Vec::new();
+
+                {
+                    let iter = table
+                        .iter()
+                        .map_err(|e| CmdbError::Database(format!("Failed to iterate: {}", e)))?;
+
+                    for item in iter {
+                        let (key, value) = item
+                            .map_err(|e| CmdbError::Database(format!("Failed to iterate: {}", e)))?;
+                        let key_str = key.value();
+                        if key_str.starts_with(&prefix) {
+                            let value_vec = value.value().to_vec();
+                            if let Some(new_value) = callback(key_str.to_string(), value_vec) {
+                                updates.push((key_str.to_string(), new_value));
+                            }
+                        }
+                    }
+                }
+
+                // Apply updates
+                for (key, value) in updates {
+                    table.insert(key.as_str(), value.as_slice()).map_err(|e| {
+                        CmdbError::Database(format!("Failed to update key {}: {}", key, e))
+                    })?;
+                }
+            }
+
+            write_txn
+                .commit()
+                .map_err(|e| CmdbError::Database(format!("Failed to commit transaction: {}", e)))?;
+
+            Ok(())
+        })
+        .await
+        .map_err(|e| CmdbError::Database(format!("Task join error: {}", e)))?
+    }
 }

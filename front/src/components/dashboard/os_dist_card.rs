@@ -1,9 +1,10 @@
+use crate::components::chart::{get_chart_colors, ChartData, PieChart};
 use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
-use crate::components::ui::table::{Table, TableBody, TableCell, TableRow};
 use crate::hooks::use_trans::use_trans;
-use lucide_yew::{AppWindow, Command, Monitor, Server, Terminal};
+use lucide_yew::Monitor;
 use std::collections::HashMap;
+use std::rc::Rc;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -15,8 +16,27 @@ pub struct OsDistCardProps {
 #[function_component(OsDistCard)]
 pub fn os_dist_card(props: &OsDistCardProps) -> Html {
     let os_stats = &props.os_stats;
-    let total_clients = props.total_clients;
     let t = use_trans();
+
+    let chart_data: Rc<Vec<ChartData>> = use_memo((os_stats.clone(),), |(stats,)| {
+        let colors = get_chart_colors();
+        let mut data: Vec<ChartData> = stats
+            .iter()
+            .enumerate()
+            .map(|(i, (label, value))| ChartData {
+                label: label.clone(),
+                value: *value as f64,
+                color: colors[i % colors.len()].clone(),
+            })
+            .collect();
+        // Sort by value descending for better visualization
+        data.sort_by(|a, b| {
+            b.value
+                .partial_cmp(&a.value)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        data
+    });
 
     html! {
         <Card class="h-full">
@@ -40,53 +60,13 @@ pub fn os_dist_card(props: &OsDistCardProps) -> Html {
                         }
                     } else {
                         html! {
-                            <Table>
-                                <TableBody>
-                                    {
-                                        os_stats.iter().map(|(os, count)| {
-                                            let percentage = if total_clients > 0 {
-                                                (*count as f64 / total_clients as f64) * 100.0
-                                            } else {
-                                                0.0
-                                            };
-
-                                            let os_lower = os.to_lowercase();
-                                            // We don't have brand icons in Lucide, so we use generic ones or text
-                                            let icon = if os_lower.contains("linux") || os_lower.contains("ubuntu") || os_lower.contains("centos") || os_lower.contains("debian") {
-                                                html! { <Terminal class="h-5 w-5 text-orange-500" /> }
-                                            } else if os_lower.contains("windows") {
-                                                html! { <AppWindow class="h-5 w-5 text-blue-500" /> }
-                                            } else if os_lower.contains("mac") || os_lower.contains("darwin") {
-                                                html! { <Command class="h-5 w-5 text-slate-200" /> }
-                                            } else {
-                                                html! { <Server class="h-5 w-5 text-gray-500" /> }
-                                            };
-
-                                            html! {
-                                                <TableRow>
-                                                    <TableCell>
-                                                        <div class="flex items-center gap-3">
-                                                            {icon}
-                                                            <div class="font-medium">{os}</div>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell class="text-center font-bold">
-                                                        {count}{t.t("dashboard.unit_machines")}
-                                                    </TableCell>
-                                                    <TableCell class="w-1/3">
-                                                        <div class="flex flex-col gap-1">
-                                                            <span class="text-xs font-bold text-right text-muted-foreground">{format!("{:.1}%", percentage)}</span>
-                                                            <div class="h-2 w-full rounded-full bg-secondary">
-                                                                <div class="h-2 rounded-full bg-primary" style={format!("width: {}%", percentage)}></div>
-                                                            </div>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            }
-                                        }).collect::<Html>()
-                                    }
-                                </TableBody>
-                            </Table>
+                            <div class="flex justify-center items-center py-4">
+                                <PieChart
+                                    data={(*chart_data).clone()}
+                                    width={300}
+                                    height={300}
+                                />
+                            </div>
                         }
                     }
                 }

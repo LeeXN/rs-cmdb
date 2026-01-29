@@ -1,3 +1,4 @@
+use crate::components::chart::{ChartData, PieChart};
 use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::hooks::use_trans::use_trans;
@@ -14,6 +15,20 @@ pub struct SystemStatusCardProps {
 #[function_component(SystemStatusCard)]
 pub fn system_status_card(props: &SystemStatusCardProps) -> Html {
     let t = use_trans();
+
+    let chart_data = vec![
+        ChartData {
+            label: t.t("dashboard.online_clients"),
+            value: props.online_clients as f64,
+            color: "#22c55e".to_string(), // green-500
+        },
+        ChartData {
+            label: t.t("dashboard.offline_clients"),
+            value: props.offline_clients as f64,
+            color: "#64748b".to_string(), // slate-500
+        },
+    ];
+
     html! {
         <Card class="h-full">
             <CardHeader>
@@ -37,6 +52,14 @@ pub fn system_status_card(props: &SystemStatusCardProps) -> Html {
                         <div class="text-sm font-medium text-muted-foreground">{t.t("dashboard.offline_clients")}</div>
                         <div class="text-2xl font-bold text-muted-foreground">{props.offline_clients}</div>
                     </div>
+                </div>
+
+                <div class="mt-6 flex justify-center h-48">
+                    <PieChart
+                        data={chart_data}
+                        width={200}
+                        height={200}
+                    />
                 </div>
 
                 <div class="flex items-center gap-2 mt-4 text-xs text-muted-foreground">

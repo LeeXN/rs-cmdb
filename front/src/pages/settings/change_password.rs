@@ -1,4 +1,5 @@
 use crate::components::ui::button::{Button, ButtonVariant};
+use crate::hooks::use_trans::use_trans;
 use crate::services::api;
 use crate::types::ChangePasswordRequest;
 use crate::utils::i18n_helper::translate_api_message;
@@ -14,6 +15,7 @@ pub fn change_password() -> Html {
     let error_message = use_state(|| Option::<String>::None);
     let success_message = use_state(|| Option::<String>::None);
     let loading = use_state(|| false);
+    let t = use_trans();
 
     let onsubmit = {
         let old_password = old_password.clone();
@@ -22,6 +24,7 @@ pub fn change_password() -> Html {
         let error_message = error_message.clone();
         let success_message = success_message.clone();
         let loading = loading.clone();
+        let t = t.clone();
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
@@ -31,12 +34,12 @@ pub fn change_password() -> Html {
             let confirm_pwd = (*confirm_password).clone();
 
             if new_pwd != confirm_pwd {
-                error_message.set(Some("New passwords do not match".to_string()));
+                error_message.set(Some(t.t("password.mismatch")));
                 return;
             }
 
             if new_pwd.len() < 6 {
-                error_message.set(Some("Password must be at least 6 characters".to_string()));
+                error_message.set(Some(t.t("password.too_short")));
                 return;
             }
 
@@ -46,6 +49,7 @@ pub fn change_password() -> Html {
             let old_password = old_password.clone();
             let new_password = new_password.clone();
             let confirm_password = confirm_password.clone();
+            let t = t.clone();
 
             loading.set(true);
             error_message.set(None);
@@ -59,7 +63,7 @@ pub fn change_password() -> Html {
 
                 match api::change_password(request).await {
                     Ok(_) => {
-                        success_message.set(Some("Password changed successfully".to_string()));
+                        success_message.set(Some(t.t("password.success")));
                         old_password.set(String::new());
                         new_password.set(String::new());
                         confirm_password.set(String::new());
@@ -81,7 +85,7 @@ pub fn change_password() -> Html {
                         <div class="card">
                             <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                                 <div class="bg-gradient-primary shadow-primary border-radius-lg pt-4 pb-3">
-                                    <h6 class="text-white text-capitalize ps-3">{"Change Password"}</h6>
+                                    <h6 class="text-white text-capitalize ps-3">{t.t("password.change_title")}</h6>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -97,7 +101,7 @@ pub fn change_password() -> Html {
                                 }
                                 <form {onsubmit}>
                                     <div class="input-group input-group-outline mb-3">
-                                        <label class="form-label">{"Current Password"}</label>
+                                        <label class="form-label">{t.t("password.current")}</label>
                                         <input type="password" class="form-control"
                                             value={(*old_password).clone()}
                                             oninput={Callback::from(move |e: InputEvent| {
@@ -108,7 +112,7 @@ pub fn change_password() -> Html {
                                         />
                                     </div>
                                     <div class="input-group input-group-outline mb-3">
-                                        <label class="form-label">{"New Password"}</label>
+                                        <label class="form-label">{t.t("password.new")}</label>
                                         <input type="password" class="form-control"
                                             value={(*new_password).clone()}
                                             oninput={Callback::from(move |e: InputEvent| {
@@ -119,7 +123,7 @@ pub fn change_password() -> Html {
                                         />
                                     </div>
                                     <div class="input-group input-group-outline mb-3">
-                                        <label class="form-label">{"Confirm New Password"}</label>
+                                        <label class="form-label">{t.t("password.confirm")}</label>
                                         <input type="password" class="form-control"
                                             value={(*confirm_password).clone()}
                                             oninput={Callback::from(move |e: InputEvent| {
@@ -138,9 +142,9 @@ pub fn change_password() -> Html {
                                         >
                                             if *loading {
                                                 <span class="loading loading-spinner loading-sm mr-2"></span>
-                                                {"Changing..."}
+                                                {t.t("password.submitting")}
                                             } else {
-                                                {"Change Password"}
+                                                {t.t("password.submit")}
                                             }
                                         </Button>
                                     </div>

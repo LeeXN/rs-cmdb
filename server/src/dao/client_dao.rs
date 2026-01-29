@@ -3,9 +3,8 @@
 //! Encapsulates all data access operations related to clients,
 //! including queries that span multiple repositories.
 
-use crate::repository::{
-    client_repository::ClientRepository, hardware_repository::HardwareRepository,
-};
+use crate::cache::CachedClientRepository;
+use crate::repository::hardware_repository::HardwareRepository;
 use common::entity::hardware::Hardware;
 use common::error::CmdbResult;
 use common::models::Client;
@@ -15,14 +14,14 @@ use tracing::instrument;
 
 /// Data Access Object for Client operations
 pub struct ClientDao {
-    client_repo: Arc<ClientRepository>,
+    client_repo: Arc<CachedClientRepository>,
     hardware_repo: Arc<HardwareRepository>,
 }
 
 impl ClientDao {
     /// Create a new ClientDao
     pub fn new(
-        client_repo: Arc<ClientRepository>,
+        client_repo: Arc<CachedClientRepository>,
         hardware_repo: Arc<HardwareRepository>,
     ) -> Self {
         Self {

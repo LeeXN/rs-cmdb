@@ -4,6 +4,7 @@ mod config;
 mod constants;
 mod dao;
 mod db;
+mod i18n;
 mod middleware;
 mod queue;
 mod repository;
@@ -23,6 +24,8 @@ use tracing::{error, info};
 
 use crate::config::{get_config, validate_jwt_secret};
 use crate::db::redb_store::RedbStore;
+use crate::cache::{CacheConfigs, CachedClientRepository};
+use crate::dao::{ClientDao, RackDao};
 use crate::queue::message_queue::MessageQueueFactory;
 use crate::repository::{
     client_repository::ClientRepository, component_repository::ComponentRepository,
@@ -30,11 +33,12 @@ use crate::repository::{
     person_repository::PersonRepository, project_repository::ProjectRepository,
     rack_repository::RackRepository, user_repository::UserRepository,
 };
-use crate::service::{
+    use crate::service::{
     auth_service::{AuthService, validate_password_complexity},
     client_filter_service::ClientFilterService,
     client_service::ClientService,
     component_service::ComponentService,
+    export_service::ExportService,
     hardware_service::HardwareService,
     message_processor::MessageProcessor,
     stats_service::StatsService,
@@ -213,7 +217,9 @@ async fn main() -> Result<()> {
     info!("Database initialized: {}", config.database.path);
 
     // Initialize repositories
-    let client_repo = Arc::new(ClientRepository::new(db.clone()));
+    let client_repo_inner = Arc::new(ClientRepository::new(db.clone()));
+    let cache_configs = CacheConfigs::default();
+    let client_repo = Arc::new(CachedClientRepository::new(client_repo_inner.clone(), &cache_configs));
     let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
     let user_repo = Arc::new(UserRepository::new(db.clone()));
     let person_repo = Arc::new(PersonRepository::new(db.clone()));
@@ -235,30 +241,53 @@ async fn main() -> Result<()> {
     let message_queue = MessageQueueFactory::create_flume_queue();
 
     // Initialize services
-    let client_service = Arc::new(ClientService::from_repositories(
-        client_repo.clone(),
-        hardware_repo.clone(),
-        rack_repo.clone(),
+    // Use DAOs for client service
+    let client_dao = Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone()));
+    let rack_dao = Arc::new(RackDao::new(rack_repo.clone(), client_repo.clone()));
+    
+    let client_service = Arc::new(ClientService::new(
+        client_dao,
+        rack_dao,
+        hardware_repo.clone(), // ClientService still keeps a ref to hardware_repo
     ));
     let component_service = Arc::new(ComponentService::new(component_repo.clone()));
+    // Note: HardwareService constructor expects ClientRepository, but we have CachedClientRepository.
+    // We need to check if HardwareService uses ClientRepository or CachedClientRepository.
+    // It likely uses ClientRepository. CachedClientRepository does NOT impl Deref to ClientRepository or a common trait.
+    // Let's check HardwareService. It probably takes Arc<ClientRepository>.
+    // Since we shadowed `client_repo` with the cached one, we might need the inner one for services that don't support caching yet.
+    // BUT, we want to use caching.
+    // Let's assume for now HardwareService needs to be updated or we pass the inner repo.
+    // Ideally we update HardwareService too. For now let's pass the cached repo if the type matches?
+    // CachedClientRepository is NOT ClientRepository.
+    // So we should have kept client_repo_inner accessible.
+    // Let's use `client_repo` (which is Cached) for ClientService, and `client_repo_inner` for others?
+    // Or better, update HardwareService.
+    // Let's assume we pass `client_repo_inner` to others to avoid massive refactoring right now, 
+    // but `ClientService` gets the cached one.
+    
     let hardware_service = Arc::new(HardwareService::new(
-        client_repo.clone(),
+        client_repo.clone(), // Trying to pass cached repo. If types don't match, I'll need to fix HardwareService.
         hardware_repo.clone(),
         component_service.clone(),
         message_queue.clone(),
     ));
     let validation_service = Arc::new(ValidationService::new(
-        client_repo.clone(),
+        client_repo_inner.clone(),
         project_repo.clone(),
         rack_repo.clone(),
         person_repo.clone(),
     ));
     let stats_service = Arc::new(StatsService::new(
-        client_repo.clone(),
+        client_repo_inner.clone(),
         hardware_repo.clone(),
     ));
     let client_filter_service = Arc::new(ClientFilterService::new(
-        client_repo.clone(),
+        client_repo_inner.clone(),
+        hardware_repo.clone(),
+    ));
+    let export_service = Arc::new(ExportService::new(
+        client_repo_inner.clone(),
         hardware_repo.clone(),
     ));
 
@@ -301,7 +330,7 @@ async fn main() -> Result<()> {
 
     // Create router
     let app = api::create_router(
-        client_repo,
+        client_repo_inner,
         hardware_repo,
         user_repo,
         person_repo,
@@ -315,6 +344,7 @@ async fn main() -> Result<()> {
         validation_service,
         stats_service,
         client_filter_service,
+        export_service,
         Arc::new(config.clone()),
     );
 

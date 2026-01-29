@@ -164,7 +164,12 @@ fn load_config() -> Result<ServerConfig, ConfigError> {
     }
 
     // Add environment variables with prefix "CMDB_" - these take precedence
-    builder = builder.add_source(config::Environment::with_prefix("CMDB").separator("_"));
+    builder = builder.add_source(config::Environment::with_prefix("CMDB").separator("__"));
+
+    // Explicitly override JWT secret from env to avoid separator ambiguity
+    if let Ok(jwt_secret) = env::var("CMDB_JWT_SECRET") {
+        builder = builder.set_override("jwt_secret", jwt_secret)?;
+    }
 
     // Build the configuration
     let config: ServerConfig = builder.build()?.try_deserialize()?;

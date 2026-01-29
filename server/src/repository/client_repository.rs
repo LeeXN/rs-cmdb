@@ -107,14 +107,27 @@ impl ClientRepository {
 
     /// Update owner to null for clients owned by a specific person
     pub async fn update_owner_to_null(&self, owner_id: &str) -> CmdbResult<()> {
-        let clients = self.list_all().await?;
-        for mut client in clients {
-            if client.owner_id.as_deref() == Some(owner_id) {
-                client.owner_id = None;
-                self.save(&client).await?;
-            }
-        }
-        Ok(())
+        let owner_id = owner_id.to_string();
+
+        self.db.update_all(
+            &self.key_prefix,
+            Box::new(move |_key, value| {
+                match serde_json::from_slice::<Client>(&value) {
+                    Ok(mut client) => {
+                        if client.owner_id.as_deref() == Some(&owner_id) {
+                            client.owner_id = None;
+                            match serde_json::to_vec(&client) {
+                                Ok(new_value) => Some(new_value),
+                                Err(_) => None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None
+                }
+            })
+        ).await
     }
 
     /// Find client by serial number

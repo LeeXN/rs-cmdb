@@ -37,7 +37,7 @@ impl ClientService {
 
     /// Create a new client service from repositories (backward compatibility)
     pub fn from_repositories(
-        client_repo: Arc<crate::repository::client_repository::ClientRepository>,
+        client_repo: Arc<crate::cache::CachedClientRepository>,
         hardware_repo: Arc<HardwareRepository>,
         rack_repo: Arc<crate::repository::rack_repository::RackRepository>,
     ) -> Self {
@@ -356,12 +356,16 @@ mod tests {
         client_repository::ClientRepository, hardware_repository::HardwareRepository,
         rack_repository::RackRepository,
     };
+    use crate::cache::{CacheConfigs, CachedClientRepository};
     use std::sync::Arc;
 
     fn create_service(
         db: Arc<dyn crate::db::Database>,
     ) -> ClientService {
-        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let client_repo_inner = Arc::new(ClientRepository::new(db.clone()));
+        let cache_configs = CacheConfigs::default();
+        let client_repo = Arc::new(CachedClientRepository::new(client_repo_inner.clone(), &cache_configs));
+        
         let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
         let rack_repo = Arc::new(RackRepository::new(db.clone()));
         ClientService::from_repositories(client_repo, hardware_repo, rack_repo)

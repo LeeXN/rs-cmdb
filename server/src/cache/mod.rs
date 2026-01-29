@@ -6,5 +6,5 @@
 pub mod cache_service;
 pub mod cached_repository;
 
-pub use cache_service::{CacheConfig, CacheConfigs, CacheService};
+pub use cache_service::{CacheConfigs, CacheService};
 pub use cached_repository::CachedClientRepository;

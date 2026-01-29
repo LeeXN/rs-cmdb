@@ -336,7 +336,7 @@ capacity = 1000            # 内部消息队列容量
 
 ### 环境变量
 
-每个设置都可以通过环境变量覆盖。嵌套键使用双下划线 `__` 分隔。
+每个设置都可以通过环境变量覆盖。嵌套键使用双下划线 `__` 分隔（如 `CMDB_DATABASE__PATH`），单层键保持 `CMDB_<KEY>`（如 `CMDB_JWT_SECRET`）。为避免解析歧义，`CMDB_JWT_SECRET` 会被显式读取并覆盖默认值。
 
 **安全变量：**
 - `CMDB_JWT_SECRET` - **必需**，最少 32 个字符（使用 `openssl rand -base64 32` 生成）

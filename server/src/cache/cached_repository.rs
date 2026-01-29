@@ -127,7 +127,8 @@ impl CachedClientRepository {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Tests are placeholder for now, so removed unused imports
+    // use super::*;
 
     // Note: These tests would require a proper test database setup
     // For now, they serve as documentation of expected behavior

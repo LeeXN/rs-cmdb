@@ -336,7 +336,7 @@ capacity = 1000            # Internal message queue capacity
 
 ### Environment Variables
 
-Every setting can be overridden by environment variables. Use double underscores `__` for nested keys.
+Every setting can be overridden by environment variables. Use double underscores `__` for nested keys (e.g. `CMDB_DATABASE__PATH`). Single-level keys stay as `CMDB_<KEY>` (e.g. `CMDB_JWT_SECRET`). For safety, `CMDB_JWT_SECRET` is read explicitly and always overrides defaults.
 
 **Security Variables:**
 - `CMDB_JWT_SECRET` - **Required**, minimum 32 characters (use `openssl rand -base64 32` to generate)

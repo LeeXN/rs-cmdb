@@ -91,13 +91,28 @@ impl ComponentRepository {
 
     /// Release components by client ID (set client_id to None and status to InStock)
     pub async fn release_components_by_client(&self, client_id: &str) -> CmdbResult<()> {
-        let components = self.find_by_client_id(client_id).await?;
-        for mut component in components {
-            component.client_id = None;
-            component.status = ComponentStatus::InStock;
-            self.save(&component).await?;
-        }
-        Ok(())
+        let client_id = client_id.to_string();
+
+        self.db.update_all(
+            &self.key_prefix,
+            Box::new(move |_key, value| {
+                match serde_json::from_slice::<Component>(&value) {
+                    Ok(mut component) => {
+                        if component.client_id.as_deref() == Some(&client_id) {
+                            component.client_id = None;
+                            component.status = ComponentStatus::InStock;
+                            match serde_json::to_vec(&component) {
+                                Ok(new_value) => Some(new_value),
+                                Err(_) => None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None
+                }
+            })
+        ).await
     }
 
     /// Find components with query filters and pagination

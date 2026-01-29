@@ -41,6 +41,128 @@ pub fn get_translations() -> HashMap<String, String> {
     );
     translations.insert("server_model".to_string(), "Server Model".to_string());
 
+    // Hardware Component Titles
+    translations.insert("cpu.title".to_string(), "CPU".to_string());
+    translations.insert("gpu.title".to_string(), "GPU".to_string());
+    translations.insert("memory.title".to_string(), "Memory".to_string());
+    translations.insert("network.title".to_string(), "Network".to_string());
+    translations.insert("storage.title".to_string(), "Storage".to_string());
+
+    // Hardware Labels
+    translations.insert("label.vendor".to_string(), "Vendor".to_string());
+    translations.insert("label.model".to_string(), "Model".to_string());
+    translations.insert("label.frequency".to_string(), "Frequency".to_string());
+    translations.insert("label.cores".to_string(), "Cores".to_string());
+    translations.insert("label.threads".to_string(), "Threads".to_string());
+    translations.insert("label.device_id".to_string(), "Device ID".to_string());
+    translations.insert("label.driver_version".to_string(), "Driver Version".to_string());
+    translations.insert("label.serial_number".to_string(), "Serial Number".to_string());
+    translations.insert("label.capacity".to_string(), "Capacity".to_string());
+    translations.insert("label.speed".to_string(), "Speed".to_string());
+    translations.insert("label.firmware".to_string(), "Firmware".to_string());
+    translations.insert("label.interface".to_string(), "Interface".to_string());
+    translations.insert("label.size".to_string(), "Size".to_string());
+    translations.insert("label.type".to_string(), "Type".to_string());
+    translations.insert("label.manufacturer".to_string(), "Manufacturer".to_string());
+    translations.insert("label.temperature".to_string(), "Temperature".to_string());
+    translations.insert("label.voltage".to_string(), "Voltage".to_string());
+    translations.insert("label.power".to_string(), "Power".to_string());
+    translations.insert("label.utilization".to_string(), "Utilization".to_string());
+
+    // Hardware History
+    translations.insert("history.change".to_string(), "Change".to_string());
+    translations.insert("history.change_type".to_string(), "Change Type".to_string());
+    translations.insert("history.empty".to_string(), "No changes recorded".to_string());
+    translations.insert("history.loading".to_string(), "Loading changes...".to_string());
+    translations.insert("history.time".to_string(), "Time".to_string());
+    translations.insert("history.title".to_string(), "Hardware History".to_string());
+    translations.insert("history.view_details".to_string(), "View Details".to_string());
+
+    // IPMI
+    translations.insert("ipmi.access_denied".to_string(), "Access Denied".to_string());
+    translations.insert("ipmi.not_available".to_string(), "Not Available".to_string());
+    translations.insert("ipmi.status_online".to_string(), "Online".to_string());
+    translations.insert("ipmi.status_offline".to_string(), "Offline".to_string());
+    translations.insert("ipmi.status_unknown".to_string(), "Unknown".to_string());
+    translations.insert("ipmi.privilege_admin".to_string(), "Administrator".to_string());
+    translations.insert("ipmi.privilege_user".to_string(), "User".to_string());
+    translations.insert("ipmi.privilege_operator".to_string(), "Operator".to_string());
+    translations.insert("ipmi.privilege_callback".to_string(), "Callback".to_string());
+    translations.insert("ipmi.users".to_string(), "Users".to_string());
+    translations.insert("ipmi.username".to_string(), "Username".to_string());
+    translations.insert("ipmi.password".to_string(), "Password".to_string());
+    translations.insert("ipmi.channel".to_string(), "Channel".to_string());
+    translations.insert("ipmi.ip_address".to_string(), "IP Address".to_string());
+    translations.insert("ipmi.mac_address".to_string(), "MAC Address".to_string());
+    translations.insert("ipmi.netmask".to_string(), "Netmask".to_string());
+    translations.insert("ipmi.gateway".to_string(), "Gateway".to_string());
+
+    // Status (with prefix to avoid conflicts)
+    translations.insert("status.online".to_string(), "Online".to_string());
+    translations.insert("status.offline".to_string(), "Offline".to_string());
+    translations.insert("status.enabled".to_string(), "Enabled".to_string());
+    translations.insert("status.disabled".to_string(), "Disabled".to_string());
+    translations.insert("status.active".to_string(), "Active".to_string());
+    translations.insert("status.inactive".to_string(), "Inactive".to_string());
+    translations.insert("status.unknown".to_string(), "Unknown".to_string());
+    translations.insert("status.available".to_string(), "Available".to_string());
+    translations.insert("status.unavailable".to_string(), "Unavailable".to_string());
+
+    // Change Types
+    translations.insert("change.added".to_string(), "Added".to_string());
+    translations.insert("change.removed".to_string(), "Removed".to_string());
+    translations.insert("change.modified".to_string(), "Modified".to_string());
+    translations.insert("change.upgraded".to_string(), "Upgraded".to_string());
+    translations.insert("change.downgraded".to_string(), "Downgraded".to_string());
+    translations.insert("change.replaced".to_string(), "Replaced".to_string());
+    translations.insert("change.migrated".to_string(), "Migrated".to_string());
+
+    // Network Configuration
+    translations.insert("network.bonding_slaves".to_string(), "Bonding Slaves".to_string());
+    translations.insert("network.config".to_string(), "Network Configuration".to_string());
+    translations.insert("network.ipv4_config".to_string(), "IPv4 Configuration".to_string());
+    translations.insert("network.ipv6_config".to_string(), "IPv6 Configuration".to_string());
+    translations.insert("network.mac_address".to_string(), "MAC Address".to_string());
+    translations.insert("network.ip_address".to_string(), "IP Address".to_string());
+    translations.insert("network.subnet_mask".to_string(), "Subnet Mask".to_string());
+    translations.insert("network.gateway".to_string(), "Gateway".to_string());
+    translations.insert("network.dns_servers".to_string(), "DNS Servers".to_string());
+    translations.insert("network.speed".to_string(), "Speed".to_string());
+    translations.insert("network.duplex".to_string(), "Duplex".to_string());
+    translations.insert("network.mtu".to_string(), "MTU".to_string());
+    translations.insert("network.bond_mode".to_string(), "Bond Mode".to_string());
+    translations.insert("network.vlan".to_string(), "VLAN".to_string());
+    translations.insert("network.bridge".to_string(), "Bridge".to_string());
+
+    // Storage
+    translations.insert("storage.partitions".to_string(), "Partitions".to_string());
+    translations.insert("storage.partition".to_string(), "Partition".to_string());
+    translations.insert("storage.mount_point".to_string(), "Mount Point".to_string());
+    translations.insert("storage.file_system".to_string(), "File System".to_string());
+    translations.insert("storage.used".to_string(), "Used".to_string());
+    translations.insert("storage.available".to_string(), "Available".to_string());
+    translations.insert("storage.usage_percent".to_string(), "Usage %".to_string());
+    translations.insert("storage.disk_type".to_string(), "Disk Type".to_string());
+    translations.insert("storage.rotational_speed".to_string(), "Rotational Speed".to_string());
+    translations.insert("storage.form_factor".to_string(), "Form Factor".to_string());
+    translations.insert("storage.smart_status".to_string(), "SMART Status".to_string());
+
+    // Memory
+    translations.insert("memory.modules_detail".to_string(), "Memory Modules Detail".to_string());
+    translations.insert("memory.module".to_string(), "Memory Module".to_string());
+    translations.insert("memory.type".to_string(), "Type".to_string());
+    translations.insert("memory.speed".to_string(), "Speed".to_string());
+    translations.insert("memory.size".to_string(), "Size".to_string());
+    translations.insert("memory.bank_label".to_string(), "Bank Label".to_string());
+    translations.insert("memory.manufacturer".to_string(), "Manufacturer".to_string());
+    translations.insert("memory.serial_number".to_string(), "Serial Number".to_string());
+    translations.insert("memory.part_number".to_string(), "Part Number".to_string());
+    translations.insert("memory.ecc".to_string(), "ECC".to_string());
+    translations.insert("memory.voltage".to_string(), "Voltage".to_string());
+    translations.insert("memory.frequency".to_string(), "Frequency".to_string());
+    translations.insert("memory.bandwidth".to_string(), "Bandwidth".to_string());
+    translations.insert("memory.channels".to_string(), "Channels".to_string());
+
     // 未知值
     translations.insert("no_discrete_gpu".to_string(), "No Discrete GPU".to_string());
     translations.insert("unknown_system".to_string(), "Unknown System".to_string());
@@ -628,6 +750,12 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("warning".to_string(), "Warning".to_string());
     translations.insert("info".to_string(), "Info".to_string());
 
+    // Notification
+    translations.insert("notification.success".to_string(), "Success".to_string());
+    translations.insert("notification.info".to_string(), "Information".to_string());
+    translations.insert("notification.warning".to_string(), "Warning".to_string());
+    translations.insert("notification.error".to_string(), "Error".to_string());
+
     // 表格列标题
     translations.insert("hostname".to_string(), "Hostname".to_string());
     translations.insert("ip_address".to_string(), "IP Address".to_string());
@@ -666,6 +794,8 @@ pub fn get_translations() -> HashMap<String, String> {
         "Confirm Delete".to_string(),
     );
     translations.insert("common.delete".to_string(), "Delete".to_string());
+    translations.insert("common.export".to_string(), "Export".to_string());
+    translations.insert("common.reset".to_string(), "Reset".to_string());
 
     // Projects
     translations.insert(
@@ -981,6 +1111,12 @@ pub fn get_translations() -> HashMap<String, String> {
         "Server Model".to_string(),
     );
 
+    // Stats Filter
+    translations.insert("stats.filter.cpu_vendor".to_string(), "CPU Vendor".to_string());
+    translations.insert("stats.filter.gpu_vendor".to_string(), "GPU Vendor".to_string());
+    translations.insert("stats.filter.memory_capacity".to_string(), "Memory Capacity (GB)".to_string());
+    translations.insert("stats.filter.os".to_string(), "Operating System".to_string());
+
     // Client Setup
     translations.insert(
         "client_setup.parse_error".to_string(),
@@ -1183,6 +1319,7 @@ pub fn get_translations() -> HashMap<String, String> {
         "Create Cost Center".to_string(),
     );
     translations.insert("dictionaries.create".to_string(), "Create".to_string());
+    translations.insert("dictionaries.create_item".to_string(), "Create Item".to_string());
     translations.insert("dictionaries.actions".to_string(), "Actions".to_string());
     translations.insert(
         "dictionaries.confirm_delete_title".to_string(),
@@ -1391,6 +1528,8 @@ pub fn get_translations() -> HashMap<String, String> {
         "client_edit.unassigned".to_string(),
         "Unassigned".to_string(),
     );
+    translations.insert("client_edit.save".to_string(), "Save".to_string());
+    translations.insert("client_edit.cancel".to_string(), "Cancel".to_string());
 
     translations
 }

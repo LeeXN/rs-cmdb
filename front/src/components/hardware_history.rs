@@ -4,6 +4,7 @@ use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::services::api::{fetch_hardware_history, ApiError};
 use crate::types::Hardware;
+use crate::utils::i18n_helper::t as tr;
 use lucide_yew::{
     CircleAlert, CircleMinus, CirclePlus, Eye, History, Pencil, RefreshCw, TrendingDown,
     TrendingUp, X,
@@ -108,7 +109,7 @@ impl Component for HardwareHistory {
             <Card>
                 <CardHeader>
                     <div class="flex justify-between items-center">
-                        <CardTitle>{"硬件变更历史"}</CardTitle>
+                        <CardTitle>{tr("hardware.history.title")}</CardTitle>
                         <Button
                             variant={ButtonVariant::Outline}
                             size={ButtonSize::Sm}
@@ -120,7 +121,7 @@ impl Component for HardwareHistory {
                             } else {
                                 html! { <RefreshCw class="h-4 w-4 mr-2" /> }
                             }}
-                            {if self.loading { "加载中..." } else { "刷新" }}
+                            {if self.loading { tr("common.loading") } else { tr("common.refresh") }}
                         </Button>
                     </div>
                 </CardHeader>
@@ -138,7 +139,7 @@ impl HardwareHistory {
             return html! {
                 <div class="flex flex-col items-center justify-center p-8 text-muted-foreground">
                     <RefreshCw class="h-8 w-8 animate-spin mb-2" />
-                    <p>{"正在加载硬件历史..."}</p>
+                    <p>{tr("hardware.history.loading")}</p>
                 </div>
             };
         }
@@ -147,7 +148,7 @@ impl HardwareHistory {
             return html! {
                 <div class="rounded-md bg-destructive/15 p-4 text-destructive flex items-center gap-2 mb-4">
                     <CircleAlert class="h-5 w-5" />
-                    <span>{"错误: "}{error}</span>
+                    <span>{tr("common.error_prefix")}{error}</span>
                 </div>
             };
         }
@@ -156,7 +157,7 @@ impl HardwareHistory {
             return html! {
                 <div class="flex flex-col items-center justify-center p-8 text-muted-foreground">
                     <History class="h-12 w-12 mb-2 opacity-50" />
-                    <p>{"暂无硬件变更历史"}</p>
+                    <p>{tr("hardware.history.empty")}</p>
                 </div>
             };
         }
@@ -167,10 +168,10 @@ impl HardwareHistory {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>{"时间"}</TableHead>
-                                <TableHead>{"变更内容"}</TableHead>
-                                <TableHead>{"变更类型"}</TableHead>
-                                <TableHead>{"操作"}</TableHead>
+                                <TableHead>{tr("hardware.history.time")}</TableHead>
+                                <TableHead>{tr("hardware.history.change")}</TableHead>
+                                <TableHead>{tr("hardware.history.change_type")}</TableHead>
+                                <TableHead>{tr("common.actions")}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -256,7 +257,7 @@ impl HardwareHistory {
                         variant={ButtonVariant::Ghost}
                         size={ButtonSize::Icon}
                         onclick={ctx.link().callback(move |_| HardwareHistoryMsg::SelectHistory(index))}
-                        title="查看详情"
+                        title={tr("hardware.history.view_details")}
                     >
                         <Eye class="h-4 w-4" />
                     </Button>
@@ -276,11 +277,11 @@ impl HardwareHistory {
                 {
                     change_types.iter().map(|(change_type, count)| {
                         let (variant, icon, text) = match change_type {
-                            ChangeType::Added => (BadgeVariant::Success, html! { <CirclePlus class="h-3 w-3 mr-1" /> }, "新增"),
-                            ChangeType::Removed => (BadgeVariant::Destructive, html! { <CircleMinus class="h-3 w-3 mr-1" /> }, "移除"),
-                            ChangeType::Modified => (BadgeVariant::Info, html! { <Pencil class="h-3 w-3 mr-1" /> }, "修改"),
-                            ChangeType::Upgraded => (BadgeVariant::Default, html! { <TrendingUp class="h-3 w-3 mr-1" /> }, "升级"),
-                            ChangeType::Downgraded => (BadgeVariant::Warning, html! { <TrendingDown class="h-3 w-3 mr-1" /> }, "降级"),
+                            ChangeType::Added => (BadgeVariant::Success, html! { <CirclePlus class="h-3 w-3 mr-1" /> }, tr("hardware.change.added")),
+                            ChangeType::Removed => (BadgeVariant::Destructive, html! { <CircleMinus class="h-3 w-3 mr-1" /> }, tr("hardware.change.removed")),
+                            ChangeType::Modified => (BadgeVariant::Info, html! { <Pencil class="h-3 w-3 mr-1" /> }, tr("hardware.change.modified")),
+                            ChangeType::Upgraded => (BadgeVariant::Default, html! { <TrendingUp class="h-3 w-3 mr-1" /> }, tr("hardware.change.upgraded")),
+                            ChangeType::Downgraded => (BadgeVariant::Warning, html! { <TrendingDown class="h-3 w-3 mr-1" /> }, tr("hardware.change.downgraded")),
                         };
 
                         html! {

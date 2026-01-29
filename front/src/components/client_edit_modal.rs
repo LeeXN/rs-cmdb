@@ -164,7 +164,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                         onclick={props.on_cancel.reform(|_| ())}
                     >
                         <X class="h-4 w-4" />
-                        <span class="sr-only">{"Close"}</span>
+                        <span class="sr-only">{t.t("common.close")}</span>
                     </Button>
                 </ModalHeader>
 
