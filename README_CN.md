@@ -272,6 +272,8 @@ export CMDB_JWT_SECRET=$(openssl rand -hex 64)
 - 至少一个数字 (0-9)
 - 至少一个特殊字符
 
+注意：管理员初始密码目前不支持写入 `config/default.toml`，仅支持通过环境变量 `CMDB_ADMIN_PASSWORD` 或首次启动时的交互式输入提供。
+
 **设置安全的管理员密码：**
 
 ```bash
@@ -340,7 +342,7 @@ capacity = 1000            # 内部消息队列容量
 
 **安全变量：**
 - `CMDB_JWT_SECRET` - **必需**，最少 32 个字符（使用 `openssl rand -base64 32` 生成）
-- `CMDB_ADMIN_PASSWORD` - **首次启动时必需**，必须满足复杂度要求
+- `CMDB_ADMIN_PASSWORD` - **首次启动时必需**，必须满足复杂度要求（仅支持环境变量/交互输入，不支持写入 TOML 配置文件）
 
 **可选变量：**
 - `CMDB_HOST` - 服务器绑定地址（默认：`0.0.0.0`）

@@ -1589,3 +1589,67 @@ pub async fn delete_user(id: &str) -> Result<(), ApiError> {
         }),
     }
 }
+
+/// Export filtered clients with hardware data
+pub async fn export_filtered_clients(
+    request: crate::types::ExportFilterRequest,
+) -> Result<crate::types::ExportFilterResponse, ApiError> {
+    let url = format!("{}/clients/export_filtered", API_BASE_URL);
+
+    match request_post(&url, &request).await {
+        Ok(response) => {
+            if response.status() == 200 {
+                match response.json::<ApiResponse<crate::types::ExportFilterResponse>>().await {
+                    Ok(data) => {
+                        if let Some(result) = data.data {
+                            Ok(result)
+                        } else {
+                            Err(ApiError {
+                                message: "导出失败: 无数据返回".to_string(),
+                            })
+                        }
+                    }
+                    Err(err) => {
+                        let error_msg = format!("解析导出数据失败: {}", err);
+                        error!("{}", error_msg);
+                        Err(ApiError { message: error_msg })
+                    }
+                }
+            } else if response.status() == 400 {
+                match response.json::<ApiResponse<crate::types::ExportFilterResponse>>().await {
+                    Ok(data) => Err(ApiError {
+                        message: data.message,
+                    }),
+                    Err(_) => Err(ApiError {
+                        message: "导出失败: 请求参数错误或导出数量超过限制".to_string(),
+                    }),
+                }
+            } else {
+                if response.status() == 401 {
+                    return Err(ApiError {
+                        message: "Unauthorized".to_string(),
+                    });
+                }
+                let error_msg = format!("导出失败: HTTP {}", response.status());
+                error!("{}", error_msg);
+                Err(ApiError { message: error_msg })
+            }
+        }
+        Err(err) => {
+            let error_msg = format!("导出请求失败: {}", err);
+            error!("{}", error_msg);
+            Err(ApiError { message: error_msg })
+        }
+    }
+}
+
+/// Callback-based export filtered clients
+pub fn get_export_filtered_clients(
+    request: crate::types::ExportFilterRequest,
+    callback: Callback<Result<crate::types::ExportFilterResponse, ApiError>>,
+) {
+    spawn_local(async move {
+        let result = export_filtered_clients(request).await;
+        callback.emit(result);
+    });
+}

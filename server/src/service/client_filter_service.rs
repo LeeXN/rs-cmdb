@@ -543,6 +543,69 @@ impl ClientFilterService {
             && matches_storage
     }
 
+    /// Get hardware export data for a client
+    pub async fn get_hardware_export_data(
+        &self,
+        client_id: &str,
+    ) -> Result<Option<common::models::ClientHardwareExport>, String> {
+        let client = match self.client_repo.get(client_id).await {
+            Ok(Some(client)) => client,
+            Ok(None) => return Ok(None),
+            Err(err) => return Err(err.to_string()),
+        };
+
+        let hardware = self
+            .hardware_repo
+            .get_hardware(client_id)
+            .await
+            .unwrap_or(None);
+
+        let export_data = common::models::ClientHardwareExport {
+            client_id: client.id.clone(),
+            hostname: client.hostname.clone(),
+            ip_address: client.ip_address.clone(),
+            os: client.os.clone().unwrap_or_default(),
+            kernel_version: client.kernel_version.clone().unwrap_or_default(),
+            sys_vendor: client.sys_vendor.clone().unwrap_or_default(),
+            product_name: client.product_name.clone().unwrap_or_default(),
+            serial_number: client.serial_number.clone().unwrap_or_default(),
+            last_seen: client.last_seen.clone().unwrap_or_default(),
+            registered_at: client.registered_at.clone().unwrap_or_default(),
+            cpu_vendor: hardware.as_ref().map(|h| h.cpu.vendor_id.clone()).unwrap_or_default(),
+            cpu_model: hardware.as_ref().map(|h| h.cpu.model_name.clone()).unwrap_or_default(),
+            cpu_cores: hardware.as_ref().map(|h| h.cpu.cores).unwrap_or(0),
+            cpu_threads: hardware.as_ref().map(|h| h.cpu.threads).unwrap_or(0),
+            cpu_frequency: hardware.as_ref().map(|h| format!("{} MHz", h.cpu.speed)).unwrap_or_default(),
+            memory_total: hardware.as_ref().map(|h| format!("{} GB", h.ram.total_size)).unwrap_or_default(),
+            memory_vendor: hardware.as_ref().map(|h| h.ram.vendor.clone()).unwrap_or_default(),
+            memory_speed: hardware.as_ref().map(|h| format!("{} MHz", h.ram.speed)).unwrap_or_default(),
+            memory_modules: hardware.as_ref().map(|h| h.ram.count as u32).unwrap_or(0),
+            gpu_count: hardware.as_ref().map(|h| h.gpus.len() as u32).unwrap_or(0),
+            gpu_models: hardware.as_ref().map(|h| {
+                h.gpus.iter().map(|g| g.model.clone()).collect::<Vec<_>>().join(", ")
+            }).unwrap_or_default(),
+            gpu_vendors: hardware.as_ref().map(|h| {
+                h.gpus.iter().map(|g| g.vendor.clone()).collect::<Vec<_>>().join(", ")
+            }).unwrap_or_default(),
+            storage_count: hardware.as_ref().map(|h| h.disks.len() as u32).unwrap_or(0),
+            storage_total: hardware.as_ref().map(|h| {
+                h.disks.iter().map(|d| format!("{} {}", d.size, d.size_unit)).collect::<Vec<_>>().join(", ")
+            }).unwrap_or_default(),
+            storage_types: hardware.as_ref().map(|h| {
+                h.disks.iter().map(|d| d.storage_type.to_string()).collect::<Vec<_>>().join(", ")
+            }).unwrap_or_default(),
+            network_count: hardware.as_ref().map(|h| h.nics.len() as u32).unwrap_or(0),
+            network_types: hardware.as_ref().map(|h| {
+                h.nics.iter().map(|n| n.nic_type.to_string()).collect::<Vec<_>>().join(", ")
+            }).unwrap_or_default(),
+            network_speeds: hardware.as_ref().map(|h| {
+                h.nics.iter().map(|n| format!("{} Mbps", n.speed)).collect::<Vec<_>>().join(", ")
+            }).unwrap_or_default(),
+        };
+
+        Ok(Some(export_data))
+    }
+
     fn generate_filter_options(&self, hardware_list: &[Hardware]) -> FilterOptions {
         use std::collections::HashSet;
 

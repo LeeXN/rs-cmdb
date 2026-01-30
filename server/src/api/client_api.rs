@@ -16,7 +16,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_macros::debug_handler;
-use common::models::{ApiResponse, Client, ClientQuery, FilterOptions, PaginatedResult};
+use common::models::{ApiResponse, Client, ClientQuery, ExportFilterRequest, ExportFilterResponse, FilterOptions, PaginatedResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{error, info, instrument};
@@ -634,6 +634,96 @@ pub async fn import_clients(
                     .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                 Json(response),
             )
+        }
+    }
+}
+
+/// Export filtered clients with hardware data
+#[debug_handler]
+#[instrument(skip(client_filter_service))]
+pub async fn export_filtered_clients(
+    Extension(client_filter_service): Extension<Arc<ClientFilterService>>,
+    Json(request): Json<ExportFilterRequest>,
+) -> impl IntoResponse {
+    info!("Exporting filtered clients");
+
+    const MAX_EXPORT_LIMIT: usize = 5000;
+
+    let filter_query = HardwareFilterQuery {
+        search_term: request.search_term,
+        os_filter: request.os,
+        os_kernel_filter: request.os_kernel,
+        cpu_vendor_filter: request.cpu_vendor,
+        cpu_model_filter: request.cpu_model,
+        gpu_vendor_filter: request.gpu_vendor,
+        gpu_model_filter: request.gpu_model,
+        memory_min_filter: request.memory_min,
+        memory_max_filter: request.memory_max,
+        server_vendor_filter: request.server_vendor,
+        server_model_filter: None,
+        network_type_filter: request.network_type,
+        network_model_filter: request.network_model,
+        storage_type_filter: request.storage_type,
+        status_filter: request.status,
+        client_status_filter: request.client_status,
+        environment_filter: request.environment,
+        rack_id_filter: request.rack_id,
+        project_id_filter: request.project_id,
+        owner_id_filter: request.owner_id,
+    };
+
+    match client_filter_service
+        .filter_clients_by_hardware(&filter_query)
+        .await
+    {
+        Ok(clients) => {
+            let total_count = clients.len();
+
+            if total_count > MAX_EXPORT_LIMIT {
+                let response = ApiResponse::<ExportFilterResponse> {
+                    status: 400,
+                    message: format!(
+                        "Export limit exceeded. Found {} clients, maximum allowed is {}. Please apply more filters to reduce the result set.",
+                        total_count, MAX_EXPORT_LIMIT
+                    ),
+                    data: None,
+                };
+                return (StatusCode::BAD_REQUEST, Json(response));
+            }
+
+            let mut hardware_data = Vec::new();
+            for client in &clients {
+                match client_filter_service.get_hardware_export_data(&client.id).await {
+                    Ok(Some(data)) => hardware_data.push(data),
+                    Ok(None) => {
+                        info!("No hardware data for client: {}", client.id);
+                    }
+                    Err(err) => {
+                        error!("Failed to get hardware data for {}: {}", client.id, err);
+                    }
+                }
+            }
+
+            let response = ApiResponse {
+                status: 200,
+                message: format!("Successfully prepared {} clients for export", total_count),
+                data: Some(ExportFilterResponse {
+                    clients,
+                    hardware_data,
+                    total_count,
+                }),
+            };
+
+            (StatusCode::OK, Json(response))
+        }
+        Err(err) => {
+            error!("Failed to filter clients for export: {}", err);
+            let response = ApiResponse::<ExportFilterResponse> {
+                status: 500,
+                message: err,
+                data: None,
+            };
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
     }
 }

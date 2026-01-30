@@ -120,8 +120,8 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
     };
 
     // 导出功能
-    let export_csv = create_export_callback(dispatcher.clone(), &state.clients, "csv");
-    let export_json = create_export_callback(dispatcher.clone(), &state.clients, "json");
+    let export_csv = create_export_callback(dispatcher.clone(), state, "csv");
+    let export_json = create_export_callback(dispatcher.clone(), state, "json");
 
     html! {
         <Card class="mb-6">
@@ -476,37 +476,55 @@ fn render_input_filter(
 
 fn create_export_callback(
     dispatcher: UseReducerDispatcher<ClientsState>,
-    filtered_clients: &[crate::types::Client],
+    state: &ClientsState,
     format: &str,
 ) -> Callback<MouseEvent> {
     let dispatcher = dispatcher.clone();
-    let client_ids: Vec<String> = filtered_clients.iter().map(|c| c.id.clone()).collect();
     let format = format.to_string();
+    let search_term = state.search_term.clone();
+    let filters = state.filters.clone();
 
     Callback::from(move |_: MouseEvent| {
         dispatcher.dispatch(ClientsAction::SetExporting(true));
 
-        if !client_ids.is_empty() {
-            api::get_export_data(Callback::from({
+        let request = crate::types::ExportFilterRequest {
+            search_term: Some(search_term.clone()).filter(|s| !s.is_empty()),
+            status: Some(filters.status.clone()).filter(|s| !s.is_empty()),
+            client_status: Some(filters.client_status.clone()).filter(|s| !s.is_empty()),
+            environment: Some(filters.environment.clone()).filter(|s| !s.is_empty()),
+            rack_id: Some(filters.rack_id.clone()).filter(|s| !s.is_empty()),
+            project_id: Some(filters.project_id.clone()).filter(|s| !s.is_empty()),
+            owner_id: Some(filters.owner_id.clone()).filter(|s| !s.is_empty()),
+            os: Some(filters.os.clone()).filter(|s| !s.is_empty()),
+            os_kernel: Some(filters.os_kernel.clone()).filter(|s| !s.is_empty()),
+            server_vendor: Some(filters.server_vendor.clone()).filter(|s| !s.is_empty()),
+            cpu_vendor: Some(filters.cpu_vendor.clone()).filter(|s| !s.is_empty()),
+            cpu_model: Some(filters.cpu_model.clone()).filter(|s| !s.is_empty()),
+            gpu_vendor: Some(filters.gpu_vendor.clone()).filter(|s| !s.is_empty()),
+            gpu_model: Some(filters.gpu_model.clone()).filter(|s| !s.is_empty()),
+            memory_min: filters.memory_min.parse().ok(),
+            memory_max: filters.memory_max.parse().ok(),
+            network_type: Some(filters.network_type.clone()).filter(|s| !s.is_empty()),
+            network_model: Some(filters.network_model.clone()).filter(|s| !s.is_empty()),
+            storage_type: Some(filters.storage_type.clone()).filter(|s| !s.is_empty()),
+        };
+
+        api::get_export_filtered_clients(
+            request,
+            Callback::from({
                 let dispatcher = dispatcher.clone();
-                let client_ids = client_ids.clone();
                 let format = format.clone();
-                move |result: Result<Vec<ClientHardwareExport>, ApiError>| {
+                move |result: Result<crate::types::ExportFilterResponse, ApiError>| {
                     dispatcher.dispatch(ClientsAction::SetExporting(false));
                     match result {
-                        Ok(all_data) => {
-                            let filtered_data: Vec<ClientHardwareExport> = all_data
-                                .into_iter()
-                                .filter(|item| client_ids.contains(&item.client_id))
-                                .collect();
-
+                        Ok(export_response) => {
                             let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
                             let filename = format!("cmdb_filtered_export_{}.{}", timestamp, format);
 
                             let result = if format == "csv" {
-                                export_to_csv(&filtered_data, &filename)
+                                export_to_csv(&export_response.hardware_data, &filename)
                             } else {
-                                export_to_json(&filtered_data, &filename)
+                                export_to_json(&export_response.hardware_data, &filename)
                             };
 
                             if let Err(err) = result {
@@ -521,9 +539,7 @@ fn create_export_callback(
                         }
                     }
                 }
-            }));
-        } else {
-            dispatcher.dispatch(ClientsAction::SetExporting(false));
-        }
+            }),
+        );
     })
 }

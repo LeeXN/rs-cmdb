@@ -272,6 +272,8 @@ On first startup, the server checks if an admin user exists. If not, it creates 
 - At least one number (0-9)
 - At least one special character
 
+> **Note:** The initial admin password cannot be set via `config/default.toml`. It must be provided via the `CMDB_ADMIN_PASSWORD` environment variable or interactively on first startup.
+
 **Set a secure admin password:**
 
 ```bash

@@ -184,6 +184,10 @@ pub fn create_router(
             get(client_api::filter_clients_by_hardware),
         )
         .route("/api/v1/clients/export", get(client_api::export_clients))
+        .route(
+            "/api/v1/clients/export_filtered",
+            post(client_api::export_filtered_clients),
+        )
         .route("/api/v1/clients/{id}", get(client_api::get_client))
         .route("/api/v1/users", get(person_api::list_persons))
         .route("/api/v1/users/{id}", get(person_api::get_person))

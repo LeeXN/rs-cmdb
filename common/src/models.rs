@@ -508,6 +508,38 @@ pub struct ClientQuery {
     pub status: Option<String>,
 }
 
+/// Export filter request for filtered client export
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExportFilterRequest {
+    pub search_term: Option<String>,
+    pub status: Option<String>,
+    pub client_status: Option<String>,
+    pub environment: Option<String>,
+    pub rack_id: Option<String>,
+    pub project_id: Option<String>,
+    pub owner_id: Option<String>,
+    pub os: Option<String>,
+    pub os_kernel: Option<String>,
+    pub server_vendor: Option<String>,
+    pub cpu_vendor: Option<String>,
+    pub cpu_model: Option<String>,
+    pub gpu_vendor: Option<String>,
+    pub gpu_model: Option<String>,
+    pub memory_min: Option<u32>,
+    pub memory_max: Option<u32>,
+    pub network_type: Option<String>,
+    pub network_model: Option<String>,
+    pub storage_type: Option<String>,
+}
+
+/// Export filter response containing filtered clients with hardware data
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ExportFilterResponse {
+    pub clients: Vec<Client>,
+    pub hardware_data: Vec<ClientHardwareExport>,
+    pub total_count: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RackQuery {
     pub page: Option<usize>,

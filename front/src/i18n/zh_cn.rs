@@ -36,6 +36,13 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("network.title".to_string(), "网络".to_string());
     translations.insert("storage.title".to_string(), "存储".to_string());
 
+    // Hardware Component Titles (with hardware. prefix)
+    translations.insert("hardware.cpu.title".to_string(), "CPU".to_string());
+    translations.insert("hardware.gpu.title".to_string(), "GPU".to_string());
+    translations.insert("hardware.memory.title".to_string(), "内存".to_string());
+    translations.insert("hardware.network.title".to_string(), "网络".to_string());
+    translations.insert("hardware.storage.title".to_string(), "存储".to_string());
+
     // Hardware Labels
     translations.insert("label.vendor".to_string(), "厂商".to_string());
     translations.insert("label.model".to_string(), "型号".to_string());
@@ -57,6 +64,71 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("label.power".to_string(), "功率".to_string());
     translations.insert("label.utilization".to_string(), "利用率".to_string());
 
+    // Hardware Labels (with hardware. prefix)
+    translations.insert("hardware.label.vendor".to_string(), "厂商".to_string());
+    translations.insert("hardware.label.model".to_string(), "型号".to_string());
+    translations.insert("hardware.label.frequency".to_string(), "频率".to_string());
+    translations.insert("hardware.label.cores".to_string(), "核心数".to_string());
+    translations.insert("hardware.label.threads".to_string(), "线程数".to_string());
+    translations.insert("hardware.label.device_id".to_string(), "设备ID".to_string());
+    translations.insert(
+        "hardware.label.driver_version".to_string(),
+        "驱动版本".to_string(),
+    );
+    translations.insert(
+        "hardware.label.serial_number".to_string(),
+        "序列号".to_string(),
+    );
+    translations.insert("hardware.label.capacity".to_string(), "容量".to_string());
+    translations.insert("hardware.label.speed".to_string(), "速度".to_string());
+    translations.insert(
+        "hardware.label.firmware_version".to_string(),
+        "固件版本".to_string(),
+    );
+    translations.insert("hardware.label.slot".to_string(), "插槽".to_string());
+    translations.insert("hardware.label.type".to_string(), "类型".to_string());
+    translations.insert(
+        "hardware.label.part_number".to_string(),
+        "部件号".to_string(),
+    );
+    translations.insert(
+        "hardware.label.memory_count".to_string(),
+        "内存数量".to_string(),
+    );
+    translations.insert("hardware.label.sticks".to_string(), "条".to_string());
+    translations.insert("hardware.label.devices".to_string(), "设备".to_string());
+    translations.insert("hardware.label.unknown".to_string(), "未知".to_string());
+    translations.insert(
+        "hardware.label.interface_name".to_string(),
+        "接口名称".to_string(),
+    );
+    translations.insert(
+        "hardware.label.nic_type".to_string(),
+        "网卡类型".to_string(),
+    );
+    translations.insert("hardware.label.pci_slot".to_string(), "PCI插槽".to_string());
+    translations.insert("hardware.label.bandwidth".to_string(), "带宽".to_string());
+    translations.insert("hardware.label.status".to_string(), "状态".to_string());
+    translations.insert("hardware.label.driver".to_string(), "驱动".to_string());
+    translations.insert(
+        "hardware.label.ib_node_type".to_string(),
+        "IB节点类型".to_string(),
+    );
+    translations.insert("hardware.label.dhcp".to_string(), "DHCP".to_string());
+    translations.insert(
+        "hardware.label.ip_address".to_string(),
+        "IP地址".to_string(),
+    );
+    translations.insert(
+        "hardware.label.subnet_mask".to_string(),
+        "子网掩码".to_string(),
+    );
+    translations.insert("hardware.label.gateway".to_string(), "网关".to_string());
+    translations.insert("hardware.label.channel".to_string(), "通道".to_string());
+    translations.insert("hardware.label.user_id".to_string(), "用户ID".to_string());
+    translations.insert("hardware.label.username".to_string(), "用户名".to_string());
+    translations.insert("hardware.label.privilege".to_string(), "权限".to_string());
+
     // Hardware History
     translations.insert("history.change".to_string(), "变更".to_string());
     translations.insert("history.change_type".to_string(), "变更类型".to_string());
@@ -65,6 +137,27 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("history.time".to_string(), "时间".to_string());
     translations.insert("history.title".to_string(), "硬件历史".to_string());
     translations.insert("history.view_details".to_string(), "查看详情".to_string());
+
+    // Hardware History (with hardware. prefix)
+    translations.insert("hardware.history.title".to_string(), "硬件历史".to_string());
+    translations.insert("hardware.history.change".to_string(), "变更".to_string());
+    translations.insert(
+        "hardware.history.change_type".to_string(),
+        "变更类型".to_string(),
+    );
+    translations.insert(
+        "hardware.history.empty".to_string(),
+        "无历史记录".to_string(),
+    );
+    translations.insert(
+        "hardware.history.loading".to_string(),
+        "加载中...".to_string(),
+    );
+    translations.insert("hardware.history.time".to_string(), "时间".to_string());
+    translations.insert(
+        "hardware.history.view_details".to_string(),
+        "查看详情".to_string(),
+    );
 
     // IPMI
     translations.insert("ipmi.access_denied".to_string(), "访问被拒绝".to_string());
@@ -85,6 +178,58 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("ipmi.netmask".to_string(), "子网掩码".to_string());
     translations.insert("ipmi.gateway".to_string(), "网关".to_string());
 
+    // IPMI (with hardware. prefix)
+    translations.insert("hardware.ipmi.users".to_string(), "用户".to_string());
+    translations.insert(
+        "hardware.ipmi.status_available".to_string(),
+        "可用".to_string(),
+    );
+    translations.insert("hardware.ipmi.status_error".to_string(), "错误".to_string());
+    translations.insert(
+        "hardware.ipmi.status_not_configured".to_string(),
+        "未配置".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.status_not_available".to_string(),
+        "不可用".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.status_access_denied".to_string(),
+        "访问被拒绝".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.not_configured".to_string(),
+        "IPMI未配置".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.not_available".to_string(),
+        "IPMI不可用".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.access_denied".to_string(),
+        "IPMI访问被拒绝".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.privilege_callback".to_string(),
+        "回调".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.privilege_user".to_string(),
+        "用户".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.privilege_operator".to_string(),
+        "操作员".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.privilege_admin".to_string(),
+        "管理员".to_string(),
+    );
+    translations.insert(
+        "hardware.ipmi.privilege_no_access".to_string(),
+        "无访问权限".to_string(),
+    );
+
     // Status
     translations.insert("status.online".to_string(), "在线".to_string());
     translations.insert("status.offline".to_string(), "离线".to_string());
@@ -96,6 +241,12 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("status.available".to_string(), "可用".to_string());
     translations.insert("status.unavailable".to_string(), "不可用".to_string());
 
+    // Status (with hardware. prefix)
+    translations.insert("hardware.status.online".to_string(), "在线".to_string());
+    translations.insert("hardware.status.offline".to_string(), "离线".to_string());
+    translations.insert("hardware.status.enabled".to_string(), "已启用".to_string());
+    translations.insert("hardware.status.disabled".to_string(), "已禁用".to_string());
+
     // Change Types
     translations.insert("change.added".to_string(), "已添加".to_string());
     translations.insert("change.removed".to_string(), "已移除".to_string());
@@ -105,8 +256,21 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("change.replaced".to_string(), "已替换".to_string());
     translations.insert("change.migrated".to_string(), "已迁移".to_string());
 
+    // Change Types (with hardware. prefix)
+    translations.insert("hardware.change.added".to_string(), "已添加".to_string());
+    translations.insert("hardware.change.removed".to_string(), "已移除".to_string());
+    translations.insert("hardware.change.modified".to_string(), "已修改".to_string());
+    translations.insert("hardware.change.upgraded".to_string(), "已升级".to_string());
+    translations.insert(
+        "hardware.change.downgraded".to_string(),
+        "已降级".to_string(),
+    );
+
     // Network Configuration
-    translations.insert("network.bonding_slaves".to_string(), "绑定从设备".to_string());
+    translations.insert(
+        "network.bonding_slaves".to_string(),
+        "绑定从设备".to_string(),
+    );
     translations.insert("network.config".to_string(), "网络配置".to_string());
     translations.insert("network.ipv4_config".to_string(), "IPv4配置".to_string());
     translations.insert("network.ipv6_config".to_string(), "IPv6配置".to_string());
@@ -120,6 +284,30 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("network.mtu".to_string(), "MTU".to_string());
     translations.insert("network.bond_mode".to_string(), "绑定模式".to_string());
     translations.insert("network.vlan".to_string(), "VLAN".to_string());
+
+    // Network Configuration (with hardware. prefix)
+    translations.insert(
+        "hardware.network.config".to_string(),
+        "网络配置".to_string(),
+    );
+    translations.insert(
+        "hardware.network.ipv4_config".to_string(),
+        "IPv4配置".to_string(),
+    );
+    translations.insert(
+        "hardware.network.ipv6_config".to_string(),
+        "IPv6配置".to_string(),
+    );
+    translations.insert(
+        "hardware.network.bonding_slaves".to_string(),
+        "绑定从设备".to_string(),
+    );
+
+    // Storage (with hardware. prefix)
+    translations.insert(
+        "hardware.storage.partitions".to_string(),
+        "分区".to_string(),
+    );
     translations.insert("network.bridge".to_string(), "网桥".to_string());
 
     // Storage
@@ -136,7 +324,10 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("storage.smart_status".to_string(), "SMART状态".to_string());
 
     // Memory
-    translations.insert("memory.modules_detail".to_string(), "内存模块详情".to_string());
+    translations.insert(
+        "memory.modules_detail".to_string(),
+        "内存模块详情".to_string(),
+    );
     translations.insert("memory.module".to_string(), "内存模块".to_string());
     translations.insert("memory.type".to_string(), "类型".to_string());
     translations.insert("memory.speed".to_string(), "速度".to_string());
@@ -988,7 +1179,10 @@ pub fn get_translations() -> HashMap<String, String> {
     // Stats Filter
     translations.insert("stats.filter.cpu_vendor".to_string(), "CPU厂商".to_string());
     translations.insert("stats.filter.gpu_vendor".to_string(), "GPU厂商".to_string());
-    translations.insert("stats.filter.memory_capacity".to_string(), "内存容量 (GB)".to_string());
+    translations.insert(
+        "stats.filter.memory_capacity".to_string(),
+        "内存容量 (GB)".to_string(),
+    );
     translations.insert("stats.filter.os".to_string(), "操作系统".to_string());
 
     // Client Setup
@@ -1188,7 +1382,10 @@ pub fn get_translations() -> HashMap<String, String> {
         "新建成本中心".to_string(),
     );
     translations.insert("dictionaries.create".to_string(), "新建".to_string());
-    translations.insert("dictionaries.create_item".to_string(), "新建项目".to_string());
+    translations.insert(
+        "dictionaries.create_item".to_string(),
+        "新建项目".to_string(),
+    );
     translations.insert("dictionaries.actions".to_string(), "操作".to_string());
     translations.insert(
         "dictionaries.confirm_delete_title".to_string(),
