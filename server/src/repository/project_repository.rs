@@ -74,26 +74,28 @@ impl ProjectRepository {
     /// Update manager to null for projects managed by a specific person
     pub async fn update_manager_to_null(&self, manager_id: &str) -> CmdbResult<()> {
         let manager_id = manager_id.to_string();
-        
-        self.db.update_all(
-            &self.key_prefix,
-            Box::new(move |_key, value| {
-                match serde_json::from_slice::<Project>(&value) {
-                    Ok(mut project) => {
-                        if project.manager_id.as_deref() == Some(&manager_id) {
-                            project.manager_id = None;
-                            match serde_json::to_vec(&project) {
-                                Ok(new_value) => Some(new_value),
-                                Err(_) => None // Skip update if serialization fails
+
+        self.db
+            .update_all(
+                &self.key_prefix,
+                Box::new(move |_key, value| {
+                    match serde_json::from_slice::<Project>(&value) {
+                        Ok(mut project) => {
+                            if project.manager_id.as_deref() == Some(&manager_id) {
+                                project.manager_id = None;
+                                match serde_json::to_vec(&project) {
+                                    Ok(new_value) => Some(new_value),
+                                    Err(_) => None, // Skip update if serialization fails
+                                }
+                            } else {
+                                None
                             }
-                        } else {
-                            None
                         }
+                        Err(_) => None, // Skip update if deserialization fails
                     }
-                    Err(_) => None // Skip update if deserialization fails
-                }
-            })
-        ).await
+                }),
+            )
+            .await
     }
 }
 

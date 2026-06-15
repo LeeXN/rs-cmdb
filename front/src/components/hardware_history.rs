@@ -2,13 +2,15 @@ use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
-use crate::services::api::{fetch_hardware_history, ApiError};
-use crate::types::Hardware;
-use crate::utils::i18n_helper::t as tr;
-use lucide_yew::{
+use crate::icons::{
     CircleAlert, CircleMinus, CirclePlus, Eye, History, Pencil, RefreshCw, TrendingDown,
     TrendingUp, X,
 };
+use crate::services::api::{fetch_hardware_history, ApiError};
+use crate::types::{
+    Hardware, HardwareHistoryChange, HardwareHistoryChangeType, HardwareHistoryEntry,
+};
+use crate::utils::i18n_helper::t as tr;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
 use yew::prelude::*;
@@ -20,33 +22,20 @@ pub struct HardwareHistoryProps {
 
 pub enum HardwareHistoryMsg {
     LoadHistory,
-    HistoryLoaded(Result<Vec<(String, Hardware)>, ApiError>),
+    HistoryLoaded(Result<Vec<HardwareHistoryEntry>, ApiError>),
     SelectHistory(usize),
+    LoadMore,
 }
 
 pub struct HardwareHistory {
-    history: Vec<(String, Hardware)>,
+    history: Vec<HardwareHistoryEntry>,
     loading: bool,
     error: Option<String>,
     selected_index: Option<usize>,
+    visible_count: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct HardwareChange {
-    pub component: String,
-    pub change_type: ChangeType,
-    pub old_value: String,
-    pub new_value: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ChangeType {
-    Added,
-    Removed,
-    Modified,
-    Upgraded,
-    Downgraded,
-}
+const HISTORY_PAGE_SIZE: usize = 50;
 
 impl Component for HardwareHistory {
     type Message = HardwareHistoryMsg;
@@ -61,6 +50,7 @@ impl Component for HardwareHistory {
             loading: true,
             error: None,
             selected_index: None,
+            visible_count: HISTORY_PAGE_SIZE,
         }
     }
 
@@ -87,6 +77,12 @@ impl Component for HardwareHistory {
                     Ok(history) => {
                         self.history = history;
                         self.error = None;
+                        self.visible_count = HISTORY_PAGE_SIZE;
+                        if let Some(index) = self.selected_index {
+                            if index >= self.history.len() {
+                                self.selected_index = None;
+                            }
+                        }
                     }
                     Err(err) => {
                         let error_message = err.message.clone();
@@ -98,7 +94,16 @@ impl Component for HardwareHistory {
                 true
             }
             HardwareHistoryMsg::SelectHistory(index) => {
-                self.selected_index = Some(index);
+                self.selected_index = if index == usize::MAX {
+                    None
+                } else {
+                    Some(index)
+                };
+                true
+            }
+            HardwareHistoryMsg::LoadMore => {
+                self.visible_count =
+                    (self.visible_count + HISTORY_PAGE_SIZE).min(self.history.len());
                 true
             }
         }
@@ -176,13 +181,31 @@ impl HardwareHistory {
                         </TableHeader>
                         <TableBody>
                             {
-                                self.history.iter().enumerate().map(|(index, (timestamp, hardware))| {
-                                    self.render_history_row(ctx, index, timestamp, hardware)
+                                self.history.iter().take(self.visible_count).enumerate().map(|(index, entry)| {
+                                    self.render_history_row(ctx, index, entry)
                                 }).collect::<Html>()
                             }
                         </TableBody>
                     </Table>
                 </div>
+
+                {
+                    if self.visible_count < self.history.len() {
+                        html! {
+                            <div class="flex justify-center">
+                                <Button
+                                    variant={ButtonVariant::Outline}
+                                    size={ButtonSize::Sm}
+                                    onclick={ctx.link().callback(|_| HardwareHistoryMsg::LoadMore)}
+                                >
+                                    {format!("{} ({}/{})", tr("common.load_more"), self.visible_count, self.history.len())}
+                                </Button>
+                            </div>
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
 
                 {self.render_selected_details(ctx)}
             </div>
@@ -193,27 +216,14 @@ impl HardwareHistory {
         &self,
         ctx: &Context<Self>,
         index: usize,
-        timestamp: &str,
-        hardware: &Hardware,
+        entry: &HardwareHistoryEntry,
     ) -> Html {
         let is_selected = self.selected_index == Some(index);
         let row_class = if is_selected { "bg-muted/50" } else { "" };
 
         // 格式化时间戳
-        let formatted_time = self.format_timestamp(timestamp);
-
-        // 计算与前一个版本的差异
-        let changes = if index < self.history.len() - 1 {
-            let previous_hardware = &self.history[index + 1].1;
-            self.calculate_hardware_changes(previous_hardware, hardware)
-        } else {
-            vec![HardwareChange {
-                component: "初始版本".to_string(),
-                change_type: ChangeType::Added,
-                old_value: "".to_string(),
-                new_value: "首次记录".to_string(),
-            }]
-        };
+        let formatted_time = self.format_timestamp(&entry.timestamp);
+        let changes = &entry.changes;
 
         html! {
             <TableRow class={row_class}>
@@ -250,7 +260,7 @@ impl HardwareHistory {
                     </div>
                 </TableCell>
                 <TableCell>
-                    {self.render_change_badges(&changes)}
+                    {self.render_change_badges(changes)}
                 </TableCell>
                 <TableCell>
                     <Button
@@ -266,10 +276,10 @@ impl HardwareHistory {
         }
     }
 
-    fn render_change_badges(&self, changes: &[HardwareChange]) -> Html {
+    fn render_change_badges(&self, changes: &[HardwareHistoryChange]) -> Html {
         let mut change_types = std::collections::HashMap::new();
         for change in changes {
-            *change_types.entry(&change.change_type).or_insert(0) += 1;
+            *change_types.entry(change.change_type.clone()).or_insert(0) += 1;
         }
 
         html! {
@@ -277,11 +287,11 @@ impl HardwareHistory {
                 {
                     change_types.iter().map(|(change_type, count)| {
                         let (variant, icon, text) = match change_type {
-                            ChangeType::Added => (BadgeVariant::Success, html! { <CirclePlus class="h-3 w-3 mr-1" /> }, tr("hardware.change.added")),
-                            ChangeType::Removed => (BadgeVariant::Destructive, html! { <CircleMinus class="h-3 w-3 mr-1" /> }, tr("hardware.change.removed")),
-                            ChangeType::Modified => (BadgeVariant::Info, html! { <Pencil class="h-3 w-3 mr-1" /> }, tr("hardware.change.modified")),
-                            ChangeType::Upgraded => (BadgeVariant::Default, html! { <TrendingUp class="h-3 w-3 mr-1" /> }, tr("hardware.change.upgraded")),
-                            ChangeType::Downgraded => (BadgeVariant::Warning, html! { <TrendingDown class="h-3 w-3 mr-1" /> }, tr("hardware.change.downgraded")),
+                            HardwareHistoryChangeType::Added => (BadgeVariant::Success, html! { <CirclePlus class="h-3 w-3 mr-1" /> }, tr("hardware.change.added")),
+                            HardwareHistoryChangeType::Removed => (BadgeVariant::Destructive, html! { <CircleMinus class="h-3 w-3 mr-1" /> }, tr("hardware.change.removed")),
+                            HardwareHistoryChangeType::Modified => (BadgeVariant::Info, html! { <Pencil class="h-3 w-3 mr-1" /> }, tr("hardware.change.modified")),
+                            HardwareHistoryChangeType::Upgraded => (BadgeVariant::Default, html! { <TrendingUp class="h-3 w-3 mr-1" /> }, tr("hardware.change.upgraded")),
+                            HardwareHistoryChangeType::Downgraded => (BadgeVariant::Warning, html! { <TrendingDown class="h-3 w-3 mr-1" /> }, tr("hardware.change.downgraded")),
                         };
 
                         html! {
@@ -298,16 +308,9 @@ impl HardwareHistory {
 
     fn render_selected_details(&self, ctx: &Context<Self>) -> Html {
         if let Some(index) = self.selected_index {
-            if let Some((timestamp, hardware)) = self.history.get(index) {
-                let formatted_time = self.format_timestamp(timestamp);
-
-                // 计算详细变更
-                let changes = if index < self.history.len() - 1 {
-                    let previous_hardware = &self.history[index + 1].1;
-                    self.calculate_hardware_changes(previous_hardware, hardware)
-                } else {
-                    vec![]
-                };
+            if let Some(entry) = self.history.get(index) {
+                let formatted_time = self.format_timestamp(&entry.timestamp);
+                let changes = &entry.changes;
 
                 return html! {
                     <Card class="mt-6 bg-muted/30 border-dashed">
@@ -343,7 +346,7 @@ impl HardwareHistory {
                                     html! {}
                                 }
                             }
-                            {self.render_hardware_summary(hardware)}
+                            {entry.snapshot.as_ref().map(|hw| self.render_hardware_summary(hw)).unwrap_or_default()}
                         </CardContent>
                     </Card>
                 };
@@ -353,29 +356,29 @@ impl HardwareHistory {
         html! {}
     }
 
-    fn render_change_detail(&self, change: &HardwareChange) -> Html {
+    fn render_change_detail(&self, change: &HardwareHistoryChange) -> Html {
         let (icon, bg_class, text_class) = match change.change_type {
-            ChangeType::Added => (
+            HardwareHistoryChangeType::Added => (
                 html! { <CirclePlus class="h-5 w-5" /> },
                 "bg-green-500/10",
                 "text-green-500",
             ),
-            ChangeType::Removed => (
+            HardwareHistoryChangeType::Removed => (
                 html! { <CircleMinus class="h-5 w-5" /> },
                 "bg-red-500/10",
                 "text-red-500",
             ),
-            ChangeType::Modified => (
+            HardwareHistoryChangeType::Modified => (
                 html! { <Pencil class="h-5 w-5" /> },
                 "bg-blue-500/10",
                 "text-blue-500",
             ),
-            ChangeType::Upgraded => (
+            HardwareHistoryChangeType::Upgraded => (
                 html! { <TrendingUp class="h-5 w-5" /> },
                 "bg-primary/10",
                 "text-primary",
             ),
-            ChangeType::Downgraded => (
+            HardwareHistoryChangeType::Downgraded => (
                 html! { <TrendingDown class="h-5 w-5" /> },
                 "bg-yellow-500/10",
                 "text-yellow-500",
@@ -504,74 +507,19 @@ impl HardwareHistory {
         (timestamp.to_string(), "".to_string())
     }
 
-    fn calculate_hardware_changes(&self, old: &Hardware, new: &Hardware) -> Vec<HardwareChange> {
-        let mut changes = Vec::new();
-
-        // CPU Changes
-        if old.cpu.model_name != new.cpu.model_name {
-            changes.push(HardwareChange {
-                component: "CPU".to_string(),
-                change_type: ChangeType::Modified,
-                old_value: old.cpu.model_name.clone(),
-                new_value: new.cpu.model_name.clone(),
-            });
-        }
-
-        // RAM Changes
-        if old.ram.total_size != new.ram.total_size {
-            let change_type = if new.ram.total_size > old.ram.total_size {
-                ChangeType::Upgraded
-            } else {
-                ChangeType::Downgraded
-            };
-            changes.push(HardwareChange {
-                component: "内存容量".to_string(),
-                change_type,
-                old_value: format!("{} GB", old.ram.total_size),
-                new_value: format!("{} GB", new.ram.total_size),
-            });
-        }
-
-        // Disk Changes (Simplified check)
-        if old.disks.len() != new.disks.len() {
-            let change_type = if new.disks.len() > old.disks.len() {
-                ChangeType::Added
-            } else {
-                ChangeType::Removed
-            };
-            changes.push(HardwareChange {
-                component: "硬盘数量".to_string(),
-                change_type,
-                old_value: format!("{} 个", old.disks.len()),
-                new_value: format!("{} 个", new.disks.len()),
-            });
-        }
-
-        // GPU Changes (Simplified check)
-        if old.gpus.len() != new.gpus.len() {
-            let change_type = if new.gpus.len() > old.gpus.len() {
-                ChangeType::Added
-            } else {
-                ChangeType::Removed
-            };
-            changes.push(HardwareChange {
-                component: "显卡数量".to_string(),
-                change_type,
-                old_value: format!("{} 个", old.gpus.len()),
-                new_value: format!("{} 个", new.gpus.len()),
-            });
-        }
-
-        changes
-    }
-
-    fn format_change_description(&self, change: &HardwareChange) -> String {
+    fn format_change_description(&self, change: &HardwareHistoryChange) -> String {
         match change.change_type {
-            ChangeType::Added => format!("新增: {}", change.new_value),
-            ChangeType::Removed => format!("移除: {}", change.old_value),
-            ChangeType::Modified => format!("{} -> {}", change.old_value, change.new_value),
-            ChangeType::Upgraded => format!("升级: {} -> {}", change.old_value, change.new_value),
-            ChangeType::Downgraded => format!("降级: {} -> {}", change.old_value, change.new_value),
+            HardwareHistoryChangeType::Added => format!("新增: {}", change.new_value),
+            HardwareHistoryChangeType::Removed => format!("移除: {}", change.old_value),
+            HardwareHistoryChangeType::Modified => {
+                format!("{} -> {}", change.old_value, change.new_value)
+            }
+            HardwareHistoryChangeType::Upgraded => {
+                format!("升级: {} -> {}", change.old_value, change.new_value)
+            }
+            HardwareHistoryChangeType::Downgraded => {
+                format!("降级: {} -> {}", change.old_value, change.new_value)
+            }
         }
     }
 }

@@ -14,7 +14,11 @@ fn main() {
     let en_keys = extract_translation_keys(&en_file);
     let zh_keys = extract_translation_keys(&zh_file);
 
-    println!("Translation keys: EN={} ZH={}", en_keys.len(), zh_keys.len());
+    println!(
+        "Translation keys: EN={} ZH={}",
+        en_keys.len(),
+        zh_keys.len()
+    );
 
     let mut has_errors = false;
     let mut has_warnings = false;
@@ -24,7 +28,10 @@ fn main() {
     let zh_only: Vec<_> = zh_keys.difference(&en_keys).cloned().collect();
 
     if !en_only.is_empty() {
-        eprintln!("❌ Translation keys in EN but missing in ZH ({} keys):", en_only.len());
+        eprintln!(
+            "❌ Translation keys in EN but missing in ZH ({} keys):",
+            en_only.len()
+        );
         for key in en_only.iter().take(20) {
             eprintln!("   - {}", key);
         }
@@ -35,7 +42,10 @@ fn main() {
     }
 
     if !zh_only.is_empty() {
-        eprintln!("❌ Translation keys in ZH but missing in EN ({} keys):", zh_only.len());
+        eprintln!(
+            "❌ Translation keys in ZH but missing in EN ({} keys):",
+            zh_only.len()
+        );
         for key in zh_only.iter().take(20) {
             eprintln!("   - {}", key);
         }
@@ -54,7 +64,10 @@ fn main() {
     let undefined_keys: Vec<_> = used_keys.difference(&all_defined_keys).cloned().collect();
 
     if !undefined_keys.is_empty() {
-        eprintln!("❌ Translation keys used in code but not defined ({} keys):", undefined_keys.len());
+        eprintln!(
+            "❌ Translation keys used in code but not defined ({} keys):",
+            undefined_keys.len()
+        );
         for key in undefined_keys.iter().take(10) {
             eprintln!("   - {}", key);
         }
@@ -69,13 +82,19 @@ fn main() {
     let unused_zh: Vec<_> = zh_keys.difference(&used_keys).cloned().collect();
 
     // Only report if both have unused keys (reduces false positives)
-    let common_unused: HashSet<_> = unused_en.into_iter().collect::<HashSet<_>>()
+    let common_unused: HashSet<_> = unused_en
+        .into_iter()
+        .collect::<HashSet<_>>()
         .intersection(&unused_zh.into_iter().collect::<HashSet<_>>())
-        .cloned().collect();
+        .cloned()
+        .collect();
 
     if !common_unused.is_empty() {
         has_warnings = true;
-        eprintln!("⚠️  Potentially unused translation keys ({} keys):", common_unused.len());
+        eprintln!(
+            "⚠️  Potentially unused translation keys ({} keys):",
+            common_unused.len()
+        );
         for key in common_unused.iter().take(10) {
             eprintln!("   - {}", key);
         }
@@ -177,7 +196,9 @@ fn is_translation_key(s: &str) -> bool {
     }
 
     // Accept simple alphanumeric keys
-    if s.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+    if s.chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
         return true;
     }
 
@@ -295,28 +316,92 @@ fn is_valid_translation_key(key: &str) -> bool {
     // history, ipmi, change, network, storage, memory, validation, notification,
     // stats, filter, server_model, operating_system
     let known_namespaces = [
-        "menu", "header", "auth", "password", "dashboard", "clients", "common",
-        "projects", "persons", "components", "analytics", "pagination", "client_detail",
-        "client_edit", "client_status", "environment", "racks", "dictionaries", "users",
-        "error", "success", "warning", "info", "hostname", "ip_address", "os", "vendor",
-        "model", "last_seen", "status", "actions", "history", "ipmi",
-        "change", "network", "storage", "memory", "label", "validation",
-        "notification", "stats", "filter", "server_model", "operating_system",
-        "no_discrete_gpu", "unknown", "online", "offline", "none", "never",
-        "cpu_config", "memory_config", "gpu_config", "storage_config", "network_config",
-        "all", "count", "loading", "search", "import", "export", "apply", "clear",
-        "client_setup", "client_not_found", "internal_server",
-        "invalid_request", "not_found", "validation_error", "database",
+        "menu",
+        "header",
+        "auth",
+        "password",
+        "dashboard",
+        "clients",
+        "common",
+        "projects",
+        "persons",
+        "components",
+        "analytics",
+        "pagination",
+        "client_detail",
+        "client_edit",
+        "client_status",
+        "environment",
+        "racks",
+        "dictionaries",
+        "users",
+        "error",
+        "success",
+        "warning",
+        "info",
+        "hostname",
+        "ip_address",
+        "os",
+        "vendor",
+        "model",
+        "last_seen",
+        "status",
+        "actions",
+        "history",
+        "ipmi",
+        "change",
+        "network",
+        "storage",
+        "memory",
+        "label",
+        "validation",
+        "notification",
+        "stats",
+        "filter",
+        "server_model",
+        "operating_system",
+        "no_discrete_gpu",
+        "unknown",
+        "online",
+        "offline",
+        "none",
+        "never",
+        "cpu_config",
+        "memory_config",
+        "gpu_config",
+        "storage_config",
+        "network_config",
+        "all",
+        "count",
+        "loading",
+        "search",
+        "import",
+        "export",
+        "apply",
+        "clear",
+        "client_setup",
+        "client_not_found",
+        "internal_server",
+        "invalid_request",
+        "not_found",
+        "validation_error",
+        "database",
     ];
 
-    let has_valid_namespace = key.contains('.') && known_namespaces.iter().any(|ns| {
-        key.starts_with(&format!("{}.", ns)) || key.starts_with(ns)
-    });
+    let has_valid_namespace = key.contains('.')
+        && known_namespaces
+            .iter()
+            .any(|ns| key.starts_with(&format!("{}.", ns)) || key.starts_with(ns));
 
     // Skip keys that look like word fragments or dynamic constructions
-    if key.starts_with("nalytics.") || key.starts_with("agination.") || key.starts_with("ardware.") ||
-       key.starts_with("omponents.") || key.starts_with("ardware.") || key.starts_with("acks.") ||
-       key.starts_with("hardware.") {
+    if key.starts_with("nalytics.")
+        || key.starts_with("agination.")
+        || key.starts_with("ardware.")
+        || key.starts_with("omponents.")
+        || key.starts_with("ardware.")
+        || key.starts_with("acks.")
+        || key.starts_with("hardware.")
+    {
         return false;
     }
 
@@ -332,7 +417,10 @@ fn is_valid_translation_key(key: &str) -> bool {
 
     // Skip keys with special characters that aren't likely translation keys
     // Allow: alphanumeric, dots, underscores, hyphens, colons
-    if !key.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '_' || c == ':' || c == '-') {
+    if !key
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '.' || c == '_' || c == ':' || c == '-')
+    {
         return false;
     }
 

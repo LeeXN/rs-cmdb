@@ -9,8 +9,8 @@ use yew::Callback;
 use crate::stores::auth_store::AuthStore;
 use crate::types::{
     ApiResponse, ChangePasswordRequest, Client, CreateUserRequest, DetailedStats, Dictionary,
-    FilterCriteria, FilterOptions, Hardware, LoginRequest, LoginResponse, PaginatedResult, Person,
-    Project, Rack, UpdateUserRequest, User,
+    FilterCriteria, FilterOptions, Hardware, HardwareHistoryEntry, LoginRequest, LoginResponse,
+    PaginatedResult, Person, Project, Rack, UpdateUserRequest, User,
 };
 
 const API_BASE_URL: &str = "/api/v1";
@@ -223,7 +223,6 @@ pub async fn search_clients(
 
 /// 异步获取客户端列表 (Deprecated: use fetch_clients with pagination instead)
 // pub async fn fetch_clients() -> Result<Vec<Client>, ApiError> { ... } - Removed
-
 /// 异步获取客户端详情
 pub async fn fetch_client(client_id: &str) -> Result<Client, ApiError> {
     let url = format!("{}/clients/{}", API_BASE_URL, client_id);
@@ -309,14 +308,16 @@ pub async fn fetch_hardware_info(client_id: &str) -> Result<Hardware, ApiError> 
 }
 
 /// 获取硬件历史信息
-pub async fn fetch_hardware_history(client_id: &str) -> Result<Vec<(String, Hardware)>, ApiError> {
+pub async fn fetch_hardware_history(
+    client_id: &str,
+) -> Result<Vec<HardwareHistoryEntry>, ApiError> {
     let url = format!("{}/clients/{}/hardware/history", API_BASE_URL, client_id);
 
     match request_get(&url).await {
         Ok(response) => {
             if response.status() == 200 {
                 match response
-                    .json::<ApiResponse<Vec<(String, Hardware)>>>()
+                    .json::<ApiResponse<Vec<HardwareHistoryEntry>>>()
                     .await
                 {
                     Ok(data) => {
@@ -605,6 +606,7 @@ pub fn get_filter_options(callback: Callback<Result<FilterOptions, ApiError>>) {
 }
 
 /// Fetch clients filtered by hardware specifications
+#[allow(clippy::too_many_arguments)]
 pub async fn fetch_clients_by_hardware_filter(
     search_term: Option<String>,
     os_filter: Option<String>,
@@ -815,6 +817,7 @@ pub async fn fetch_clients_by_hardware_filter(
 }
 
 /// Callback-based hardware filter function
+#[allow(clippy::too_many_arguments)]
 pub fn get_clients_by_hardware_filter(
     search_term: Option<String>,
     os_filter: Option<String>,
@@ -1599,7 +1602,10 @@ pub async fn export_filtered_clients(
     match request_post(&url, &request).await {
         Ok(response) => {
             if response.status() == 200 {
-                match response.json::<ApiResponse<crate::types::ExportFilterResponse>>().await {
+                match response
+                    .json::<ApiResponse<crate::types::ExportFilterResponse>>()
+                    .await
+                {
                     Ok(data) => {
                         if let Some(result) = data.data {
                             Ok(result)
@@ -1616,7 +1622,10 @@ pub async fn export_filtered_clients(
                     }
                 }
             } else if response.status() == 400 {
-                match response.json::<ApiResponse<crate::types::ExportFilterResponse>>().await {
+                match response
+                    .json::<ApiResponse<crate::types::ExportFilterResponse>>()
+                    .await
+                {
                     Ok(data) => Err(ApiError {
                         message: data.message,
                     }),

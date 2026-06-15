@@ -3,25 +3,23 @@
 //! Comprehensive integration tests for API endpoints using the actual router
 //! with in-memory test databases.
 
-use std::sync::Arc;
 use axum::{
     body::Body,
     extract::Request,
-    http::{
-        header,
-        HeaderValue, Method, StatusCode, Uri,
-    },
+    http::{HeaderValue, Method, StatusCode, Uri, header},
 };
 use serde_json::json;
+use std::sync::Arc;
 use tower::ServiceExt;
 use uuid::Uuid;
 
 use common::entity::user::{Role, User};
 // use common::entity::dictionary::Dictionary; // Removed unused import
 
-use crate::cache::{CacheConfigs, CachedClientRepository};
 use crate::api::create_router;
-use crate::config::{ServerConfig, DatabaseConfig, QueueConfig};
+use crate::cache::{CacheConfigs, CachedClientRepository};
+use crate::config::{DatabaseConfig, QueueConfig, ServerConfig};
+use crate::dao::{ClientDao, RackDao};
 use crate::db::redb_store::RedbStore;
 use crate::queue::message_queue::MessageQueueFactory;
 use crate::repository::{
@@ -31,12 +29,11 @@ use crate::repository::{
     rack_repository::RackRepository, user_repository::UserRepository,
 };
 use crate::service::{
-    auth_service::AuthService, client_service::ClientService,
-    client_filter_service::ClientFilterService, component_service::ComponentService,
+    auth_service::AuthService, client_filter_service::ClientFilterService,
+    client_service::ClientService, component_service::ComponentService,
     export_service::ExportService, hardware_service::HardwareService, stats_service::StatsService,
     validation_service::ValidationService,
 };
-use crate::dao::{ClientDao, RackDao};
 use chrono::Utc;
 
 /// Test application state
@@ -52,18 +49,19 @@ pub struct TestApp {
 /// Sets up a test application with a fresh database
 async fn setup_test_app() -> TestApp {
     // Create in-memory database
-    let db = Arc::new(
-        RedbStore::new("file:///tmp/test_db_").unwrap_or_else(|_| {
-            // Fallback to temp file creation
-            let db_path = format!("/tmp/cmdb_test_{}.db", Uuid::new_v4());
-            RedbStore::new(&db_path).expect("Failed to create test database")
-        }),
-    );
+    let db = Arc::new(RedbStore::new("file:///tmp/test_db_").unwrap_or_else(|_| {
+        // Fallback to temp file creation
+        let db_path = format!("/tmp/cmdb_test_{}.db", Uuid::new_v4());
+        RedbStore::new(&db_path).expect("Failed to create test database")
+    }));
 
     // Initialize repositories
     let client_repo_inner = Arc::new(ClientRepository::new(db.clone()));
     let cache_configs = CacheConfigs::default();
-    let client_repo = Arc::new(CachedClientRepository::new(client_repo_inner.clone(), &cache_configs));
+    let client_repo = Arc::new(CachedClientRepository::new(
+        client_repo_inner.clone(),
+        &cache_configs,
+    ));
     let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
     let user_repo = Arc::new(UserRepository::new(db.clone()));
     let person_repo = Arc::new(PersonRepository::new(db.clone()));
@@ -73,7 +71,9 @@ async fn setup_test_app() -> TestApp {
     let rack_repo = Arc::new(RackRepository::new(db.clone()));
 
     // Initialize services
-    let auth_service = Arc::new(AuthService::new("test_secret_key_for_integration_tests_min_32_chars".to_string()));
+    let auth_service = Arc::new(AuthService::new(
+        "test_secret_key_for_integration_tests_min_32_chars".to_string(),
+    ));
 
     let _client_dao = Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone()));
     let _rack_dao = Arc::new(RackDao::new(rack_repo.clone(), client_repo.clone()));
@@ -89,6 +89,7 @@ async fn setup_test_app() -> TestApp {
         hardware_repo.clone(),
         component_service.clone(),
         MessageQueueFactory::create_flume_queue(),
+        None,
     ));
 
     let validation_service = Arc::new(ValidationService::new(
@@ -162,6 +163,7 @@ async fn setup_test_app() -> TestApp {
         tls_cert: None,
         tls_key: None,
         component_missing_grace_period_hours: 24,
+        primary_ip: None,
     });
 
     // Create router
@@ -262,7 +264,8 @@ async fn test_health_check_returns_ok() {
 async fn test_version_endpoint_returns_version() {
     let app = setup_test_app().await;
 
-    let (status, body) = make_request(&app.router, Method::GET, "/api/v1/version", None, None).await;
+    let (status, body) =
+        make_request(&app.router, Method::GET, "/api/v1/version", None, None).await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(body["version"].is_string());
@@ -281,7 +284,14 @@ async fn test_login_with_valid_credentials_returns_token() {
         "password": "admin123",
     });
 
-    let (status, body) = make_request(&app.router, Method::POST, "/api/v1/auth/login", None, Some(creds)).await;
+    let (status, body) = make_request(
+        &app.router,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(creds),
+    )
+    .await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(body["data"]["token"].is_string());
@@ -297,7 +307,14 @@ async fn test_login_with_invalid_credentials_returns_401() {
         "password": "wrong_password",
     });
 
-    let (status, _) = make_request(&app.router, Method::POST, "/api/v1/auth/login", None, Some(creds)).await;
+    let (status, _) = make_request(
+        &app.router,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(creds),
+    )
+    .await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
@@ -912,8 +929,14 @@ async fn test_invalid_json_returns_400() {
     let request = Request::builder()
         .method(Method::POST)
         .uri(Uri::from_static("/api/v1/clients/register"))
-        .header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"))
-        .header(header::AUTHORIZATION, HeaderValue::from_str(&format!("Bearer {}", app.admin_token)).unwrap())
+        .header(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        )
+        .header(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", app.admin_token)).unwrap(),
+        )
         .body(Body::from("{invalid json}"))
         .unwrap();
 
@@ -976,6 +999,152 @@ async fn test_client_search() {
     assert_eq!(status, StatusCode::OK);
     assert!(body["data"].is_array());
     // Should find at least one matching client
+}
+
+// ============================================================================
+// Primary IP API Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_override_primary_ip() {
+    let app = setup_test_app().await;
+
+    let client_data = json!({
+        "hostname": "primary-ip-test",
+        "serial_number": "SN-PRIMARY",
+        "ip_address": "192.168.1.100",
+    });
+
+    let (_, create_response) = make_request(
+        &app.router,
+        Method::POST,
+        "/api/v1/clients/register",
+        None,
+        Some(client_data),
+    )
+    .await;
+
+    let client_id = create_response["data"]["id"].as_str().unwrap();
+
+    let (status, body) = make_request(
+        &app.router,
+        Method::PUT,
+        &format!("/api/v1/clients/{}/primary-ip", client_id),
+        Some(&app.admin_token),
+        Some(json!({"primary_ip": "10.0.0.50"})),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["primary_ip"], "10.0.0.50");
+}
+
+#[tokio::test]
+async fn test_override_primary_ip_clear() {
+    let app = setup_test_app().await;
+
+    let client_data = json!({
+        "hostname": "primary-ip-clear",
+        "serial_number": "SN-PRIMARY2",
+        "ip_address": "192.168.1.101",
+        "primary_ip": "10.0.0.50",
+    });
+
+    let (_, create_response) = make_request(
+        &app.router,
+        Method::POST,
+        "/api/v1/clients/register",
+        None,
+        Some(client_data),
+    )
+    .await;
+
+    let client_id = create_response["data"]["id"].as_str().unwrap();
+
+    let (status, body) = make_request(
+        &app.router,
+        Method::PUT,
+        &format!("/api/v1/clients/{}/primary-ip", client_id),
+        Some(&app.admin_token),
+        Some(json!({"primary_ip": null})),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["data"]["primary_ip"].is_null());
+}
+
+#[tokio::test]
+async fn test_override_primary_ip_invalid_format() {
+    let app = setup_test_app().await;
+
+    let client_data = json!({
+        "hostname": "primary-ip-invalid",
+        "serial_number": "SN-PRIMARY3",
+        "ip_address": "192.168.1.102",
+    });
+
+    let (_, create_response) = make_request(
+        &app.router,
+        Method::POST,
+        "/api/v1/clients/register",
+        None,
+        Some(client_data),
+    )
+    .await;
+
+    let client_id = create_response["data"]["id"].as_str().unwrap();
+
+    let (status, _) = make_request(
+        &app.router,
+        Method::PUT,
+        &format!("/api/v1/clients/{}/primary-ip", client_id),
+        Some(&app.admin_token),
+        Some(json!({"primary_ip": "not-an-ip"})),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_search_by_primary_ip() {
+    let app = setup_test_app().await;
+
+    let client_data = json!({
+        "hostname": "search-primary",
+        "serial_number": "SN-SRCH1",
+        "ip_address": "192.168.1.200",
+        "primary_ip": "10.0.0.100",
+    });
+
+    let (_, create_response) = make_request(
+        &app.router,
+        Method::POST,
+        "/api/v1/clients/register",
+        None,
+        Some(client_data),
+    )
+    .await;
+
+    let client_id = create_response["data"]["id"].as_str().unwrap();
+
+    let (status, body) = make_request(
+        &app.router,
+        Method::GET,
+        &format!("/api/v1/clients/search?hostname={}", "search-primary"),
+        Some(&app.admin_token),
+        None,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let clients = body["data"].as_array().unwrap();
+    assert!(
+        clients
+            .iter()
+            .any(|c| c["id"] == client_id && c["primary_ip"] == "10.0.0.100")
+    );
 }
 
 // ============================================================================

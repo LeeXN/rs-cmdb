@@ -3,7 +3,9 @@
 //! This service handles the transformation of client and hardware data
 //! into export-friendly formats.
 
-use crate::repository::{client_repository::ClientRepository, hardware_repository::HardwareRepository};
+use crate::repository::{
+    client_repository::ClientRepository, hardware_repository::HardwareRepository,
+};
 use common::models::ClientHardwareExport;
 use std::sync::Arc;
 use tracing::info;
@@ -14,10 +16,7 @@ pub struct ExportService {
 }
 
 impl ExportService {
-    pub fn new(
-        client_repo: Arc<ClientRepository>,
-        hardware_repo: Arc<HardwareRepository>,
-    ) -> Self {
+    pub fn new(client_repo: Arc<ClientRepository>, hardware_repo: Arc<HardwareRepository>) -> Self {
         Self {
             client_repo,
             hardware_repo,
@@ -26,18 +25,27 @@ impl ExportService {
 
     pub async fn export_client_hardware_data(&self) -> Result<Vec<ClientHardwareExport>, String> {
         // Get all clients
-        let clients = self.client_repo.list_all().await.map_err(|e| e.to_string())?;
-        
+        let clients = self
+            .client_repo
+            .list_all()
+            .await
+            .map_err(|e| e.to_string())?;
+
         let mut export_data = Vec::new();
 
         for client in clients {
-            let hardware = self.hardware_repo.get_hardware(&client.id).await.unwrap_or(None);
+            let hardware = self
+                .hardware_repo
+                .get_hardware(&client.id)
+                .await
+                .unwrap_or(None);
 
             let export_item = ClientHardwareExport {
                 // 基本信息
                 client_id: client.id.clone(),
                 hostname: client.hostname.clone(),
                 ip_address: client.ip_address.clone(),
+                primary_ip: client.primary_ip.clone(),
                 os: client
                     .os
                     .clone()

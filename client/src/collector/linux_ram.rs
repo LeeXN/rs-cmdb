@@ -251,7 +251,10 @@ fn get_memory_info() -> io::Result<MemoryDevice> {
 
                 memory_device.module_size = if module_sizes.len() == 1 {
                     // Safe: we checked len == 1, so next() will return Some
-                    *module_sizes.iter().next().expect("module_sizes has exactly one element")
+                    *module_sizes
+                        .iter()
+                        .next()
+                        .expect("module_sizes has exactly one element")
                 } else {
                     0
                 };

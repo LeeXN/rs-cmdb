@@ -9,12 +9,12 @@ use crate::components::ui::input::Input;
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::components::ui::table_action::TableActions;
 use crate::hooks::use_trans::use_trans;
+use crate::icons::{Grid3X3, LayoutGrid, List, Plus, Rows3};
 use crate::routes::Route;
 use crate::services::api::{create_rack, delete_rack, fetch_clients, fetch_racks, update_rack};
 use crate::types::Client;
 use common::entity::user::Role;
 use common::models::Rack;
-use lucide_yew::{Grid3X3, LayoutGrid, List, Plus, Rows3};
 use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -272,7 +272,7 @@ pub fn rack_visual(props: &RackVisualProps) -> Html {
                                                             // Content
                                                             <div class="flex flex-col overflow-hidden">
                                                                 <span class="text-xs font-bold text-slate-200 truncate leading-tight">{ &client.hostname }</span>
-                                                                <span class="text-[10px] text-slate-500 truncate">{ &client.ip_address }</span>
+                                                                <span class="text-[10px] text-slate-500 truncate">{ client.primary_ip.as_deref().unwrap_or(&client.ip_address) }</span>
                                                             </div>
 
                                                             // Tooltip or Hover Details
@@ -445,9 +445,7 @@ pub fn racks() -> Html {
         let show_form = show_form.clone();
         let editing_rack = editing_rack.clone();
         Callback::from(move |_| {
-            let mut new_rack = Rack::default();
-            new_rack.id = String::new();
-            new_rack.height_u = 42;
+            let mut new_rack = Rack { id: String::new(), height_u: 42, ..Default::default() };
             editing_rack.set(Some(new_rack));
             show_form.set(true);
         })

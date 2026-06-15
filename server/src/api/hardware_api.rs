@@ -9,7 +9,7 @@ use axum::{
 };
 use axum_macros::debug_handler;
 use common::entity::hardware::Hardware;
-use common::models::{ApiResponse, ClientHardwareInfo, PullRequest};
+use common::models::{ApiResponse, ClientHardwareInfo, HardwareHistoryEntry, PullRequest};
 use std::sync::Arc;
 use tracing::{error, info, instrument};
 use uuid::Uuid;
@@ -114,7 +114,7 @@ pub async fn get_hardware_history(
                         "Failed to get hardware history for client {}: {}",
                         client_id, err
                     );
-                    let response = ApiResponse::<Vec<(String, Hardware)>> {
+                    let response = ApiResponse::<Vec<HardwareHistoryEntry>> {
                         status: err.status_code(),
                         message: err.to_string(),
                         data: None,
@@ -129,7 +129,7 @@ pub async fn get_hardware_history(
             }
         }
         Ok(false) => {
-            let response = ApiResponse::<Vec<(String, Hardware)>> {
+            let response = ApiResponse::<Vec<HardwareHistoryEntry>> {
                 status: 404,
                 message: format!("Client {} not found", client_id),
                 data: None,
@@ -139,7 +139,7 @@ pub async fn get_hardware_history(
         }
         Err(err) => {
             error!("Failed to check client existence {}: {}", client_id, err);
-            let response = ApiResponse::<Vec<(String, Hardware)>> {
+            let response = ApiResponse::<Vec<HardwareHistoryEntry>> {
                 status: err.status_code(),
                 message: err.to_string(),
                 data: None,

@@ -50,7 +50,7 @@ pub fn export_to_csv(data: &[ClientHardwareExport], filename: &str) -> Result<()
         let row = vec![
             escape_csv_field(&item.client_id),
             escape_csv_field(&item.hostname),
-            escape_csv_field(&item.ip_address),
+            escape_csv_field(&item.primary_ip.clone().unwrap_or(item.ip_address.clone())),
             escape_csv_field(&item.os),
             escape_csv_field(&item.sys_vendor),
             escape_csv_field(&item.product_name),

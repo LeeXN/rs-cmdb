@@ -4,12 +4,14 @@
 //! for CMDB data including hardware analysis and client reporting.
 //! Includes caching for expensive statistical computations.
 
-use crate::cache::{cache_service::key_builder, CacheConfigs, CacheService};
-use crate::repository::{client_repository::ClientRepository, hardware_repository::HardwareRepository};
+use crate::cache::{CacheConfigs, CacheService, cache_service::key_builder};
+use crate::repository::{
+    client_repository::ClientRepository, hardware_repository::HardwareRepository,
+};
 use common::entity::hardware::Hardware;
 use common::models::{
-    CpuStats, DetailedStats, FilterOptions, GpuStats, MemoryStats,
-    NetworkStats, OsStats, ServerStats, StatItem, StorageStats,
+    CpuStats, DetailedStats, FilterOptions, GpuStats, MemoryStats, NetworkStats, OsStats,
+    ServerStats, StatItem, StorageStats,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,10 +29,7 @@ pub struct StatsService {
 
 impl StatsService {
     /// Create a new stats service
-    pub fn new(
-        client_repo: Arc<ClientRepository>,
-        hardware_repo: Arc<HardwareRepository>,
-    ) -> Self {
+    pub fn new(client_repo: Arc<ClientRepository>, hardware_repo: Arc<HardwareRepository>) -> Self {
         let cache_configs = CacheConfigs::default();
         Self {
             client_repo,
@@ -60,10 +59,8 @@ impl StatsService {
         category_filter: Option<&str>,
     ) -> Result<OverallStats, String> {
         // Build cache key
-        let cache_key = key_builder::stats(&format!(
-            "overall:{}",
-            category_filter.unwrap_or("all")
-        ));
+        let cache_key =
+            key_builder::stats(&format!("overall:{}", category_filter.unwrap_or("all")));
 
         // Try cache first
         if let Some(cached) = self.stats_cache.get(&cache_key).await {
@@ -75,14 +72,19 @@ impl StatsService {
 
         info!("Cache miss for overall stats, computing...");
 
-        let clients = self.client_repo.list_all().await.map_err(|e| e.to_string())?;
+        let clients = self
+            .client_repo
+            .list_all()
+            .await
+            .map_err(|e| e.to_string())?;
         let client_hardware_map = self.build_client_hardware_map(&clients).await;
 
         let total_clients = clients.len();
         let online_clients = self.count_online_clients(&clients);
         let offline_clients = total_clients - online_clients;
 
-        let categories = self.generate_category_stats(&clients, &client_hardware_map, category_filter);
+        let categories =
+            self.generate_category_stats(&clients, &client_hardware_map, category_filter);
 
         let result = OverallStats {
             total_clients,
@@ -114,7 +116,11 @@ impl StatsService {
 
         info!("Cache miss for detailed stats, computing...");
 
-        let clients = self.client_repo.list_all().await.map_err(|e| e.to_string())?;
+        let clients = self
+            .client_repo
+            .list_all()
+            .await
+            .map_err(|e| e.to_string())?;
         let client_hardware_map = self.build_client_hardware_map(&clients).await;
 
         let total_clients = clients.len();
@@ -155,7 +161,11 @@ impl StatsService {
 
         info!("Cache miss for filter options, computing...");
 
-        let clients = self.client_repo.list_all().await.map_err(|e| e.to_string())?;
+        let clients = self
+            .client_repo
+            .list_all()
+            .await
+            .map_err(|e| e.to_string())?;
 
         let mut cpu_vendors = std::collections::HashSet::new();
         let mut cpu_models = std::collections::HashSet::new();
@@ -253,7 +263,9 @@ impl StatsService {
         filter_options.network_models.sort();
 
         // Cache the result
-        self.filter_options_cache.insert(cache_key, filter_options.clone()).await;
+        self.filter_options_cache
+            .insert(cache_key, filter_options.clone())
+            .await;
 
         info!("Generated filter options");
         Ok(filter_options)
@@ -261,7 +273,10 @@ impl StatsService {
 
     // Helper methods
 
-    async fn build_client_hardware_map(&self, clients: &[common::models::Client]) -> HashMap<String, (common::models::Client, Hardware)> {
+    async fn build_client_hardware_map(
+        &self,
+        clients: &[common::models::Client],
+    ) -> HashMap<String, (common::models::Client, Hardware)> {
         let mut map = HashMap::new();
         for client in clients {
             if let Ok(Some(hardware)) = self.hardware_repo.get_hardware(&client.id).await {
@@ -333,7 +348,10 @@ impl StatsService {
         categories
     }
 
-    fn generate_cpu_stats(&self, client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>) -> CategoryStats {
+    fn generate_cpu_stats(
+        &self,
+        client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>,
+    ) -> CategoryStats {
         let mut cpu_stats = HashMap::new();
 
         for (client, hardware) in client_hardware_map.values() {
@@ -356,7 +374,10 @@ impl StatsService {
         )
     }
 
-    fn generate_memory_stats(&self, client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>) -> CategoryStats {
+    fn generate_memory_stats(
+        &self,
+        client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>,
+    ) -> CategoryStats {
         let mut memory_stats = HashMap::new();
 
         for (client, hardware) in client_hardware_map.values() {
@@ -374,7 +395,10 @@ impl StatsService {
         )
     }
 
-    fn generate_gpu_stats(&self, client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>) -> CategoryStats {
+    fn generate_gpu_stats(
+        &self,
+        client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>,
+    ) -> CategoryStats {
         let mut gpu_stats = HashMap::new();
 
         for (client, hardware) in client_hardware_map.values() {
@@ -399,7 +423,10 @@ impl StatsService {
         )
     }
 
-    fn generate_disk_stats(&self, client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>) -> CategoryStats {
+    fn generate_disk_stats(
+        &self,
+        client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>,
+    ) -> CategoryStats {
         let mut disk_stats = HashMap::new();
 
         for (client, hardware) in client_hardware_map.values() {
@@ -424,7 +451,10 @@ impl StatsService {
         )
     }
 
-    fn generate_nic_stats(&self, client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>) -> CategoryStats {
+    fn generate_nic_stats(
+        &self,
+        client_hardware_map: &HashMap<String, (common::models::Client, Hardware)>,
+    ) -> CategoryStats {
         let mut nic_stats = HashMap::new();
 
         for (client, hardware) in client_hardware_map.values() {
@@ -458,7 +488,11 @@ impl StatsService {
                 .push(client.id.clone());
         }
 
-        self.generate_category_stats_internal(crate::constants::CATEGORY_OS, os_stats, clients.len())
+        self.generate_category_stats_internal(
+            crate::constants::CATEGORY_OS,
+            os_stats,
+            clients.len(),
+        )
     }
 
     fn generate_server_model_stats(&self, clients: &[common::models::Client]) -> CategoryStats {

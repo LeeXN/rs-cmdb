@@ -2,7 +2,7 @@ use crate::components::chart::{ChartData, PieChart};
 use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::hooks::use_trans::use_trans;
-use lucide_yew::RefreshCw;
+use crate::icons::RefreshCw;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]

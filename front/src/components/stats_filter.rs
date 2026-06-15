@@ -1,8 +1,8 @@
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent};
 use crate::hooks::use_trans::use_trans;
+use crate::icons::{Download, RefreshCw};
 use crate::types::FilterCriteria;
-use lucide_yew::{Download, RefreshCw};
 use yew::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Properties)]

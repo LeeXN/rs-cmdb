@@ -158,6 +158,8 @@ pub fn get_translations() -> HashMap<String, String> {
         "hardware.history.view_details".to_string(),
         "查看详情".to_string(),
     );
+    translations.insert("common.refresh".to_string(), "刷新".to_string());
+    translations.insert("common.load_more".to_string(), "加载更多".to_string());
 
     // IPMI
     translations.insert("ipmi.access_denied".to_string(), "访问被拒绝".to_string());
@@ -673,8 +675,20 @@ pub fn get_translations() -> HashMap<String, String> {
         "最近 10 次心跳".to_string(),
     );
     translations.insert(
+        "dashboard.recent_offline_title".to_string(),
+        "近期离线客户端".to_string(),
+    );
+    translations.insert(
+        "dashboard.recent_offline_desc".to_string(),
+        "最近心跳后已离线的客户端".to_string(),
+    );
+    translations.insert(
         "dashboard.no_clients_registered".to_string(),
         "暂无客户端注册".to_string(),
+    );
+    translations.insert(
+        "dashboard.no_recent_offline_clients".to_string(),
+        "近期没有离线客户端".to_string(),
     );
     translations.insert("dashboard.offline".to_string(), "离线".to_string());
 
@@ -725,7 +739,7 @@ pub fn get_translations() -> HashMap<String, String> {
     );
     translations.insert(
         "clients.search.hint".to_string(),
-        "支持模糊搜索，输入关键词即可实时筛选".to_string(),
+        "支持模糊搜索，停止输入后会自动更新筛选结果".to_string(),
     );
     translations.insert(
         "clients.search.export_csv".to_string(),
@@ -796,6 +810,10 @@ pub fn get_translations() -> HashMap<String, String> {
         "暂无设备数据".to_string(),
     );
     translations.insert("clients.table.hostname".to_string(), "主机名".to_string());
+    translations.insert(
+        "clients.table.online_status".to_string(),
+        "在线状态".to_string(),
+    );
     translations.insert("clients.table.ip".to_string(), "IP地址".to_string());
     translations.insert("clients.table.os".to_string(), "操作系统".to_string());
     translations.insert("clients.table.owner".to_string(), "负责人".to_string());
@@ -825,7 +843,7 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("clients.actions.delete".to_string(), "删除".to_string());
     translations.insert(
         "clients.actions.confirm_delete".to_string(),
-        "确定要删除该设备吗？此操作无法撤销。".to_string(),
+        "确定要删除该设备吗？注意：如果客户端 Agent 仍在运行，它会自动重新注册。请先停止客户端服务。".to_string(),
     );
 
     translations.insert(
@@ -1464,6 +1482,10 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("client_detail.id".to_string(), "ID".to_string());
     translations.insert("client_detail.hostname".to_string(), "主机名".to_string());
     translations.insert("client_detail.ip".to_string(), "IP 地址".to_string());
+    translations.insert(
+        "client_detail.primary_ip".to_string(),
+        "主 IP 地址".to_string(),
+    );
     translations.insert("client_detail.os".to_string(), "操作系统".to_string());
     translations.insert("client_detail.kernel".to_string(), "内核版本".to_string());
     translations.insert("client_detail.location".to_string(), "位置".to_string());
@@ -1560,6 +1582,19 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("client_edit.unassigned".to_string(), "未分配".to_string());
     translations.insert("client_edit.save".to_string(), "保存".to_string());
     translations.insert("client_edit.cancel".to_string(), "取消".to_string());
+    translations.insert(
+        "client_edit.primary_ip_hint".to_string(),
+        "设置后将覆盖自动检测的主 IP 地址".to_string(),
+    );
+    translations.insert("client_edit.primary_ip_none".to_string(), "无".to_string());
+    translations.insert(
+        "client_edit.primary_ip_select".to_string(),
+        "选择 IP...".to_string(),
+    );
+    translations.insert(
+        "client_edit.primary_ip_custom".to_string(),
+        "手动输入...".to_string(),
+    );
 
     translations
 }

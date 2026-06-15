@@ -3,11 +3,13 @@ use crate::hooks::use_trans::use_trans;
 use crate::pages::clients::components::{
     search_bar::SearchBar, statistics::Statistics, table::ClientsTable,
 };
+use crate::pages::clients::filters::filter_clients_local;
 use crate::pages::clients::state::{ClientsAction, ClientsState};
 use crate::services::api::{self, ApiError};
 use crate::types::{Client, ClientStatus, Environment, FilterOptions};
 use calamine::{DataType, Reader, Xlsx};
 use common::entity::user::Role;
+use gloo::utils::document;
 use rust_xlsxwriter::Workbook;
 use std::io::Cursor;
 use wasm_bindgen::closure::Closure;
@@ -17,13 +19,17 @@ use web_sys::{Blob, BlobPropertyBag, FileReader, HtmlAnchorElement, HtmlInputEle
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use crate::components::client_edit_modal::ClientEditModal;
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
-use lucide_yew::{FileDown, TriangleAlert, X};
+use crate::icons::{FileDown, TriangleAlert, X};
+use yew::create_portal;
 
 #[function_component(ClientsPage)]
 pub fn clients_page() -> Html {
     let state = use_reducer(ClientsState::default);
+    let basic_clients_cache = use_state(Vec::<Client>::new);
+    let basic_clients_cache_reload = use_state(|| None::<usize>);
     let location = use_location();
     let file_input_ref = use_node_ref();
     let import_progress = use_state(|| 0);
@@ -80,11 +86,36 @@ pub fn clients_page() -> Html {
         });
     }
 
+    let apply_local_clients_page = {
+        let state = state.clone();
+        Callback::from(move |clients: Vec<Client>| {
+            let filtered = filter_clients_local(&clients, &state.search_term, &state.filters);
+            state.dispatch(ClientsAction::SetClients(
+                crate::pages::clients::utils::build_paginated_result(
+                    &filtered,
+                    state.current_page,
+                    state.page_size,
+                ),
+            ));
+        })
+    };
+
+    let statistics_clients = if !state.filters.has_api_filters() && !basic_clients_cache.is_empty()
+    {
+        filter_clients_local(&basic_clients_cache, &state.search_term, &state.filters)
+    } else {
+        state.clients.clone()
+    };
+
     // 数据加载 - 动态数据 (分页/搜索/筛选)
     {
         let state = state.clone();
+        let basic_clients_cache = basic_clients_cache.clone();
+        let basic_clients_cache_reload = basic_clients_cache_reload.clone();
+        let apply_local_clients_page = apply_local_clients_page.clone();
         let current_page = state.current_page;
         let page_size = state.page_size;
+        let total_db_items = state.total_db_items;
         let search_term = state.search_term.clone();
         let filters = state.filters.clone();
         let reload_trigger = state.reload_trigger;
@@ -93,11 +124,12 @@ pub fn clients_page() -> Html {
             (
                 current_page,
                 page_size,
+                total_db_items,
                 search_term,
                 filters,
                 reload_trigger,
             ),
-            move |(page, size, search, filters, _)| {
+            move |(page, size, total_db_items, search, filters, _)| {
                 if filters.has_api_filters() {
                     let params =
                         crate::pages::clients::utils::build_api_filter_params(search, filters);
@@ -127,59 +159,61 @@ pub fn clients_page() -> Html {
                         params.18,
                         Callback::from({
                             let state = state.clone();
-                            move |result: Result<Vec<Client>, ApiError>| {
-                                match result {
-                                    Ok(clients) => {
-                                        // Calculate pagination locally
-                                        let total = clients.len();
-                                        let (total_pages, start, end) =
-                                            crate::pages::clients::utils::calculate_pagination(
-                                                total, page_val, size_val,
-                                            );
-                                        let items = if start < total {
-                                            clients[start..end].to_vec()
-                                        } else {
-                                            Vec::new()
-                                        };
-
-                                        let paginated = crate::types::PaginatedResult {
-                                            items,
-                                            total,
-                                            page: page_val,
-                                            page_size: size_val,
-                                            total_pages,
-                                        };
-                                        state.dispatch(ClientsAction::SetClients(paginated));
-                                    }
-                                    Err(err) => {
-                                        state.dispatch(ClientsAction::SetError(Some(err.message)))
-                                    }
+                            move |result: Result<Vec<Client>, ApiError>| match result {
+                                Ok(clients) => {
+                                    let paginated =
+                                        crate::pages::clients::utils::build_paginated_result(
+                                            &clients, page_val, size_val,
+                                        );
+                                    state.dispatch(ClientsAction::SetClients(paginated));
+                                }
+                                Err(err) => {
+                                    state.dispatch(ClientsAction::SetError(Some(err.message)))
                                 }
                             }
                         }),
                     );
                 } else {
-                    api::get_clients(
-                        *page,
-                        *size,
-                        Some(search.clone()),
-                        Some(filters.os.clone()),
-                        Some(filters.status.clone()),
-                        Callback::from({
-                            let state = state.clone();
-                            move |result: Result<
-                                crate::types::PaginatedResult<Client>,
-                                ApiError,
-                            >| {
-                                match result {
-                                    Ok(result) => state.dispatch(ClientsAction::SetClients(result)),
-                                    Err(err) => {
-                                        state.dispatch(ClientsAction::SetError(Some(err.message)))
+                    let should_reload_cache = basic_clients_cache.is_empty()
+                        || *basic_clients_cache_reload != Some(state.reload_trigger)
+                        || (*total_db_items > 0 && basic_clients_cache.len() < *total_db_items);
+
+                    if should_reload_cache {
+                        let fetch_size = (*total_db_items).max(*size).max(1000);
+                        api::get_clients(
+                            1,
+                            fetch_size,
+                            None,
+                            None,
+                            None,
+                            Callback::from({
+                                let state = state.clone();
+                                let basic_clients_cache = basic_clients_cache.clone();
+                                let basic_clients_cache_reload = basic_clients_cache_reload.clone();
+                                let apply_local_clients_page = apply_local_clients_page.clone();
+                                move |result: Result<
+                                    crate::types::PaginatedResult<Client>,
+                                    ApiError,
+                                >| {
+                                    match result {
+                                        Ok(result) => {
+                                            state.dispatch(ClientsAction::SetTotalDbItems(
+                                                result.total,
+                                            ));
+                                            basic_clients_cache.set(result.items.clone());
+                                            basic_clients_cache_reload
+                                                .set(Some(state.reload_trigger));
+                                            apply_local_clients_page.emit(result.items);
+                                        }
+                                        Err(err) => state
+                                            .dispatch(ClientsAction::SetError(Some(err.message))),
                                     }
                                 }
-                            }
-                        }),
-                    );
+                            }),
+                        );
+                    } else {
+                        apply_local_clients_page.emit((*basic_clients_cache).clone());
+                    }
                 }
                 || ()
             },
@@ -205,16 +239,38 @@ pub fn clients_page() -> Html {
     // 分页处理
     let on_page_change = {
         let state = state.clone();
+        let basic_clients_cache = basic_clients_cache.clone();
         Callback::from(move |page: usize| {
-            state.dispatch(ClientsAction::SetPage(page));
+            if !state.filters.has_api_filters() && !basic_clients_cache.is_empty() {
+                let filtered =
+                    filter_clients_local(&basic_clients_cache, &state.search_term, &state.filters);
+                state.dispatch(ClientsAction::SetClients(
+                    crate::pages::clients::utils::build_paginated_result(
+                        &filtered,
+                        page,
+                        state.page_size,
+                    ),
+                ));
+            } else {
+                state.dispatch(ClientsAction::SetPage(page));
+            }
         })
     };
 
     // 页面大小变更处理
     let on_page_size_change = {
         let state = state.clone();
+        let basic_clients_cache = basic_clients_cache.clone();
         Callback::from(move |size: usize| {
-            state.dispatch(ClientsAction::SetPageSize(size));
+            if !state.filters.has_api_filters() && !basic_clients_cache.is_empty() {
+                let filtered =
+                    filter_clients_local(&basic_clients_cache, &state.search_term, &state.filters);
+                state.dispatch(ClientsAction::SetClients(
+                    crate::pages::clients::utils::build_paginated_result(&filtered, 1, size),
+                ));
+            } else {
+                state.dispatch(ClientsAction::SetPageSize(size));
+            }
         })
     };
 
@@ -317,7 +373,14 @@ pub fn clients_page() -> Html {
 
                 let _ = worksheet.write_string(r, 0, &client.id);
                 let _ = worksheet.write_string(r, 1, &client.hostname);
-                let _ = worksheet.write_string(r, 2, &client.ip_address);
+                let _ = worksheet.write_string(
+                    r,
+                    2,
+                    client
+                        .primary_ip
+                        .as_deref()
+                        .unwrap_or(&client.ip_address),
+                );
                 let _ = worksheet.write_string(r, 3, &rack_name);
                 let _ =
                     worksheet.write_string(r, 4, client.unit_position.clone().unwrap_or_default());
@@ -401,7 +464,11 @@ pub fn clients_page() -> Html {
         let racks = state.racks.clone();
         let persons = state.persons.clone();
         let projects = state.projects.clone();
-        let all_clients = state.clients.clone();
+        let all_clients = if !basic_clients_cache.is_empty() {
+            (*basic_clients_cache).clone()
+        } else {
+            state.clients.clone()
+        };
         let import_progress = import_progress.clone();
         let is_importing = is_importing.clone();
         let import_errors = import_errors.clone();
@@ -661,19 +728,7 @@ pub fn clients_page() -> Html {
                                         import_progress.set(progress);
                                     }
 
-                                    // Refresh
-                                    if let Ok(result) = api::fetch_clients(
-                                        state.current_page,
-                                        state.page_size,
-                                        Some(state.search_term.clone()),
-                                        Some(state.filters.os.clone()),
-                                        Some(state.filters.status.clone()),
-                                    )
-                                    .await
-                                    {
-                                        state.dispatch(ClientsAction::SetClients(result));
-                                    }
-
+                                    state.dispatch(ClientsAction::TriggerReload);
                                     is_importing.set(false);
                                     import_progress.set(100);
                                     gloo::dialogs::alert(&t.t("clients.import.success"));
@@ -691,24 +746,55 @@ pub fn clients_page() -> Html {
         })
     };
 
+    let editing_client_id = use_state(|| None::<String>);
+    let editing_client_data = use_state(|| None::<Client>);
+
+    let on_edit_client = {
+        let editing_client_id = editing_client_id.clone();
+        let clients = state.clients.clone();
+        let editing_client_data = editing_client_data.clone();
+        Callback::from(move |id: String| {
+            if let Some(client) = clients.iter().find(|c| c.id == id) {
+                editing_client_data.set(Some(client.clone()));
+                editing_client_id.set(Some(id));
+            }
+        })
+    };
+
+    let on_edit_save = {
+        let editing_client_id = editing_client_id.clone();
+        let editing_client_data = editing_client_data.clone();
+        let state = state.clone();
+        Callback::from(move |updated: Client| {
+            let id = updated.id.clone();
+            let editing_client_id = editing_client_id.clone();
+            let editing_client_data = editing_client_data.clone();
+            let state = state.clone();
+            spawn_local(async move {
+                let _ = api::update_client(&id, &updated).await;
+                editing_client_id.set(None);
+                editing_client_data.set(None);
+                state.dispatch(ClientsAction::TriggerReload);
+            });
+        })
+    };
+
+    let on_edit_cancel = {
+        let editing_client_id = editing_client_id.clone();
+        let editing_client_data = editing_client_data.clone();
+        Callback::from(move |()| {
+            editing_client_id.set(None);
+            editing_client_data.set(None);
+        })
+    };
+
     let on_delete_client = {
         let state = state.clone();
         Callback::from(move |id: String| {
             let state = state.clone();
             spawn_local(async move {
-                if let Ok(_) = api::delete_client(&id).await {
-                    // Refresh
-                    if let Ok(result) = api::fetch_clients(
-                        state.current_page,
-                        state.page_size,
-                        Some(state.search_term.clone()),
-                        Some(state.filters.os.clone()),
-                        Some(state.filters.status.clone()),
-                    )
-                    .await
-                    {
-                        state.dispatch(ClientsAction::SetClients(result));
-                    }
+                if api::delete_client(&id).await.is_ok() {
+                    state.dispatch(ClientsAction::TriggerReload);
                 }
             });
         })
@@ -736,7 +822,7 @@ pub fn clients_page() -> Html {
                         <Statistics
                             total_db_items={state.total_db_items}
                             filtered_total={state.total_items}
-                            filtered_clients={state.clients.clone()}
+                            filtered_clients={statistics_clients}
                         />
 
                         <div class="flex flex-col gap-4">
@@ -779,6 +865,7 @@ pub fn clients_page() -> Html {
                             on_toggle_selection={on_toggle_selection}
                             on_select_all={on_select_all}
                             on_delete={on_delete_client}
+                            on_edit={on_edit_client}
                         />
                     </div>
                 </CardContent>
@@ -799,6 +886,20 @@ pub fn clients_page() -> Html {
                         </CardContent>
                     </Card>
                 </div>
+            }
+
+            // Edit Client Modal
+            if let Some(client_data) = &*editing_client_data {
+                {create_portal(
+                    html! {
+                        <ClientEditModal
+                            client={client_data.clone()}
+                            on_save={on_edit_save.clone()}
+                            on_cancel={on_edit_cancel.clone()}
+                        />
+                    },
+                    document().body().unwrap().into()
+                )}
             }
 
             // Error Report Modal

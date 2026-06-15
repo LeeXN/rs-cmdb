@@ -10,6 +10,7 @@ use crate::components::ui::select::{Select, SelectOption};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::components::ui::table_action::TableActions;
 use crate::hooks::use_trans::use_trans;
+use crate::icons::{FileCode, FileSpreadsheet, Plus};
 use crate::pages::components::batch_form::BatchCreateForm;
 use crate::pages::components::form::ComponentForm;
 use crate::pages::components::import_export::{export_components, handle_file_import};
@@ -19,7 +20,6 @@ use crate::services::component::{
 };
 use common::entity::user::Role;
 use common::models::{Component, ComponentStatus, ComponentType, PaginatedResult};
-use lucide_yew::{FileCode, FileSpreadsheet, Plus};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use wasm_bindgen_futures::spawn_local;

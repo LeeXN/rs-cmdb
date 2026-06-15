@@ -4,12 +4,36 @@ use crate::components::ui::modal::{
     Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle,
 };
 use crate::hooks::use_trans::use_trans;
+use crate::icons::X;
 use crate::services::api;
 use crate::types::{Client, ClientStatus, Environment, Person, Project, Rack};
-use lucide_yew::X;
+use common::entity::hardware::NIC;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlSelectElement};
 use yew::prelude::*;
+
+/// Extract unique non-empty NIC IPs (IPv4 preferred, fallback IPv6)
+fn extract_nic_ips(nics: &[NIC]) -> Vec<String> {
+    let mut ips: Vec<String> = nics
+        .iter()
+        .filter_map(|nic| {
+            let ip = if !nic.ipv4_address.is_empty()
+                && nic.ipv4_address != "N/A"
+                && nic.ipv4_address != "0.0.0.0"
+            {
+                nic.ipv4_address.clone()
+            } else if !nic.ipv6_address.is_empty() && nic.ipv6_address != "N/A" {
+                nic.ipv6_address.clone()
+            } else {
+                return None;
+            };
+            Some(format!("{} ({})", ip, nic.name))
+        })
+        .collect();
+    ips.sort();
+    ips.dedup();
+    ips
+}
 
 #[derive(Properties, PartialEq)]
 pub struct ClientEditModalProps {
@@ -38,6 +62,9 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
     let warranty_expiration =
         use_state(|| props.client.warranty_expiration.clone().unwrap_or_default());
     let supplier = use_state(|| props.client.supplier.clone().unwrap_or_default());
+    let primary_ip = use_state(|| props.client.primary_ip.clone().unwrap_or_default());
+    let nic_ips = use_state(Vec::<String>::new);
+    let nics_loading = use_state(|| true);
 
     let persons = use_state(Vec::<Person>::new);
     let projects = use_state(Vec::<Project>::new);
@@ -47,10 +74,16 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
         let persons = persons.clone();
         let projects = projects.clone();
         let racks = racks.clone();
+        let nic_ips = nic_ips.clone();
+        let nics_loading = nics_loading.clone();
+        let client_id = props.client.id.clone();
         use_effect_with((), move |_| {
             let persons = persons.clone();
             let projects = projects.clone();
             let racks = racks.clone();
+            let nic_ips = nic_ips.clone();
+            let nics_loading = nics_loading.clone();
+            let client_id = client_id.clone();
             spawn_local(async move {
                 if let Ok(data) = api::fetch_persons(1, 1000, None, None).await {
                     persons.set(data.items);
@@ -65,6 +98,12 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                 if let Ok(data) = api::fetch_racks(1, 1000, None, None).await {
                     racks.set(data.items);
                 }
+            });
+            spawn_local(async move {
+                if let Ok(hw) = api::fetch_hardware_info(&client_id).await {
+                    nic_ips.set(extract_nic_ips(&hw.nics));
+                }
+                nics_loading.set(false);
             });
             || ()
         });
@@ -84,6 +123,7 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
         let asset_tag = asset_tag.clone();
         let warranty_expiration = warranty_expiration.clone();
         let supplier = supplier.clone();
+        let primary_ip = primary_ip.clone();
 
         let client = props.client.clone();
         let on_save = props.on_save.clone();
@@ -142,6 +182,11 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                 None
             } else {
                 Some((*supplier).clone())
+            };
+            updated_client.primary_ip = if primary_ip.is_empty() {
+                None
+            } else {
+                Some((*primary_ip).clone())
             };
 
             on_save.emit(updated_client);
@@ -382,6 +427,70 @@ pub fn client_edit_modal(props: &ClientEditModalProps) -> Html {
                                 })}
                             />
                         </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class={label_class}>{t.t("client_detail.primary_ip")}</label>
+                        <select class={select_class}
+                            onchange={
+                                let primary_ip = primary_ip.clone();
+                                Callback::from(move |e: Event| {
+                                    let input: HtmlSelectElement = e.target_unchecked_into();
+                                    let val = input.value();
+                                    if val == "__custom__" {
+                                        primary_ip.set(String::new());
+                                    } else {
+                                        let ip = val.split(" (").next().unwrap_or("").to_string();
+                                        primary_ip.set(ip);
+                                    }
+                                })
+                            }
+                        >
+                            <option value="" selected={primary_ip.is_empty() && !nic_ips.is_empty()}>
+                                {if nic_ips.is_empty() { t.t("client_edit.primary_ip_none") } else { t.t("client_edit.primary_ip_select") }}
+                            </option>
+                            {
+                                nic_ips.iter().map(|entry| {
+                                    let ip = entry.split(" (").next().unwrap_or("").to_string();
+                                    let is_selected = *primary_ip == ip;
+                                    html! {
+                                        <option value={entry.clone()} selected={is_selected}>{entry}</option>
+                                    }
+                                }).collect::<Html>()
+                            }
+                            <option value="__custom__" selected={
+                                let ip = (*primary_ip).clone();
+                                !ip.is_empty() && !nic_ips.iter().any(|e| e.starts_with(&ip))
+                            }>{t.t("client_edit.primary_ip_custom")}</option>
+                        </select>
+                        {
+                            if nic_ips.is_empty() || {
+                                let ip = (*primary_ip).clone();
+                                !ip.is_empty() && !nic_ips.iter().any(|e| e.starts_with(&ip))
+                            } {
+                                html! {
+                                    <Input
+                                        value={(*primary_ip).clone()}
+                                        placeholder={"192.168.1.100"}
+                                        oninput={
+                                            let primary_ip = primary_ip.clone();
+                                            Callback::from(move |val: String| {
+                                                primary_ip.set(val);
+                                            })
+                                        }
+                                    />
+                                }
+                            } else {
+                                html! {}
+                            }
+                        }
+                        <p class="text-xs text-muted-foreground">
+                            {if *nics_loading {
+                                t.t("loading")
+                            } else {
+                                t.t("client_edit.primary_ip_hint")
+                            }}
+                        </p>
                     </div>
 
                     <div class="space-y-2">

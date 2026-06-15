@@ -203,6 +203,7 @@ pub fn create_test_client(id: &str) -> Client {
         id: id.to_string(),
         hostname: format!("client-{}", id),
         ip_address: format!("192.168.1.{}", id.split('-').next_back().unwrap_or("1")),
+        primary_ip: None,
         os: Some("Linux".to_string()),
         kernel_version: None,
         serial_number: Some(format!("SN-{}", id)),

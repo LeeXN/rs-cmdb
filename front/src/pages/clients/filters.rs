@@ -16,6 +16,10 @@ pub fn filter_clients_local(
                 let matches_search = client.hostname.to_lowercase().contains(&search_lower)
                     || client.ip_address.contains(search_term)
                     || client
+                        .primary_ip
+                        .as_ref()
+                        .is_some_and(|ip| ip.contains(search_term))
+                    || client
                         .os
                         .as_ref()
                         .is_some_and(|os| os.to_lowercase().contains(&search_lower))

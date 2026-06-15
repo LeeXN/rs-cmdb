@@ -5,10 +5,10 @@ use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::checkbox::Checkbox;
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::hooks::use_trans::use_trans;
+use crate::icons::{Eye, Pencil, Trash2};
 use crate::routes::Route;
 use crate::types::{Client, ClientStatus, Environment, Person, Project};
 use common::entity::user::Role;
-use lucide_yew::{Eye, Pencil, Trash2};
 use std::collections::HashSet;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -28,6 +28,7 @@ pub struct TableProps {
     pub on_toggle_selection: Callback<String>,
     pub on_select_all: Callback<bool>,
     pub on_delete: Callback<String>,
+    pub on_edit: Callback<String>,
 }
 
 #[function_component(ClientsTable)]
@@ -53,7 +54,6 @@ pub fn clients_table(props: &TableProps) -> Html {
 
     let on_select_all_click = {
         let on_select_all = props.on_select_all.clone();
-        let is_all_selected = is_all_selected;
         Callback::from(move |_| {
             on_select_all.emit(!is_all_selected);
         })
@@ -72,6 +72,7 @@ pub fn clients_table(props: &TableProps) -> Html {
                                 />
                             </TableHead>
                             <TableHead>{t.t("clients.table.hostname")}</TableHead>
+                            <TableHead class="text-center">{t.t("clients.table.online_status")}</TableHead>
                             <TableHead>{t.t("clients.table.ip")}</TableHead>
                             <TableHead class="text-center">{t.t("clients.table.os")}</TableHead>
                             <TableHead class="text-center">{t.t("clients.table.owner")}</TableHead>
@@ -147,6 +148,14 @@ pub fn clients_table(props: &TableProps) -> Html {
                                     })
                                 };
 
+                                let on_edit_click = {
+                                    let on_edit = props.on_edit.clone();
+                                    let id = client.id.clone();
+                                    Callback::from(move |_| {
+                                        on_edit.emit(id.clone());
+                                    })
+                                };
+
                                 let on_toggle = {
                                     let on_toggle_selection = props.on_toggle_selection.clone();
                                     let id = client.id.clone();
@@ -156,6 +165,21 @@ pub fn clients_table(props: &TableProps) -> Html {
                                 };
 
                                 let is_selected = props.selected_clients.contains(&client.id);
+
+                                let is_online = client.last_seen.as_ref()
+                                    .and_then(|time| chrono::DateTime::parse_from_rfc3339(time).ok())
+                                    .map(|dt| {
+                                        let now = chrono::Utc::now();
+                                        let duration = now.signed_duration_since(dt.with_timezone(&chrono::Utc));
+                                        duration.num_minutes() <= 5
+                                    })
+                                    .unwrap_or(false);
+
+                                let online_badge = if is_online {
+                                    html! { <Badge variant={BadgeVariant::Outline} class="bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-700">{t.t("online")}</Badge> }
+                                } else {
+                                    html! { <Badge variant={BadgeVariant::Outline} class="bg-red-600 text-white border-red-500 hover:bg-red-700">{t.t("offline")}</Badge> }
+                                };
 
                                 html! {
                                     <TableRow>
@@ -173,7 +197,8 @@ pub fn clients_table(props: &TableProps) -> Html {
                                                 <span class="text-xs text-muted-foreground">{ &client.serial_number.clone().unwrap_or_default() }</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell>{ &*client.ip_address }</TableCell>
+                                        <TableCell class="text-center">{online_badge}</TableCell>
+                                        <TableCell>{ client.primary_ip.as_deref().unwrap_or(&client.ip_address) }</TableCell>
                                         <TableCell class="text-center">
                                             <div class="flex flex-col items-center">
                                                 <span class="text-sm">{ client.os.clone().unwrap_or_else(|| "-".to_string()) }</span>
@@ -190,7 +215,7 @@ pub fn clients_table(props: &TableProps) -> Html {
                                                     <Eye class="h-4 w-4" />
                                                 </Button>
                                                 <PermissionGuard min_role={Role::User}>
-                                                    <Button variant={ButtonVariant::Ghost} size={ButtonSize::Icon} title={t.t("clients.actions.edit")}>
+                                                    <Button variant={ButtonVariant::Ghost} size={ButtonSize::Icon} onclick={on_edit_click} title={t.t("clients.actions.edit")}>
                                                         <Pencil class="h-4 w-4" />
                                                     </Button>
                                                 </PermissionGuard>

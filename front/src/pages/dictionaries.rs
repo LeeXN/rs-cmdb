@@ -9,12 +9,12 @@ use crate::components::ui::input::Input;
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::components::ui::table_action::TableActions;
 use crate::hooks::use_trans::use_trans;
+use crate::icons::{Briefcase, Building2, Plus, Wallet};
 use crate::services::api::{
     create_dictionary, delete_dictionary, fetch_dictionaries, update_dictionary,
 };
 use common::entity::dictionary::Dictionary;
 use common::entity::user::Role;
-use lucide_yew::{Briefcase, Building2, Plus, Wallet};
 use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -184,8 +184,7 @@ pub fn dictionaries() -> Html {
         let show_form = show_form.clone();
         let editing_item = editing_item.clone();
         Callback::from(move |_| {
-            let mut item = Dictionary::default();
-            item.id = String::new(); // Ensure ID is empty for new items
+            let mut item = Dictionary { id: String::new(), ..Default::default() };
             editing_item.set(item);
             show_form.set(true);
         })

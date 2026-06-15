@@ -5,10 +5,10 @@ use yew_router::prelude::*;
 use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardFooter, CardHeader};
+use crate::icons::{ArrowRight, Calendar, Clock, Monitor};
 use crate::routes::Route;
 use crate::types::Client;
 use crate::utils::format::{format_datetime, format_time_ago};
-use lucide_yew::{ArrowRight, Calendar, Clock, Monitor};
 
 #[derive(Properties, PartialEq)]
 pub struct ClientCardProps {
@@ -65,7 +65,7 @@ pub fn client_card(props: &ClientCardProps) -> Html {
                     </Link<Route>>
                     <div class="flex items-center text-sm text-muted-foreground">
                         <Monitor class="mr-1 h-3 w-3" />
-                        { &props.client.ip_address }
+                        { props.client.primary_ip.as_ref().unwrap_or(&props.client.ip_address) }
                     </div>
                 </div>
                 <div>

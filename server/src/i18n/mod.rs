@@ -25,13 +25,13 @@ impl I18n {
     }
 
     pub fn t(&self, key: &str) -> String {
-        self.translations
-            .get(key)
-            .cloned()
-            .unwrap_or_else(|| {
-                eprintln!("Warning: Translation key '{}' not found for language {:?}", key, self.language);
-                key.to_string()
-            })
+        self.translations.get(key).cloned().unwrap_or_else(|| {
+            eprintln!(
+                "Warning: Translation key '{}' not found for language {:?}",
+                key, self.language
+            );
+            key.to_string()
+        })
     }
 
     pub fn t_with_args(&self, key: &str, args: &HashMap<&str, &str>) -> String {

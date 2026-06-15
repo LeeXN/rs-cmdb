@@ -115,9 +115,11 @@ impl ClientService {
         serial_number: &str,
         os: &str,
         client_id: Option<String>,
+        primary_ip: Option<String>,
     ) -> CmdbResult<Client> {
         // Create a new client with given or generated ID
         let mut client = Client::new(hostname.to_string(), ip_address.to_string());
+        client.primary_ip = primary_ip.clone();
 
         // Use provided client ID if available
         if let Some(id) = client_id {
@@ -126,11 +128,7 @@ impl ClientService {
             // Try to find existing client by serial number if client_id is not provided
             // Note: This uses the underlying repo since find_by_serial is repo-specific
             // In a full refactor, this would also be in the DAO
-            if let Ok(Some(existing)) = self
-                .client_dao
-                .get_by_serial(serial_number)
-                .await
-            {
+            if let Ok(Some(existing)) = self.client_dao.get_by_serial(serial_number).await {
                 info!(
                     "Found existing client by serial number: {} -> {}",
                     serial_number, existing.id
@@ -149,6 +147,10 @@ impl ClientService {
                 existing_client.product_name = Some(product_name.to_string());
                 existing_client.serial_number = Some(serial_number.to_string());
                 existing_client.os = Some(os.to_string());
+                // Only update primary_ip if explicitly provided by the agent
+                if let Some(ref pip) = primary_ip {
+                    existing_client.primary_ip = Some(pip.clone());
+                }
                 existing_client.update_last_seen();
 
                 self.client_dao.save(&existing_client).await?;
@@ -172,9 +174,11 @@ impl ClientService {
     #[instrument(skip(self))]
     pub async fn delete_client(&self, client_id: &str) -> CmdbResult<()> {
         // Get client information first
-        let client = self.client_dao.get(client_id).await?.ok_or_else(|| {
-            CmdbError::NotFound(format!("Client {} not found", client_id))
-        })?;
+        let client = self
+            .client_dao
+            .get(client_id)
+            .await?
+            .ok_or_else(|| CmdbError::NotFound(format!("Client {} not found", client_id)))?;
 
         info!(
             "Deleting client: {} ({})",
@@ -352,20 +356,21 @@ impl ClientDao {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::{CacheConfigs, CachedClientRepository};
     use crate::repository::{
         client_repository::ClientRepository, hardware_repository::HardwareRepository,
         rack_repository::RackRepository,
     };
-    use crate::cache::{CacheConfigs, CachedClientRepository};
     use std::sync::Arc;
 
-    fn create_service(
-        db: Arc<dyn crate::db::Database>,
-    ) -> ClientService {
+    fn create_service(db: Arc<dyn crate::db::Database>) -> ClientService {
         let client_repo_inner = Arc::new(ClientRepository::new(db.clone()));
         let cache_configs = CacheConfigs::default();
-        let client_repo = Arc::new(CachedClientRepository::new(client_repo_inner.clone(), &cache_configs));
-        
+        let client_repo = Arc::new(CachedClientRepository::new(
+            client_repo_inner.clone(),
+            &cache_configs,
+        ));
+
         let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
         let rack_repo = Arc::new(RackRepository::new(db.clone()));
         ClientService::from_repositories(client_repo, hardware_repo, rack_repo)
@@ -493,6 +498,7 @@ mod tests {
                 "SN12345",
                 "Linux",
                 None,
+                None,
             )
             .await;
 
@@ -518,6 +524,7 @@ mod tests {
                 "SN12345",
                 "Linux",
                 Some(custom_id.clone()),
+                None,
             )
             .await;
 
@@ -544,6 +551,7 @@ mod tests {
                 "PowerEdge",
                 "SN12345",
                 "Linux",
+                None,
                 None,
             )
             .await;

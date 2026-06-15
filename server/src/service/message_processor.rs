@@ -108,6 +108,7 @@ impl MessageProcessor {
                         &registration.serial_number.unwrap_or_default(),
                         &registration.os.unwrap_or_default(),
                         Some(registration.id.clone()),
+                        registration.primary_ip.clone(),
                     )
                     .await?;
             }

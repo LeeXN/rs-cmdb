@@ -24,6 +24,7 @@ pub enum ClientsAction {
     SelectAll(bool),
     ClearSelection,
     SetTotalDbItems(usize),
+    TriggerReload,
 }
 
 // 简化筛选状态结构
@@ -72,10 +73,7 @@ impl FilterState {
     }
 
     pub fn has_api_filters(&self) -> bool {
-        !self.os.is_empty()
-            || !self.os_kernel.is_empty()
-            || !self.server_vendor.is_empty()
-            || !self.cpu_vendor.is_empty()
+        !self.cpu_vendor.is_empty()
             || !self.cpu_model.is_empty()
             || !self.gpu_vendor.is_empty()
             || !self.gpu_model.is_empty()
@@ -84,12 +82,6 @@ impl FilterState {
             || !self.network_type.is_empty()
             || !self.network_model.is_empty()
             || !self.storage_type.is_empty()
-            || !self.status.is_empty()
-            || !self.client_status.is_empty()
-            || !self.environment.is_empty()
-            || !self.rack_id.is_empty()
-            || !self.project_id.is_empty()
-            || !self.owner_id.is_empty()
     }
 
     pub fn clear(&mut self) {
@@ -236,6 +228,10 @@ impl Reducible for ClientsState {
             }
             ClientsAction::SetTotalDbItems(total) => {
                 new_state.total_db_items = total;
+            }
+            ClientsAction::TriggerReload => {
+                new_state.loading = true;
+                new_state.reload_trigger += 1;
             }
         }
 

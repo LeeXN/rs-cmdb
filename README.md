@@ -4,13 +4,66 @@
 
 **rs-cmdb** is a lightweight Configuration Management Database (CMDB) system built entirely in Rust.
 
+## 📌 Primary IP Feature
+
+The **Primary IP** feature introduces a dedicated `primary_ip` field on each client record, displayed preferentially alongside the original `ip_address`. The field is sourced through the following priority chain:
+
+1. **Manual override** — Set via the frontend edit form or `PUT /api/v1/clients/{id}/primary-ip` API
+2. **Client agent auto-detection** — If the client agent config has `[primary_ip] subnet = "10.0.0.0/8"`, the agent matches its NIC IPv4 against the CIDR and sends the result on registration
+3. **Server auto-detection** — If the server config has `[primary_ip] subnet = "10.0.0.0/8"`, the server automatically detects the primary IP from NICs after each hardware push
+4. **Fallback** — If none of the above apply, the field remains `None` and the UI falls back to the original `ip_address`
+
+### Upgrade & Compatibility
+
+**Compatibility Matrix** — All combinations work without breaking:
+
+| Server | Client | Behavior |
+|---|---|---|
+| New | New | Full primary_ip support: agent detects on registration + server auto-detects on hardware push + manual override via UI/API |
+| New | Old | Server auto-detects `primary_ip` from NICs on hardware push (if `[primary_ip]` subnet configured). Agent registration does NOT include `primary_ip`. Works seamlessly. |
+| Old | New | New client sends `primary_ip` in registration payload; old server ignores the unknown field (no `deny_unknown_fields`). `primary_ip` is not stored or displayed. Non-breaking. |
+
+No database migration is needed — the field is `Option<String>` and defaults to `None` on existing records.
+
+**Server** (`rs-cmdb-server`) upgrade steps:
+
+1. Binary update: Replace the server binary with the new build and restart.
+2. (Optional) Add auto-detection CIDR to `config/default.toml` or environment variable.
+   Two formats are accepted — shorthand (single line) or full struct:
+
+   **Shorthand (recommended):**
+   ```toml
+   primary_ip = "10.0.0.0/8"
+   ```
+   **Full struct (equivalent):**
+   ```toml
+   [primary_ip]
+   subnet = "10.0.0.0/8"
+   ```
+
+   Environment variable equivalent:
+   ```bash
+   CMDB_PRIMARY_IP__SUBNET=10.0.0.0/8
+   ```
+3. Auto-detection runs on the next hardware push from each client; manually set `primary_ip` via the UI or API at any time.
+
+**Client Agent** (`rs-cmdb-client`) upgrade steps:
+
+1. Binary update: Replace the client binary with the new build and restart.
+2. (Optional) Add `[primary_ip]` section to `client.toml` to enable local detection on registration:
+   ```toml
+   [primary_ip]
+   subnet = "10.0.0.0/8"
+   ```
+3. If no config is added, the agent sends `primary_ip: null` and falls back to server-side auto-detection.
+
 ## 🚀 Features
 
 *   **Full Stack Rust**: Built with Rust from the kernel to the UI, ensuring memory safety and high performance.
 *   **Automated Discovery**: Cross-platform agents (`rs-cmdb-client`) automatically collect hardware specifications (CPU, RAM, Disk, Network) and report to the server.
 *   **Asset Management**:
     *   Detailed hardware inventory tracking.
-    *   Change history logging (track hardware modifications over time).
+    *   **Efficient change history**: Stores only deltas (not full snapshots), with built-in CLI for analysis, cleanup, and migration (`rs-cmdb-server history analyze | cleanup | migrate`).
     *   Rack and data center visualization.
 *   **Modern Dashboard**: Real-time analytics, resource usage statistics, and health monitoring.
 *   **Security**: Role-Based Access Control (RBAC) and secure API authentication.
@@ -77,7 +130,8 @@ The project follows a monorepo structure:
 
 We provide a `Makefile` to simplify the build and test process.
 
-*   **Build Everything**: `make build` (Builds Server, Client, and Frontend)
+*   **Build Everything (glibc)**: `make build`
+*   **Build Static Musl Binaries**: `make build-musl` (fully static, no libc dependency)
 *   **Run Tests**: `make test`
 *   **Build Docker Image**: `make docker`
 *   **Clean Artifacts**: `make clean`
@@ -331,6 +385,14 @@ component_missing_grace_period_hours = 24 # Grace period before alerting on miss
 [database]
 path = "data/cmdb.redb"    # Path to the Redb database file
 
+# Primary IP Auto-Detection (Optional)
+[primary_ip]
+# CIDR subnet for automatic primary IP detection from NICs
+# When hardware is reported, the server scans NIC IPv4 addresses
+# and assigns the first matching Ethernet NIC's IP as primary_ip.
+# Leave commented out to skip auto-detection.
+# subnet = "10.0.0.0/8"
+
 # Message Queue
 [queue]
 capacity = 1000            # Internal message queue capacity
@@ -349,6 +411,7 @@ Every setting can be overridden by environment variables. Use double underscores
 - `CMDB_PORT` - Server port (default: `8080`)
 - `CMDB_LOG_LEVEL` - Log level: debug, info, warn, error (default: `info`)
 - `CMDB_DATABASE__PATH` - Path to database file (default: `data/cmdb.redb`)
+- `CMDB_PRIMARY_IP__SUBNET` - CIDR subnet for primary IP auto-detection (e.g., `10.0.0.0/8`)
 - `CMDB_SSH_KNOWN_HOSTS_FILE` - Path to SSH known_hosts file (default: `/etc/cmdb/ssh_known_hosts`)
 
 ### SSH Known Hosts Setup
@@ -428,6 +491,67 @@ Access the UI at `http://localhost:8080`.
 Use the admin username and the password you set via `CMDB_ADMIN_PASSWORD`:
 - Username: `admin`
 - Password: *(your chosen password)*
+
+## 🔧 History Maintenance (CLI)
+
+The server binary includes built-in CLI commands for managing the hardware change history database.
+
+```text
+rs-cmdb-server history <COMMAND>
+
+Commands:
+  analyze   Analyze history storage — show per-client snapshot counts and age
+  cleanup   Remove old history entries, keeping only the newest N per client
+  migrate   Convert old full-snapshot history entries to delta format (only needed
+            for databases created before the delta-history feature)
+  compact   Rewrite database to reclaim unused space (run after migrate + cleanup)
+```
+
+### `history analyze`
+Scans all history keys and prints:
+- Total number of clients with history
+- Total history entries
+- Top-20 clients by history count, with oldest/newest timestamps
+
+```bash
+rs-cmdb-server history analyze --db-path /opt/rs-cmdb/data/cmdb.redb
+```
+
+### `history cleanup --keep-last <N>`
+Removes the oldest history entries per client, keeping only the newest `N` snapshots per machine. Use `--dry-run` to preview without deleting.
+
+```bash
+# Preview: show what would be deleted
+rs-cmdb-server history cleanup --keep-last 50 --dry-run --db-path /opt/rs-cmdb/data/cmdb.redb
+
+# Execute cleanup, keeping newest 50 entries per client
+rs-cmdb-server history cleanup --keep-last 50 --db-path /opt/rs-cmdb/data/cmdb.redb
+```
+
+### `history migrate`
+Converts old full-snapshot history entries to the new delta-only format, significantly reducing storage usage. Only needed if the database was created before the delta-history feature was introduced. After migration, history stores only changes instead of full hardware snapshots.
+
+```bash
+rs-cmdb-server history migrate --db-path /opt/rs-cmdb/data/cmdb.redb
+```
+
+### `history compact`
+Rewrites the entire database to a new file, reclaiming **all** unused space. Run this after `migrate` and `cleanup` to shrink the file to its minimum size (actual data only, no wasted pages).
+
+```bash
+rs-cmdb-server history compact --db-path /opt/rs-cmdb/data/cmdb.redb
+```
+
+Example result after a full cycle:
+```text
+# Before: 121,298 entries → 4.1 GB file (2.7 GB actual)
+rs-cmdb-server history migrate --db-path /opt/rs-cmdb/data/cmdb.redb
+rs-cmdb-server history cleanup --keep-last 100 --db-path /opt/rs-cmdb/data/cmdb.redb
+rs-cmdb-server history compact --db-path /opt/rs-cmdb/data/cmdb.redb
+# After: 24,814 entries → 26 MB file
+```
+
+> **Note**: `compact` loads all data into memory, so ensure sufficient RAM for the full database working set.
 
 ## 📄 License
 

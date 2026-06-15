@@ -5,6 +5,4 @@
 
 pub mod input_validation;
 
-pub use input_validation::{
-    validate_hostname, validate_ip_address, validate_ipv4, validate_ipv6, validate_ssh_argument,
-};
+pub use input_validation::{validate_ip_address, validate_ssh_argument};

@@ -22,3 +22,7 @@ components = [
 
 [logging]
 level = "info"
+
+# Uncomment to auto-detect primary IP from a specific subnet during registration
+# [primary_ip]
+# subnet = "10.0.0.0/8"

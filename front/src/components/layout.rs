@@ -2,15 +2,15 @@ use crate::components::change_password_modal::ChangePasswordModal;
 use crate::components::ui::input::Input;
 use crate::hooks::use_trans::use_trans;
 use crate::i18n::Language;
+use crate::icons::{
+    Bell, ChartBar, Code, Cpu, Download, Folder, HardDrive, Key, Languages, LayoutDashboard, List,
+    LogOut, Menu, Search, Server, Shield, User, Users,
+};
 use crate::routes::Route;
 use crate::stores::auth_store::AuthStore;
 use crate::stores::language_store::LanguageStore;
 use crate::stores::theme::ThemeStore;
 use crate::types::Role;
-use lucide_yew::{
-    Bell, ChartBar, Code, Cpu, Download, Folder, HardDrive, Key, Languages, LayoutDashboard, List,
-    LogOut, Menu, Search, Server, Shield, User, Users,
-};
 use web_sys::window;
 use yew::prelude::*;
 use yew_router::prelude::*;

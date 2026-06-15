@@ -10,12 +10,12 @@ use crate::components::ui::select::{Select, SelectOption};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::components::ui::table_action::TableActions;
 use crate::hooks::use_trans::use_trans;
+use crate::icons::Plus;
 use crate::services::api::{fetch_dictionaries, fetch_persons};
 use crate::services::project::{create_project, delete_project, get_projects, update_project};
 use crate::types::Role;
 use common::entity::dictionary::Dictionary;
 use common::models::{Person, Project};
-use lucide_yew::Plus;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -268,8 +268,7 @@ pub fn projects() -> Html {
         let show_form = show_form.clone();
         let editing_project = editing_project.clone();
         Callback::from(move |_| {
-            let mut new_project = Project::default();
-            new_project.id = String::new(); // Ensure ID is empty for new project
+            let mut new_project = Project { id: String::new(), ..Default::default() };
             editing_project.set(Some(new_project));
             show_form.set(true);
         })

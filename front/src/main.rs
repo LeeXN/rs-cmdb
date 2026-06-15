@@ -2,6 +2,7 @@ mod app;
 mod components;
 mod hooks;
 mod i18n;
+mod icons;
 mod pages;
 mod routes;
 mod services;

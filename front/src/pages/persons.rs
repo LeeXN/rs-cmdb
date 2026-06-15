@@ -10,12 +10,12 @@ use crate::components::ui::select::{Select, SelectOption};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::components::ui::table_action::TableActions;
 use crate::hooks::use_trans::use_trans;
+use crate::icons::Plus;
 use crate::services::api::fetch_dictionaries;
 use crate::services::person::{create_person, delete_person, get_persons, update_person};
 use crate::types::Role;
 use common::entity::dictionary::Dictionary;
 use common::models::Person;
-use lucide_yew::Plus;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -247,8 +247,7 @@ pub fn persons() -> Html {
         let show_form = show_form.clone();
         let editing_person = editing_person.clone();
         Callback::from(move |_| {
-            let mut new_person = Person::default();
-            new_person.id = String::new(); // Ensure ID is empty for new person
+            let mut new_person = Person { id: String::new(), ..Default::default() };
             editing_person.set(Some(new_person));
             show_form.set(true);
         })

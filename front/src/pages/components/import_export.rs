@@ -1,15 +1,15 @@
+use crate::i18n::I18n;
+use crate::services::component::update_component;
+use calamine::{DataType, Reader, Xlsx};
 use common::models::{Component, ComponentStatus, ComponentType};
 use rust_xlsxwriter::Workbook;
+use std::collections::HashMap;
+use std::io::Cursor;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{Blob, BlobPropertyBag, FileReader, HtmlAnchorElement, Url};
-use std::io::Cursor;
-use calamine::{Reader, Xlsx, DataType};
-use crate::services::component::update_component;
 use yew::Callback;
-use std::collections::HashMap;
-use std::rc::Rc;
-use crate::i18n::I18n;
 
 pub fn export_components(components: &[Component]) {
     let mut workbook = Workbook::new();
@@ -46,11 +46,7 @@ pub fn export_components(components: &[Component]) {
         let _ = worksheet.write_string(r, 4, component.vendor.clone().unwrap_or_default());
         let _ = worksheet.write_string(r, 5, &status);
         let _ = worksheet.write_string(r, 6, component.location.clone().unwrap_or_default());
-        let _ = worksheet.write_string(
-            r,
-            7,
-            component.purchase_date.clone().unwrap_or_default(),
-        );
+        let _ = worksheet.write_string(r, 7, component.purchase_date.clone().unwrap_or_default());
         let _ = worksheet.write_string(
             r,
             8,
@@ -67,8 +63,7 @@ pub fn export_components(components: &[Component]) {
     array.push(&uint8_array.buffer());
 
     let blob_options = BlobPropertyBag::new();
-    blob_options
-        .set_type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    blob_options.set_type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     let blob = Blob::new_with_u8_array_sequence_and_options(&array, &blob_options).unwrap();
 
     let url = Url::create_object_url_with_blob(&blob).unwrap();
@@ -197,7 +192,7 @@ pub fn handle_file_import(
                 let total = updates.len();
                 let mut success_count = 0;
                 for (idx, component) in updates.iter().enumerate() {
-                    if let Ok(_) = update_component(&component.id, component).await {
+                    if update_component(&component.id, component).await.is_ok() {
                         success_count += 1;
                     }
                     let progress = ((idx as f64 / total as f64) * 100.0) as i32;
