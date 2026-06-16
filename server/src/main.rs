@@ -522,7 +522,7 @@ async fn run_history_analyze(db: &Arc<dyn Database>) -> Result<()> {
 
     // Sort buckets by history count descending
     let mut sorted: Vec<_> = buckets.into_iter().collect();
-    sorted.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    sorted.sort_by_key(|entry| std::cmp::Reverse(entry.1.len()));
 
     println!("\nTop clients by history count:");
     for (client_id, entries) in sorted.iter().take(20) {
@@ -561,8 +561,8 @@ async fn run_history_cleanup(
 
     // Sort each client's entries newest-first
     let mut to_delete = Vec::new();
-    for (_client_id, mut entries) in buckets.iter_mut() {
-        entries.sort_by(|a, b| b.1.cmp(&a.1));
+    for (_client_id, entries) in buckets.iter_mut() {
+        entries.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         if entries.len() > keep_last {
             for (key, _) in entries.iter().skip(keep_last) {
                 to_delete.push(key.clone());

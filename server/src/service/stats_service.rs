@@ -557,7 +557,7 @@ impl StatsService {
             })
             .collect();
 
-        items.sort_by(|a, b| b.count.cmp(&a.count));
+        items.sort_by_key(|item| std::cmp::Reverse(item.count));
         items
     }
 
