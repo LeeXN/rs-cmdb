@@ -184,7 +184,10 @@ pub fn dictionaries() -> Html {
         let show_form = show_form.clone();
         let editing_item = editing_item.clone();
         Callback::from(move |_| {
-            let mut item = Dictionary { id: String::new(), ..Default::default() };
+            let mut item = Dictionary {
+                id: String::new(),
+                ..Default::default()
+            };
             editing_item.set(item);
             show_form.set(true);
         })

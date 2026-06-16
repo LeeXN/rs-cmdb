@@ -592,8 +592,6 @@ async fn run_history_cleanup(
 async fn run_history_migrate(db: &Arc<dyn Database>) -> Result<()> {
     use common::models::{HardwareHistoryEntry, build_hardware_history_entries};
 
-    let hardware_repo = crate::repository::hardware_repository::HardwareRepository::new(db.clone());
-
     // Get all client IDs that have history
     let keys = db.list_keys("hardware:").await?;
     let mut client_ids: Vec<String> = keys
@@ -637,7 +635,7 @@ async fn run_history_migrate(db: &Arc<dyn Database>) -> Result<()> {
         }
 
         // Extract old-format snapshots
-        let snapshots: Vec<(String, common::entity::hardware::Hardware)> = entries
+        let mut snapshots: Vec<(String, common::entity::hardware::Hardware)> = entries
             .iter()
             .filter_map(|(key, data)| {
                 let timestamp = key.strip_prefix(&history_prefix)?.to_string();
@@ -650,6 +648,7 @@ async fn run_history_migrate(db: &Arc<dyn Database>) -> Result<()> {
             continue;
         }
 
+        snapshots.sort_by(|a, b| b.0.cmp(&a.0));
         let history_entries = build_hardware_history_entries(&snapshots);
         let timestamp_prefix = format!("hardware:{}:history:", client_id);
 

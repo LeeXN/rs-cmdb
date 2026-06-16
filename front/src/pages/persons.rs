@@ -247,7 +247,10 @@ pub fn persons() -> Html {
         let show_form = show_form.clone();
         let editing_person = editing_person.clone();
         Callback::from(move |_| {
-            let mut new_person = Person { id: String::new(), ..Default::default() };
+            let mut new_person = Person {
+                id: String::new(),
+                ..Default::default()
+            };
             editing_person.set(Some(new_person));
             show_form.set(true);
         })

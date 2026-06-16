@@ -225,7 +225,6 @@ impl HardwareRepository {
         let entries = self.db.list_entries(&history_prefix).await?;
         let mut full_snapshots = Vec::new();
         let mut delta_entries = Vec::new();
-        let current_hardware = self.get_hardware(client_id).await?;
 
         for (key, data) in entries {
             // Extract timestamp from key
@@ -238,9 +237,6 @@ impl HardwareRepository {
             match serde_json::from_slice::<HardwareHistoryEntry>(&data) {
                 Ok(mut entry) => {
                     entry.timestamp = timestamp;
-                    if entry.snapshot.is_none() {
-                        entry.snapshot = current_hardware.clone();
-                    }
                     delta_entries.push(entry);
                 }
                 Err(_) => {

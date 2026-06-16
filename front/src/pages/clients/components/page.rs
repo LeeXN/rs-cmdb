@@ -376,10 +376,7 @@ pub fn clients_page() -> Html {
                 let _ = worksheet.write_string(
                     r,
                     2,
-                    client
-                        .primary_ip
-                        .as_deref()
-                        .unwrap_or(&client.ip_address),
+                    client.primary_ip.as_deref().unwrap_or(&client.ip_address),
                 );
                 let _ = worksheet.write_string(r, 3, &rack_name);
                 let _ =

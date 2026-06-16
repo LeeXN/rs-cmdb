@@ -268,7 +268,10 @@ pub fn projects() -> Html {
         let show_form = show_form.clone();
         let editing_project = editing_project.clone();
         Callback::from(move |_| {
-            let mut new_project = Project { id: String::new(), ..Default::default() };
+            let mut new_project = Project {
+                id: String::new(),
+                ..Default::default()
+            };
             editing_project.set(Some(new_project));
             show_form.set(true);
         })

@@ -445,7 +445,11 @@ pub fn racks() -> Html {
         let show_form = show_form.clone();
         let editing_rack = editing_rack.clone();
         Callback::from(move |_| {
-            let mut new_rack = Rack { id: String::new(), height_u: 42, ..Default::default() };
+            let mut new_rack = Rack {
+                id: String::new(),
+                height_u: 42,
+                ..Default::default()
+            };
             editing_rack.set(Some(new_rack));
             show_form.set(true);
         })
