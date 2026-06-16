@@ -6,6 +6,13 @@ use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+/// Primary IP auto-detection configuration for client
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PrimaryIpConfig {
+    /// CIDR subnet for auto-detection of primary IP from NICs (e.g., "10.0.0.0/8")
+    pub subnet: String,
+}
+
 /// 客户端配置
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ClientConfig {
@@ -19,6 +26,8 @@ pub struct ClientConfig {
     pub report: ReportConfig,
     /// 日志配置
     pub logging: LoggingConfig,
+    /// Primary IP auto-detection configuration
+    pub primary_ip: Option<PrimaryIpConfig>,
 }
 
 /// 服务器配置
@@ -145,6 +154,7 @@ pub fn default_config() -> ClientConfig {
             level: "info".to_string(),
             file: None,
         },
+        primary_ip: None,
     }
 }
 

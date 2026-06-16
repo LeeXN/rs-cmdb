@@ -2,7 +2,7 @@ use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent};
 use crate::components::ui::input::Input;
-use lucide_yew::{Search, X};
+use crate::icons::{Search, X};
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 

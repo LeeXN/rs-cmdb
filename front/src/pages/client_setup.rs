@@ -9,7 +9,7 @@ use crate::components::error::ErrorDisplay;
 use crate::components::loading::Loading;
 use crate::components::ui::card::{Card, CardBody, CardHeader};
 use crate::components::ui::select::{Select, SelectOption};
-use lucide_yew::{CircleCheck, Download, FileText, Info};
+use crate::icons::{CircleCheck, Download, FileText, Info};
 use wasm_bindgen_futures;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

@@ -1,5 +1,5 @@
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
-use lucide_yew::{CircleAlert, RefreshCw};
+use crate::icons::{CircleAlert, RefreshCw};
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]

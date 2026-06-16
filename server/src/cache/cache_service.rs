@@ -154,7 +154,7 @@ where
         CacheStats {
             entry_count: self.cache.entry_count(),
             weighted_size: self.cache.weighted_size(),
-            hit_count: 0, // Not available without "unstable-debug" feature
+            hit_count: 0,  // Not available without "unstable-debug" feature
             miss_count: 0, // Not available without "unstable-debug" feature
         }
     }
@@ -310,7 +310,7 @@ mod tests {
         let stats = cache.stats();
         // entry_count may be 0 due to timing in Moka's internal state,
         // but the item is definitely retrievable (verified above)
-        assert!(stats.entry_count >= 0);
+        // entry_count is u64, always non-negative; assertion omitted intentionally
     }
 
     #[tokio::test]

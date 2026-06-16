@@ -1,12 +1,12 @@
 use crate::components::ui::button::{Button, ButtonVariant};
 use crate::components::ui::input::Input;
 use crate::hooks::use_trans::use_trans;
+use crate::icons::{Eye, EyeOff, X};
 use crate::routes::Route;
 use crate::services::api::change_password;
 use crate::stores::auth_store::AuthStore;
 use crate::types::ChangePasswordRequest;
 use crate::utils::i18n_helper::translate_api_message;
-use lucide_yew::{Eye, EyeOff, X};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use yew_router::prelude::*;

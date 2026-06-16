@@ -24,9 +24,9 @@ use crate::repository::{
     rack_repository::RackRepository, user_repository::UserRepository,
 };
 use crate::service::{
-    auth_service::AuthService, client_service::ClientService,
-    client_filter_service::ClientFilterService, export_service::ExportService,
-    stats_service::StatsService, validation_service::ValidationService,
+    auth_service::AuthService, client_filter_service::ClientFilterService,
+    client_service::ClientService, export_service::ExportService, stats_service::StatsService,
+    validation_service::ValidationService,
 };
 use axum::{
     Router,
@@ -158,6 +158,10 @@ pub fn create_router(
         .route(
             "/api/v1/dictionaries/{id}",
             put(dictionary_api::update_dictionary).delete(dictionary_api::delete_dictionary),
+        )
+        .route(
+            "/api/v1/clients/{id}/primary-ip",
+            put(client_api::update_client_primary_ip),
         )
         .route("/api/v1/racks", post(rack_api::create_rack))
         .route(

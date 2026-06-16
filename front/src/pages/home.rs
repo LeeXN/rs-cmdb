@@ -1,9 +1,8 @@
+use crate::icons::{Database, Settings, Signal, Zap};
 use gloo::timers::callback::Interval;
-use lucide_yew::{Database, Settings, Signal, Zap};
 use std::rc::Rc;
 use yew::prelude::*;
 
-use crate::components::dashboard::client_status_list::ClientStatusList;
 use crate::components::dashboard::os_dist_card::OsDistCard;
 use crate::components::dashboard::recent_clients_card::RecentClientsCard;
 use crate::components::dashboard::stats_card::StatsCard;
@@ -159,9 +158,21 @@ pub fn home_page() -> Html {
         }
     }
 
-    // 获取最近注册的客户端
+    // 获取最近离线的客户端
     let mut recent_clients = state.clients.clone();
-    recent_clients.sort_by(|a, b| match (&b.registered_at, &a.registered_at) {
+    recent_clients.retain(|client| {
+        client
+            .last_seen
+            .as_ref()
+            .and_then(|last_seen| chrono::DateTime::parse_from_rfc3339(last_seen).ok())
+            .map(|dt| {
+                let now = chrono::Utc::now();
+                let duration = now.signed_duration_since(dt.with_timezone(&chrono::Utc));
+                duration.num_minutes() > 5
+            })
+            .unwrap_or(true)
+    });
+    recent_clients.sort_by(|a, b| match (&b.last_seen, &a.last_seen) {
         (Some(b_time), Some(a_time)) => b_time.cmp(a_time),
         (Some(_), None) => std::cmp::Ordering::Less,
         (None, Some(_)) => std::cmp::Ordering::Greater,
@@ -239,18 +250,9 @@ pub fn home_page() -> Html {
                 />
             </div>
 
-            // Row 3: 最近注册的客户端
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div class="lg:col-span-5">
-                    <RecentClientsCard recent_clients={recent_clients.clone()} />
-                </div>
-
-                <div class="lg:col-span-7">
-                    <ClientStatusList
-                        clients={state.clients.clone()}
-                        total_clients={total_clients}
-                    />
-                </div>
+            // Row 3: 近期离线客户端
+            <div class="grid grid-cols-1 gap-6">
+                <RecentClientsCard recent_clients={recent_clients.clone()} />
             </div>
         </div>
     }

@@ -7,7 +7,9 @@ use crate::repository::client_repository::ClientRepository;
 use crate::service::{
     client_filter_service::{ClientFilterService, HardwareFilterQuery},
     export_service::ExportService,
-    stats_service::{CategoryStats as ServiceCategoryStats, OverallStats as ServiceOverallStats, StatsService}
+    stats_service::{
+        CategoryStats as ServiceCategoryStats, OverallStats as ServiceOverallStats, StatsService,
+    },
 };
 use axum::{
     Json,
@@ -17,8 +19,8 @@ use axum::{
 };
 use axum_macros::debug_handler;
 use common::models::{
-    ApiResponse, Client, ClientHardwareExport, DetailedStats, FilterCriteria,
-    FilterOptions, StatItem,
+    ApiResponse, Client, ClientHardwareExport, DetailedStats, FilterCriteria, FilterOptions,
+    StatItem,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -62,7 +64,11 @@ impl From<ServiceOverallStats> for OverallStats {
             total_clients: inner.total_clients,
             online_clients: inner.online_clients,
             offline_clients: inner.offline_clients,
-            categories: inner.categories.into_iter().map(CategoryStats::from).collect(),
+            categories: inner
+                .categories
+                .into_iter()
+                .map(CategoryStats::from)
+                .collect(),
         }
     }
 }
@@ -113,7 +119,10 @@ pub async fn get_detailed_stats(
 ) -> impl IntoResponse {
     match stats_service.get_detailed_stats().await {
         Ok(stats) => {
-            info!("Generated detailed stats for {} clients", stats.total_clients);
+            info!(
+                "Generated detailed stats for {} clients",
+                stats.total_clients
+            );
 
             let response = ApiResponse {
                 status: 200,
@@ -243,7 +252,10 @@ pub async fn filter_clients(
         owner_id_filter: None,
     };
 
-    match client_filter_service.filter_clients_by_hardware(&query).await {
+    match client_filter_service
+        .filter_clients_by_hardware(&query)
+        .await
+    {
         Ok(filtered_clients) => {
             info!("Filtered clients: {} matches found", filtered_clients.len());
             let response = ApiResponse {

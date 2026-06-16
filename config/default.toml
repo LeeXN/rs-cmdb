@@ -25,3 +25,8 @@ path = "data/cmdb.db"
 # [queue]
 # queue_type = "flume"
 # capacity = 1000
+
+# Primary IP auto-detection settings
+# Uncomment and configure the subnet to enable auto-detection of primary IP from NICs
+# [primary_ip]
+# subnet = "10.0.0.0/8"

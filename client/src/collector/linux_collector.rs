@@ -86,11 +86,7 @@ pub fn get_threads_per_core() -> f32 {
 // 获取每个CPU的核心数
 pub fn get_cores_per_cpu() -> u32 {
     let cpu = collect_cpu_info();
-    if cpu.cpus > 0 {
-        cpu.cores / cpu.cpus
-    } else {
-        0
-    }
+    cpu.cores.checked_div(cpu.cpus).unwrap_or(0)
 }
 
 // 收集GPU信息

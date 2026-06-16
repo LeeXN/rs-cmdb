@@ -1,3 +1,4 @@
+use gloo::timers::callback::Timeout;
 use log::info;
 use wasm_bindgen::JsCast;
 use yew::prelude::*;
@@ -7,14 +8,14 @@ use crate::hooks::use_trans::use_trans;
 use crate::pages::clients::filters::has_active_filters;
 use crate::pages::clients::state::{ClientsAction, ClientsState};
 use crate::services::api::{self, ApiError};
-use crate::types::{ClientHardwareExport, Role};
+use crate::types::Role;
 use crate::utils::export::{export_to_csv, export_to_json};
 
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
 use crate::components::ui::input::Input;
 use crate::components::ui::select::Select;
-use lucide_yew::{FileCode, FileDown, FileInput, Funnel, LoaderCircle, Search, X};
+use crate::icons::{FileCode, FileDown, FileInput, Funnel, LoaderCircle, Search, X};
 
 #[derive(Properties, PartialEq)]
 pub struct SearchBarProps {
@@ -30,12 +31,48 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
     let dispatcher = &props.dispatcher;
     let on_import_click = &props.on_import_click;
     let t = use_trans();
+    let search_input = use_state(|| state.search_term.clone());
+    let search_timeout = use_mut_ref(|| None::<Timeout>);
 
-    // 搜索处理（实时）
+    {
+        let search_input = search_input.clone();
+        let term = state.search_term.clone();
+        use_effect_with(term, move |term| {
+            search_input.set(term.clone());
+            || ()
+        });
+    }
+
+    {
+        let search_timeout = search_timeout.clone();
+        use_effect_with((), move |_| {
+            move || {
+                if let Some(timeout) = search_timeout.borrow_mut().take() {
+                    timeout.cancel();
+                }
+            }
+        });
+    }
+
+    // 搜索处理（300ms 防抖，保留自动触发语义）
     let on_search = {
+        let search_input = search_input.clone();
+        let search_timeout = search_timeout.clone();
         let dispatcher = dispatcher.clone();
         Callback::from(move |val: String| {
-            dispatcher.dispatch(ClientsAction::SetSearchTerm(val));
+            search_input.set(val.clone());
+
+            if let Some(timeout) = search_timeout.borrow_mut().take() {
+                timeout.cancel();
+            }
+
+            let dispatcher = dispatcher.clone();
+            let search_timeout = search_timeout.clone();
+            let timeout_ref = search_timeout.clone();
+            *search_timeout.borrow_mut() = Some(Timeout::new(300, move || {
+                dispatcher.dispatch(ClientsAction::SetSearchTerm(val.clone()));
+                timeout_ref.borrow_mut().take();
+            }));
         })
     };
 
@@ -139,7 +176,7 @@ pub fn search_bar(props: &SearchBarProps) -> Html {
                         <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
                             class="pl-8"
-                            value={state.search_term.clone()}
+                            value={(*search_input).clone()}
                             oninput={on_search}
                             placeholder={t.t("clients.search.placeholder")}
                         />

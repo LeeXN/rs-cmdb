@@ -249,7 +249,7 @@ fn render_page_numbers(
     let mut pages = Vec::new();
 
     // 如果开始页不是1，显示省略号
-    if actual_start > 1 && actual_start > 2 {
+    if actual_start > 2 {
         pages.push(html! {
                 <Button variant={ButtonVariant::Ghost} size={ButtonSize::Sm} class="h-8 w-8 p-0" disabled={true} key="start-ellipsis">
                     {"⋯"}

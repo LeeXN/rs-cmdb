@@ -1,4 +1,4 @@
-use lucide_yew::{CircleCheck, CircleX, Info, TriangleAlert, X};
+use crate::icons::{CircleCheck, CircleX, Info, TriangleAlert, X};
 use yew::prelude::*;
 
 use crate::hooks::use_trans::use_trans;

@@ -4,19 +4,26 @@
 //! Filtering and search logic has been moved to ClientFilterService.
 
 use crate::queue::{Message, MessageQueue};
-use crate::repository::{client_repository::ClientRepository, component_repository::ComponentRepository};
+use crate::repository::{
+    client_repository::ClientRepository, component_repository::ComponentRepository,
+};
 use crate::service::{
     client_filter_service::{ClientFilterService, HardwareFilterQuery, SearchQuery},
     client_service::ClientService,
     validation_service::ValidationService,
 };
+use crate::validation::validate_ip_address;
 use axum::{
     extract::{Extension, Json, Path, Query},
     http::StatusCode,
     response::IntoResponse,
 };
 use axum_macros::debug_handler;
-use common::models::{ApiResponse, Client, ClientQuery, ExportFilterRequest, ExportFilterResponse, FilterOptions, PaginatedResult};
+use common::models::{
+    ApiResponse, Client, ClientQuery, ExportFilterRequest, ExportFilterResponse, FilterOptions,
+    PaginatedResult,
+};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{error, info, instrument};
@@ -36,8 +43,10 @@ pub async fn list_clients(
                 clients.retain(|c| {
                     c.hostname.to_lowercase().contains(&search_lower)
                         || c.ip_address.contains(&search_lower)
-                        || c
-                            .os
+                        || c.primary_ip
+                            .as_deref()
+                            .is_some_and(|ip| ip.contains(&search_lower))
+                        || c.os
                             .as_ref()
                             .is_some_and(|os| os.to_lowercase().contains(&search_lower))
                 });
@@ -266,6 +275,7 @@ pub async fn register_client(
             } else {
                 Some(registration.id.clone())
             },
+            registration.primary_ip.clone(),
         )
         .await
     {
@@ -508,10 +518,7 @@ pub async fn filter_clients_by_hardware(
         .await
     {
         Ok(clients) => {
-            info!(
-                "Hardware filter returned {} clients",
-                clients.len()
-            );
+            info!("Hardware filter returned {} clients", clients.len());
             let response = ApiResponse {
                 status: 200,
                 message: crate::constants::MSG_CLIENTS_FILTERED_SUCCESS.to_string(),
@@ -605,6 +612,96 @@ pub async fn export_clients(
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PrimaryIpRequest {
+    pub primary_ip: Option<String>,
+}
+
+/// Update client primary IP
+#[debug_handler]
+#[instrument(skip(client_repo))]
+pub async fn update_client_primary_ip(
+    Path(client_id): Path<String>,
+    Extension(client_repo): Extension<Arc<ClientRepository>>,
+    Json(request): Json<PrimaryIpRequest>,
+) -> impl IntoResponse {
+    info!("Updating primary IP for client: {}", client_id);
+
+    // Validate IP if provided
+    if let Some(ref ip) = request.primary_ip {
+        if !ip.is_empty() {
+            if let Err(e) = validate_ip_address(ip) {
+                let response = ApiResponse::<Client> {
+                    status: 400,
+                    message: format!("Invalid IP address: {}", e),
+                    data: None,
+                };
+                return (StatusCode::BAD_REQUEST, Json(response));
+            }
+        }
+    }
+
+    match client_repo
+        .update_primary_ip(&client_id, request.primary_ip.as_deref().unwrap_or(""))
+        .await
+    {
+        Ok(_) => {
+            // Fetch and return updated client
+            match client_repo.get(&client_id).await {
+                Ok(Some(client)) => {
+                    let response = ApiResponse {
+                        status: 200,
+                        message: "Primary IP updated successfully".to_string(),
+                        data: Some(client),
+                    };
+                    (StatusCode::OK, Json(response))
+                }
+                Ok(None) => {
+                    error!("Client {} not found after primary IP update", client_id);
+                    let response = ApiResponse::<Client> {
+                        status: 404,
+                        message: "Client not found after update".to_string(),
+                        data: None,
+                    };
+                    (StatusCode::NOT_FOUND, Json(response))
+                }
+                Err(err) => {
+                    error!(
+                        "Failed to fetch client {} after primary IP update: {}",
+                        client_id, err
+                    );
+                    let response = ApiResponse::<Client> {
+                        status: err.status_code(),
+                        message: err.to_string(),
+                        data: None,
+                    };
+                    (
+                        StatusCode::from_u16(err.status_code())
+                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                        Json(response),
+                    )
+                }
+            }
+        }
+        Err(err) => {
+            error!(
+                "Failed to update primary IP for client {}: {}",
+                client_id, err
+            );
+            let response = ApiResponse::<Client> {
+                status: err.status_code(),
+                message: err.to_string(),
+                data: None,
+            };
+            (
+                StatusCode::from_u16(err.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(response),
+            )
+        }
+    }
+}
+
 /// Import clients from JSON
 #[debug_handler]
 #[instrument(skip(client_service))]
@@ -693,7 +790,10 @@ pub async fn export_filtered_clients(
 
             let mut hardware_data = Vec::new();
             for client in &clients {
-                match client_filter_service.get_hardware_export_data(&client.id).await {
+                match client_filter_service
+                    .get_hardware_export_data(&client.id)
+                    .await
+                {
                     Ok(Some(data)) => hardware_data.push(data),
                     Ok(None) => {
                         info!("No hardware data for client: {}", client.id);

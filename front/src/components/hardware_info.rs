@@ -2,11 +2,11 @@ use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::hooks::use_trans::use_trans;
+use crate::icons::{Cpu, HardDrive, Monitor, Server, Wifi, Zap};
 use crate::types::{Hardware, NICStatus, StorageType};
 use crate::utils::format::{format_frequency, format_number};
 use crate::utils::i18n_helper::t as tr;
 use common::entity::hardware::IpmiStatus;
-use lucide_yew::{Cpu, HardDrive, Monitor, Server, Wifi, Zap};
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]

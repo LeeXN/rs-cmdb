@@ -2,7 +2,7 @@ use crate::components::chart::{get_chart_colors, ChartData, PieChart};
 use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::hooks::use_trans::use_trans;
-use lucide_yew::Monitor;
+use crate::icons::Monitor;
 use std::collections::HashMap;
 use std::rc::Rc;
 use yew::prelude::*;

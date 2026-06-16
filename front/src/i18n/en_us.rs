@@ -209,6 +209,8 @@ pub fn get_translations() -> HashMap<String, String> {
         "hardware.history.view_details".to_string(),
         "View Details".to_string(),
     );
+    translations.insert("common.refresh".to_string(), "Refresh".to_string());
+    translations.insert("common.load_more".to_string(), "Load More".to_string());
 
     // IPMI
     translations.insert(
@@ -825,8 +827,20 @@ pub fn get_translations() -> HashMap<String, String> {
         "Last 10 Heartbeats".to_string(),
     );
     translations.insert(
+        "dashboard.recent_offline_title".to_string(),
+        "Recently Offline".to_string(),
+    );
+    translations.insert(
+        "dashboard.recent_offline_desc".to_string(),
+        "Most recently seen offline clients".to_string(),
+    );
+    translations.insert(
         "dashboard.no_clients_registered".to_string(),
         "No Clients Registered".to_string(),
+    );
+    translations.insert(
+        "dashboard.no_recent_offline_clients".to_string(),
+        "No offline clients recently".to_string(),
     );
     translations.insert("dashboard.offline".to_string(), "Offline".to_string());
 
@@ -874,7 +888,7 @@ pub fn get_translations() -> HashMap<String, String> {
     );
     translations.insert(
         "clients.search.hint".to_string(),
-        "Supports fuzzy search, type to filter instantly".to_string(),
+        "Supports fuzzy search, updates automatically after typing stops".to_string(),
     );
     translations.insert(
         "clients.search.export_csv".to_string(),
@@ -957,6 +971,10 @@ pub fn get_translations() -> HashMap<String, String> {
         "No device data available".to_string(),
     );
     translations.insert("clients.table.hostname".to_string(), "Hostname".to_string());
+    translations.insert(
+        "clients.table.online_status".to_string(),
+        "Online".to_string(),
+    );
     translations.insert("clients.table.ip".to_string(), "IP Address".to_string());
     translations.insert("clients.table.os".to_string(), "OS".to_string());
     translations.insert("clients.table.owner".to_string(), "Owner".to_string());
@@ -992,7 +1010,7 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("clients.actions.delete".to_string(), "Delete".to_string());
     translations.insert(
         "clients.actions.confirm_delete".to_string(),
-        "Are you sure you want to delete this device? This action cannot be undone.".to_string(),
+        "Are you sure you want to delete this device? NOTE: If the client agent is still running, it will re-register automatically. Stop the client service first.".to_string(),
     );
 
     translations.insert(
@@ -1712,6 +1730,10 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("client_detail.id".to_string(), "ID".to_string());
     translations.insert("client_detail.hostname".to_string(), "Hostname".to_string());
     translations.insert("client_detail.ip".to_string(), "IP Address".to_string());
+    translations.insert(
+        "client_detail.primary_ip".to_string(),
+        "Primary IP".to_string(),
+    );
     translations.insert("client_detail.os".to_string(), "OS".to_string());
     translations.insert("client_detail.kernel".to_string(), "Kernel".to_string());
     translations.insert("client_detail.location".to_string(), "Location".to_string());
@@ -1823,6 +1845,22 @@ pub fn get_translations() -> HashMap<String, String> {
     );
     translations.insert("client_edit.save".to_string(), "Save".to_string());
     translations.insert("client_edit.cancel".to_string(), "Cancel".to_string());
+    translations.insert(
+        "client_edit.primary_ip_hint".to_string(),
+        "Setting this overrides auto-detected primary IP".to_string(),
+    );
+    translations.insert(
+        "client_edit.primary_ip_none".to_string(),
+        "None".to_string(),
+    );
+    translations.insert(
+        "client_edit.primary_ip_select".to_string(),
+        "Select an IP...".to_string(),
+    );
+    translations.insert(
+        "client_edit.primary_ip_custom".to_string(),
+        "Custom...".to_string(),
+    );
 
     translations
 }

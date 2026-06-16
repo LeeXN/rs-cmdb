@@ -1,4 +1,4 @@
-use crate::types::Client;
+use crate::types::{Client, PaginatedResult};
 use std::collections::HashMap;
 
 // 统计相关工具函数
@@ -157,4 +157,33 @@ pub fn calculate_pagination(
     let start_index = (current_page - 1) * page_size;
     let end_index = std::cmp::min(start_index + page_size, total_items);
     (total_pages, start_index, end_index)
+}
+
+pub fn build_paginated_result<T: Clone>(
+    items: &[T],
+    requested_page: usize,
+    page_size: usize,
+) -> PaginatedResult<T> {
+    let total = items.len();
+    let total_pages = total.div_ceil(page_size);
+    let page = if total_pages == 0 {
+        1
+    } else {
+        requested_page.clamp(1, total_pages)
+    };
+    let start_index = (page - 1) * page_size;
+    let end_index = std::cmp::min(start_index + page_size, total);
+    let paged_items = if start_index < total {
+        items[start_index..end_index].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    PaginatedResult {
+        items: paged_items,
+        total,
+        page,
+        page_size,
+        total_pages,
+    }
 }

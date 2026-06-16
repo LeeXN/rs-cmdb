@@ -94,7 +94,10 @@ mod tests {
             parse_accept_language(Some("zh-CN,en;q=0.9")),
             Language::ZhCn
         );
-        assert_eq!(parse_accept_language(Some("fr-FR,en;q=0.9")), Language::ZhCn);
+        assert_eq!(
+            parse_accept_language(Some("fr-FR,en;q=0.9")),
+            Language::ZhCn
+        );
         assert_eq!(parse_accept_language(None), Language::ZhCn);
         assert_eq!(parse_accept_language(Some("")), Language::ZhCn);
     }

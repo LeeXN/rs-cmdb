@@ -21,9 +21,9 @@ use common::entity::user::Role;
 use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
-use lucide_yew::{
-    Activity, Box as BoxIcon, Calendar, CircleQuestionMark, Clock, Cpu, Folder, History, Info,
-    MapPin, Pencil, Power, RefreshCw, Server, Tag, TriangleAlert, User,
+use crate::icons::{
+    Activity, BoxIcon, Calendar, CircleQuestionMark, Clock, Cpu, Folder, History, Info, MapPin,
+    Pencil, Power, RefreshCw, Server, Tag, TriangleAlert, User,
 };
 
 #[derive(PartialEq, Clone, Copy)]
@@ -479,7 +479,15 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
                                     </div>
                                     <div class="flex justify-between border-b border-border py-2">
                                         <span class="font-medium flex items-center"><Server class="h-4 w-4 mr-2 text-muted-foreground" />{t.t("client_detail.ip") + ":"}</span>
-                                        <span class="text-right">{ &client.ip_address }</span>
+                                        <span class="text-right">
+                                            {
+                                                if let Some(primary_ip) = &client.primary_ip {
+                                                    html! { <><Badge variant={BadgeVariant::Outline} class="bg-cyan-500/10 text-cyan-500 border-cyan-500/20 mr-1">{t.t("client_detail.primary_ip")}</Badge>{primary_ip}</> }
+                                                } else {
+                                                    html! { <>{&client.ip_address}</> }
+                                                }
+                                            }
+                                        </span>
                                     </div>
                                     <div class="flex justify-between border-b border-border py-2">
                                         <span class="font-medium flex items-center"><BoxIcon class="h-4 w-4 mr-2 text-muted-foreground" />{t.t("client_detail.os") + ":"}</span>

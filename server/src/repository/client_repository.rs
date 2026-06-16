@@ -71,6 +71,26 @@ impl ClientRepository {
         Ok(clients)
     }
 
+    /// Update client primary IP
+    pub async fn update_primary_ip(&self, client_id: &str, primary_ip: &str) -> CmdbResult<()> {
+        let mut client = match self.get(client_id).await? {
+            Some(c) => c,
+            None => {
+                return Err(CmdbError::NotFound(format!(
+                    "Client {} not found",
+                    client_id
+                )));
+            }
+        };
+
+        client.primary_ip = if primary_ip.is_empty() {
+            None
+        } else {
+            Some(primary_ip.to_string())
+        };
+        self.save(&client).await
+    }
+
     /// Update client last seen timestamp
     pub async fn update_last_seen(&self, client_id: &str) -> CmdbResult<()> {
         let mut client = match self.get(client_id).await? {
@@ -109,25 +129,27 @@ impl ClientRepository {
     pub async fn update_owner_to_null(&self, owner_id: &str) -> CmdbResult<()> {
         let owner_id = owner_id.to_string();
 
-        self.db.update_all(
-            &self.key_prefix,
-            Box::new(move |_key, value| {
-                match serde_json::from_slice::<Client>(&value) {
-                    Ok(mut client) => {
-                        if client.owner_id.as_deref() == Some(&owner_id) {
-                            client.owner_id = None;
-                            match serde_json::to_vec(&client) {
-                                Ok(new_value) => Some(new_value),
-                                Err(_) => None
+        self.db
+            .update_all(
+                &self.key_prefix,
+                Box::new(
+                    move |_key, value| match serde_json::from_slice::<Client>(&value) {
+                        Ok(mut client) => {
+                            if client.owner_id.as_deref() == Some(&owner_id) {
+                                client.owner_id = None;
+                                match serde_json::to_vec(&client) {
+                                    Ok(new_value) => Some(new_value),
+                                    Err(_) => None,
+                                }
+                            } else {
+                                None
                             }
-                        } else {
-                            None
                         }
-                    }
-                    Err(_) => None
-                }
-            })
-        ).await
+                        Err(_) => None,
+                    },
+                ),
+            )
+            .await
     }
 
     /// Find client by serial number
@@ -153,6 +175,7 @@ mod tests {
             id: id.to_string(),
             hostname: format!("test-{}", id),
             ip_address: format!("192.168.1.{}", id),
+            primary_ip: None,
             os: Some("Linux".to_string()),
             kernel_version: Some("5.15.0".to_string()),
             serial_number: Some(format!("SN-{}", id)),

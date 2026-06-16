@@ -4,13 +4,68 @@
 
 **rs-cmdb** 是一个完全使用 Rust 构建的轻量级配置管理数据库 (CMDB) 系统.
 
+## 📌 主 IP 地址功能
+
+**主 IP** 功能为每个客户端记录引入了一个专用的 `primary_ip` 字段，在界面中优先显示于原有的 `ip_address`。该字段的赋值优先级如下：
+
+1. **手动覆盖** — 通过前端编辑表单或 `PUT /api/v1/clients/{id}/primary-ip` API 设置
+2. **客户端 Agent 自动检测** — 若客户端配置中包含 `[primary_ip] subnet = "10.0.0.0/8"`，Agent 会在注册时将匹配子网的 NIC IPv4 地址作为主 IP 上报
+3. **服务端自动检测** — 若服务端配置中包含 `[primary_ip] subnet = "10.0.0.0/8"`，服务端会在每次硬件推送后根据 NIC 自动检测主 IP
+4. **兜底** — 若以上均未命中，则字段保持 `None`，界面回退显示原 `ip_address`
+
+### 升级已部署环境
+
+### 升级兼容性
+
+**兼容性矩阵** — 所有组合均无兼容性问题：
+
+| 服务端 | 客户端 | 行为 |
+|---|---|---|
+| 新 | 新 | 完整 primary_ip 支持：Agent 注册时本地检测 + 服务端硬件推送时自动检测 + UI/API 手动覆盖 |
+| 新 | 旧 | 服务端在硬件推送时根据 NIC 自动检测 `primary_ip`（如果配置了 `[primary_ip]` subnet）。Agent 注册时不携带 `primary_ip`。完全兼容。 |
+| 旧 | 新 | 新客户端在注册时会发送 `primary_ip`，旧服务端忽略未知字段（没有 `deny_unknown_fields`）。`primary_ip` 不会被存储或显示。无破坏性影响。 |
+
+无需数据库迁移 — 字段为 `Option<String>`，已有记录默认为 `None`。
+
+**服务端** (`rs-cmdb-server`) 升级步骤：
+
+1. 替换服务端二进制文件为新构建版本，重启服务。
+2. （可选）在 `config/default.toml` 或环境变量中添加自动检测 CIDR。
+   支持两种写法 — 简写（单行）或标准结构体：
+
+   **简写（推荐）：**
+   ```toml
+   primary_ip = "10.0.0.0/8"
+   ```
+   **标准结构体（等效）：**
+   ```toml
+   [primary_ip]
+   subnet = "10.0.0.0/8"
+   ```
+
+   环境变量等效写法：
+   ```bash
+   CMDB_PRIMARY_IP__SUBNET=10.0.0.0/8
+   ```
+3. 自动检测将在各客户端下一次硬件推送时触发；也可随时通过 UI 或 API 手动设置 `primary_ip`。
+
+**客户端 Agent** (`rs-cmdb-client`) 升级步骤：
+
+1. 替换客户端二进制文件为新构建版本，重启服务。
+2. （可选）在 `client.toml` 中添加 `[primary_ip]` 配置，以在注册时启用本地检测：
+   ```toml
+   [primary_ip]
+   subnet = "10.0.0.0/8"
+   ```
+3. 若不添加配置，Agent 上报 `primary_ip: null`，回退到服务端自动检测。
+
 ## 🚀 功能特性
 
 *   **全栈 Rust**: 从内核到 UI 全部使用 Rust 构建，确保内存安全和高性能。
 *   **自动发现**: 跨平台代理 (`rs-cmdb-client`) 自动采集硬件规格（CPU、内存、磁盘、网络）并向服务器报告。
 *   **资产管理**:
     *   详细的硬件库存跟踪。
-    *   变更历史记录（跟踪随时间变化的硬件修改）。
+    *   **高效的变更历史**：仅存储增量变化（非全量快照），内置 CLI 分析/清理/迁移工具 (`rs-cmdb-server history analyze | cleanup | migrate`)。
     *   机架和数据中心可视化。
 *   **现代化仪表盘**: 实时分析、资源使用统计和健康监控。
 *   **安全性**: 基于角色的访问控制 (RBAC) 和安全的 API 认证。
@@ -77,7 +132,8 @@ docker run -itd \
 
 我们提供了 `Makefile` 来简化构建和测试流程。
 
-*   **构建所有组件**: `make build` (构建 Server, Client 和 Frontend)
+*   **构建所有组件 (glibc)**: `make build`
+*   **构建静态 Musl 二进制**: `make build-musl` (完全静态，不依赖系统 libc)
 *   **运行测试**: `make test`
 *   **构建 Docker 镜像**: `make docker`
 *   **清理产物**: `make clean`
@@ -331,6 +387,14 @@ component_missing_grace_period_hours = 24 # 组件缺失告警宽限期
 [database]
 path = "data/cmdb.redb"    # Redb 数据库文件路径
 
+# 主 IP 自动检测（可选）
+[primary_ip]
+# 用于从网卡自动检测主 IP 的 CIDR 子网
+# 上报硬件时，服务器会扫描网卡的 IPv4 地址，
+# 将第一个匹配子网且类型为 Ethernet 的 IP 设为主 IP。
+# 留空或注释掉则跳过自动检测。
+# subnet = "10.0.0.0/8"
+
 # 消息队列
 [queue]
 capacity = 1000            # 内部消息队列容量
@@ -349,6 +413,7 @@ capacity = 1000            # 内部消息队列容量
 - `CMDB_PORT` - 服务器端口（默认：`8080`）
 - `CMDB_LOG_LEVEL` - 日志级别：debug, info, warn, error（默认：`info`）
 - `CMDB_DATABASE__PATH` - 数据库文件路径（默认：`data/cmdb.redb`）
+- `CMDB_PRIMARY_IP__SUBNET` - 主 IP 自动检测的 CIDR 子网（例如 `10.0.0.0/8`）
 - `CMDB_SSH_KNOWN_HOSTS_FILE` - SSH known_hosts 文件路径（默认：`/etc/cmdb/ssh_known_hosts`）
 
 ### SSH Known Hosts 设置
@@ -428,6 +493,67 @@ export CMDB_ADMIN_PASSWORD="YourSecureP@ssword123"
 使用管理员用户名和您通过 `CMDB_ADMIN_PASSWORD` 设置的密码：
 - 用户名: `admin`
 - 密码: *(您选择的密码)*
+
+## 🔧 历史维护 (CLI)
+
+服务端二进制内置了用于管理硬件变更历史数据库的命令行工具。
+
+```text
+rs-cmdb-server history <命令>
+
+命令:
+  analyze   分析历史存储 — 显示每台客户端的快照数量和时间范围
+  cleanup   清理旧历史条目，每台客户端只保留最新的 N 条
+  migrate   将旧的全量快照历史转换为增量格式
+            （仅需在增量历史功能引入前创建的数据库上执行）
+  compact   重写数据库以回收闲置空间（migrate + cleanup 后执行）
+```
+
+### `history analyze`
+扫描所有历史键，输出：
+- 拥有历史记录的客户端数量
+- 总历史条目数
+- 按历史数量降序排列的前 20 台客户端（含最早/最新时间戳）
+
+```bash
+rs-cmdb-server history analyze --db-path /opt/rs-cmdb/data/cmdb.redb
+```
+
+### `history cleanup --keep-last <N>`
+每台客户端只保留最新的 N 条历史记录，删除更旧的条目。使用 `--dry-run` 预览不执行。
+
+```bash
+# 预览：显示将被删除的数量
+rs-cmdb-server history cleanup --keep-last 50 --dry-run --db-path /opt/rs-cmdb/data/cmdb.redb
+
+# 执行清理，每台客户端保留最新 50 条
+rs-cmdb-server history cleanup --keep-last 50 --db-path /opt/rs-cmdb/data/cmdb.redb
+```
+
+### `history migrate`
+将旧的全量快照历史转换为新的仅存增量格式，大幅减少存储占用。仅需在增量历史功能引入前创建的数据库上执行。迁移后，历史只存储变化而不是完整硬件快照。
+
+```bash
+rs-cmdb-server history migrate --db-path /opt/rs-cmdb/data/cmdb.redb
+```
+
+### `history compact`
+将整个数据库重写到新文件，**回收所有闲置空间**。在 `migrate` 和 `cleanup` 之后执行，将文件压缩到最小大小。
+
+```bash
+rs-cmdb-server history compact --db-path /opt/rs-cmdb/data/cmdb.redb
+```
+
+完整操作流程示例：
+```text
+# 操作前：121,298 条历史 → 4.1 GB 文件（实际占用 2.7 GB）
+rs-cmdb-server history migrate --db-path /opt/rs-cmdb/data/cmdb.redb
+rs-cmdb-server history cleanup --keep-last 100 --db-path /opt/rs-cmdb/data/cmdb.redb
+rs-cmdb-server history compact --db-path /opt/rs-cmdb/data/cmdb.redb
+# 操作后：24,814 条记录 → 26 MB 文件
+```
+
+> **注意**：`compact` 会将所有数据加载到内存中，请确保有足够 RAM 承载完整数据库工作集。
 
 ## 📄 许可证
 

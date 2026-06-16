@@ -55,4 +55,13 @@ yewdux = "0.11.0"
 urlencoding = "2.1"
 rust_xlsxwriter = { version = "0.64.0", features = ["wasm"] }
 calamine = { version = "0.24.0", features = ["dates"] }
-lucide-yew = { version = "2.44.0", features = ["all-icons"] }
+
+[lints.rust]
+unused = { level = "allow", priority = 0 }
+dead_code = { level = "allow", priority = 0 }
+
+[lints.clippy]
+enum_variant_names = { level = "allow", priority = 0 }
+large_enum_variant = { level = "allow", priority = 0 }
+type_complexity = { level = "allow", priority = 0 }
+

@@ -18,10 +18,7 @@ pub struct RackDao {
 
 impl RackDao {
     /// Create a new RackDao
-    pub fn new(
-        rack_repo: Arc<RackRepository>,
-        client_repo: Arc<CachedClientRepository>,
-    ) -> Self {
+    pub fn new(rack_repo: Arc<RackRepository>, client_repo: Arc<CachedClientRepository>) -> Self {
         Self {
             rack_repo,
             client_repo,
@@ -73,10 +70,7 @@ impl RackDao {
     ) -> CmdbResult<()> {
         // Check if rack exists
         let Some(rack) = self.get(rack_id).await? else {
-            return Err(CmdbError::Validation(format!(
-                "Rack {} not found",
-                rack_id
-            )));
+            return Err(CmdbError::Validation(format!("Rack {} not found", rack_id)));
         };
 
         // Check if position is within rack height
@@ -119,10 +113,7 @@ impl RackDao {
 
     /// Get available positions in a rack
     #[instrument(skip(self))]
-    pub async fn get_available_positions(
-        &self,
-        rack_id: &str,
-    ) -> CmdbResult<Vec<(u32, u32)>> {
+    pub async fn get_available_positions(&self, rack_id: &str) -> CmdbResult<Vec<(u32, u32)>> {
         let Some(rack) = self.get(rack_id).await? else {
             return Err(CmdbError::NotFound(format!("Rack {} not found", rack_id)));
         };

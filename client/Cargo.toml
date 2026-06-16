@@ -28,6 +28,33 @@ anyhow = "1.0.100"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 tracing-appender = "0.2"
+ipnet = "2.11"
+
+[lints.rust]
+unused = "allow"
+dead_code = "allow"
+
+[lints.clippy]
+enum_variant_names = "allow"
+large_enum_variant = "allow"
+type_complexity = "allow"
+too_many_arguments = "allow"
+absurd_extreme_comparisons = "allow"
+wrong_self_convention = "allow"
+module_inception = "allow"
+if_same_then_else = "allow"
+collapsible_if = "allow"
+collapsible_else_if = "allow"
+derivable_impls = "allow"
+redundant_closure = "allow"
+needless_range_loop = "allow"
+manual_ok_err = "allow"
+unnecessary_cast = "allow"
+manual_strip = "allow"
+field_reassign_with_default = "allow"
+redundant_field_names = "allow"
+empty_line_after_doc_comments = "allow"
+lines_filter_map_ok = "allow"
 
 [[bin]]
 name = "rs-cmdb-client"

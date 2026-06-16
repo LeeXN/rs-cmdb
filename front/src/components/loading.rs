@@ -1,4 +1,4 @@
-use lucide_yew::LoaderCircle;
+use crate::icons::LoaderCircle;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]

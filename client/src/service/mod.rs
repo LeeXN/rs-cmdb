@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::collector::linux_collector;
 use crate::config::ClientConfig;
-use common::entity::hardware::Hardware;
+use common::entity::hardware::{Hardware, NICType, NIC};
 use common::models::Client;
 
 /// 客户端服务，负责运行推送和拉取服务
@@ -118,6 +118,33 @@ impl ClientService {
             .clone()
             .unwrap_or_else(|| os_info.hostname.clone());
 
+        // Auto-detect primary IP: explicit config takes priority, then infer from server URL
+        let primary_ip = if let Some(cfg) = &self.config.primary_ip {
+            detect_primary_ip_from_subnet(&cfg.subnet)
+        } else {
+            // Infer subnet from server URL (e.g., http://10.0.0.50:8080/api/v1 -> 10.0.0.0/24)
+            let server_host = self
+                .config
+                .server
+                .url
+                .trim_start_matches("http://")
+                .trim_start_matches("https://")
+                .split(':')
+                .next()
+                .unwrap_or("");
+            if let Ok(ip) = server_host.parse::<std::net::Ipv4Addr>() {
+                let inferred = format!(
+                    "{}.{}.{}.0/24",
+                    ip.octets()[0],
+                    ip.octets()[1],
+                    ip.octets()[2]
+                );
+                detect_primary_ip_from_subnet(&inferred)
+            } else {
+                None
+            }
+        };
+
         let registration = Client {
             id: self.client_id.clone(),
             hostname,
@@ -125,6 +152,7 @@ impl ClientService {
             sys_vendor: Some(system_info.sys_vendor.clone()),
             product_name: Some(system_info.product_name.clone()),
             ip_address: os_info.ip_address,
+            primary_ip,
             os: Some(format!(
                 "{}-{}",
                 os_info.name.clone(),
@@ -229,4 +257,25 @@ impl ClientService {
 
         Ok(())
     }
+}
+
+/// Try to detect primary IP by matching NICs against a CIDR subnet.
+/// Returns the IPv4 of the first matching NIC, preferring Ethernet.
+fn detect_primary_ip_from_subnet(subnet: &str) -> Option<String> {
+    let subnet: ipnet::IpNet = subnet.parse().ok()?;
+    let nics = linux_collector::collect_nic_info().ok()?;
+    let mut candidates: Vec<&NIC> = nics
+        .iter()
+        .filter(|nic| {
+            nic.ipv4_address
+                .parse::<std::net::IpAddr>()
+                .ok()
+                .is_some_and(|ip| subnet.contains(&ip))
+        })
+        .collect();
+    candidates.sort_by_key(|nic| match nic.nic_type {
+        NICType::Ethernet => 0,
+        _ => 1,
+    });
+    candidates.first().map(|nic| nic.ipv4_address.clone())
 }

@@ -1,5 +1,5 @@
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
-use lucide_yew::{Pencil, Trash2};
+use crate::icons::{Pencil, Trash2};
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]

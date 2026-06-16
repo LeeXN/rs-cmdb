@@ -3,7 +3,7 @@
 //! Provides cached implementations of repositories to reduce
 //! database access for frequently accessed data.
 
-use crate::cache::{cache_service::key_builder, CacheConfigs, CacheService};
+use crate::cache::{CacheConfigs, CacheService, cache_service::key_builder};
 use crate::repository::client_repository::ClientRepository;
 use common::error::CmdbResult;
 use common::models::Client;
@@ -99,6 +99,17 @@ impl CachedClientRepository {
     pub async fn find_by_serial(&self, serial: &str) -> CmdbResult<Option<Client>> {
         // This could be optimized with a separate cache key
         self.inner.find_by_serial(serial).await
+    }
+
+    /// Update client primary IP (invalidates cache)
+    #[instrument(skip(self))]
+    pub async fn update_primary_ip(&self, id: &str, primary_ip: &str) -> CmdbResult<()> {
+        self.inner.update_primary_ip(id, primary_ip).await?;
+
+        let cache_key = key_builder::client(id);
+        self.cache.invalidate(&cache_key).await;
+
+        Ok(())
     }
 
     /// Update client last seen timestamp

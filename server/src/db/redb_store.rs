@@ -273,8 +273,9 @@ impl Database for RedbStore {
                         .map_err(|e| CmdbError::Database(format!("Failed to iterate: {}", e)))?;
 
                     for item in iter {
-                        let (key, value) = item
-                            .map_err(|e| CmdbError::Database(format!("Failed to iterate: {}", e)))?;
+                        let (key, value) = item.map_err(|e| {
+                            CmdbError::Database(format!("Failed to iterate: {}", e))
+                        })?;
                         let key_str = key.value();
                         if key_str.starts_with(&prefix) {
                             let value_vec = value.value().to_vec();

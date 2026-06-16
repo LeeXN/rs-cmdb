@@ -1,6 +1,10 @@
 use crate::db::Database;
-use common::entity::hardware::Hardware;
+use common::entity::hardware::{Hardware, NICStatus};
 use common::error::{CmdbError, CmdbResult};
+use common::models::{
+    HardwareHistoryChange, HardwareHistoryChangeType, HardwareHistoryEntry,
+    build_hardware_history_entries, calculate_hardware_history_changes,
+};
 use serde_json;
 use std::sync::Arc;
 
@@ -40,12 +44,19 @@ impl HardwareRepository {
             CmdbError::Serialization(format!("Failed to serialize hardware: {}", e))
         })?;
 
+        // Load previous hardware BEFORE saving current, so we can compute diffs
+        let previous_hardware = if save_history {
+            self.get_hardware(client_id).await?
+        } else {
+            None
+        };
+
         // Check if hardware has changed (only if we need to save history)
         let hardware_changed = if save_history {
-            match self.get_hardware(client_id).await? {
+            match &previous_hardware {
                 Some(existing_hardware) => {
                     // Compare the hardware configurations
-                    !self.hardware_equals(&existing_hardware, hardware)
+                    !self.hardware_equals(existing_hardware, hardware)
                 }
                 None => {
                     // No existing hardware, this is the first time
@@ -64,8 +75,28 @@ impl HardwareRepository {
         // Only save to history if hardware has actually changed
         if save_history && hardware_changed {
             let timestamp = chrono::Utc::now().timestamp().to_string();
+            let (changes, snapshot) = match previous_hardware {
+                Some(prev) => (calculate_hardware_history_changes(&prev, hardware), None),
+                None => (
+                    vec![HardwareHistoryChange {
+                        component: "初始版本".to_string(),
+                        change_type: HardwareHistoryChangeType::Added,
+                        old_value: String::new(),
+                        new_value: "首次记录".to_string(),
+                    }],
+                    None,
+                ),
+            };
+            let entry = HardwareHistoryEntry {
+                timestamp: timestamp.clone(),
+                changes,
+                snapshot,
+            };
+            let entry_json = serde_json::to_vec(&entry).map_err(|e| {
+                CmdbError::Serialization(format!("Failed to serialize history entry: {}", e))
+            })?;
             self.db
-                .set(&self.get_history_key(client_id, &timestamp), &hardware_json)
+                .set(&self.get_history_key(client_id, &timestamp), &entry_json)
                 .await?;
         }
 
@@ -84,12 +115,19 @@ impl HardwareRepository {
             CmdbError::Serialization(format!("Failed to serialize hardware: {}", e))
         })?;
 
+        // Load previous hardware BEFORE saving current, so we can compute diffs
+        let previous_hardware = if save_history {
+            self.get_hardware(client_id).await?
+        } else {
+            None
+        };
+
         // Check if hardware has changed (only if we need to save history)
         let hardware_changed = if save_history {
-            match self.get_hardware(client_id).await? {
+            match &previous_hardware {
                 Some(existing_hardware) => {
                     // Compare the hardware configurations
-                    !self.hardware_equals(&existing_hardware, hardware)
+                    !self.hardware_equals(existing_hardware, hardware)
                 }
                 None => {
                     // No existing hardware, this is the first time
@@ -118,8 +156,28 @@ impl HardwareRepository {
             } else {
                 chrono::Utc::now().timestamp().to_string()
             };
+            let (changes, snapshot) = match previous_hardware {
+                Some(prev) => (calculate_hardware_history_changes(&prev, hardware), None),
+                None => (
+                    vec![HardwareHistoryChange {
+                        component: "初始版本".to_string(),
+                        change_type: HardwareHistoryChangeType::Added,
+                        old_value: String::new(),
+                        new_value: "首次记录".to_string(),
+                    }],
+                    None,
+                ),
+            };
+            let entry = HardwareHistoryEntry {
+                timestamp: timestamp.clone(),
+                changes,
+                snapshot,
+            };
+            let entry_json = serde_json::to_vec(&entry).map_err(|e| {
+                CmdbError::Serialization(format!("Failed to serialize history entry: {}", e))
+            })?;
             self.db
-                .set(&self.get_history_key(client_id, &timestamp), &hardware_json)
+                .set(&self.get_history_key(client_id, &timestamp), &entry_json)
                 .await?;
         }
 
@@ -128,7 +186,20 @@ impl HardwareRepository {
 
     /// Compare two hardware configurations to check if they are equal
     fn hardware_equals(&self, hw1: &Hardware, hw2: &Hardware) -> bool {
-        hw1.semantically_eq(hw2)
+        let mut left = hw1.clone();
+        let mut right = hw2.clone();
+
+        for nic in &mut left.nics {
+            nic.status = NICStatus::Unknown;
+            nic.speed = 0;
+        }
+
+        for nic in &mut right.nics {
+            nic.status = NICStatus::Unknown;
+            nic.speed = 0;
+        }
+
+        left.semantically_eq(&right)
     }
 
     /// Get hardware information for a client
@@ -149,29 +220,58 @@ impl HardwareRepository {
     pub async fn get_hardware_history(
         &self,
         client_id: &str,
-    ) -> CmdbResult<Vec<(String, Hardware)>> {
+    ) -> CmdbResult<Vec<HardwareHistoryEntry>> {
         let history_prefix = format!("{}{}:history:", self.key_prefix, client_id);
         let entries = self.db.list_entries(&history_prefix).await?;
-        let mut history = Vec::with_capacity(entries.len());
+        let mut full_snapshots = Vec::new();
+        let mut delta_entries = Vec::new();
 
         for (key, data) in entries {
-            let hardware = serde_json::from_slice(&data).map_err(|e| {
-                CmdbError::Serialization(format!("Failed to deserialize hardware history: {}", e))
-            })?;
-
             // Extract timestamp from key
             let timestamp = key
                 .strip_prefix(&history_prefix)
                 .unwrap_or_default()
                 .to_string();
 
-            history.push((timestamp, hardware));
+            // Try to deserialize as new delta format first
+            match serde_json::from_slice::<HardwareHistoryEntry>(&data) {
+                Ok(mut entry) => {
+                    entry.timestamp = timestamp;
+                    delta_entries.push(entry);
+                }
+                Err(_) => {
+                    // Old format: full Hardware snapshot
+                    match serde_json::from_slice::<Hardware>(&data) {
+                        Ok(hw) => {
+                            full_snapshots.push((timestamp, hw));
+                        }
+                        Err(e) => {
+                            return Err(CmdbError::Serialization(format!(
+                                "Failed to deserialize history entry: {}",
+                                e
+                            )));
+                        }
+                    }
+                }
+            }
         }
 
-        // Sort by timestamp, descending
-        history.sort_by(|a, b| b.0.cmp(&a.0));
+        // Process old-format snapshots through build_hardware_history_entries
+        full_snapshots.sort_by(|a, b| b.0.cmp(&a.0));
+        let mut result = if full_snapshots.is_empty() {
+            Vec::new()
+        } else {
+            build_hardware_history_entries(&full_snapshots)
+        };
 
-        Ok(history)
+        // Add new-format delta entries
+        delta_entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        result.extend(delta_entries);
+
+        // Sort all by timestamp descending
+        result.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+        Ok(result)
     }
 
     /// Delete hardware information for a client
@@ -421,6 +521,45 @@ mod tests {
             hardware1.semantically_eq(&hardware2),
             "Different CPU speeds should be semantically equal (ignored)"
         );
+    }
+
+    #[tokio::test]
+    async fn test_hardware_equals_ignores_nic_status_and_speed_flapping() {
+        let db = setup_test_db().unwrap();
+        let repo = HardwareRepository::new(std::sync::Arc::new(db));
+        let mut hardware1 = create_test_hardware_with_components();
+        let mut hardware2 = create_test_hardware_with_components();
+
+        hardware1.nics[0].status = NICStatus::Up;
+        hardware1.nics[0].speed = 1000;
+        hardware2.nics[0].status = NICStatus::Down;
+        hardware2.nics[0].speed = 0;
+
+        assert!(repo.hardware_equals(&hardware1, &hardware2));
+    }
+
+    #[tokio::test]
+    async fn test_hardware_equals_keeps_nic_ip_changes() {
+        let db = setup_test_db().unwrap();
+        let repo = HardwareRepository::new(std::sync::Arc::new(db));
+        let mut hardware1 = create_test_hardware_with_components();
+        let mut hardware2 = create_test_hardware_with_components();
+
+        hardware2.nics[0].ipv4_address = "192.168.1.101".to_string();
+
+        assert!(!repo.hardware_equals(&hardware1, &hardware2));
+    }
+
+    #[tokio::test]
+    async fn test_hardware_equals_keeps_ipmi_ip_changes() {
+        let db = setup_test_db().unwrap();
+        let repo = HardwareRepository::new(std::sync::Arc::new(db));
+        let mut hardware1 = create_test_hardware_with_components();
+        let mut hardware2 = create_test_hardware_with_components();
+
+        hardware2.ipmi.as_mut().unwrap().ip_address = Some("10.0.0.11".to_string());
+
+        assert!(!repo.hardware_equals(&hardware1, &hardware2));
     }
 
     #[tokio::test]

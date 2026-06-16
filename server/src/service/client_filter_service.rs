@@ -3,7 +3,9 @@
 //! This service provides filtering and search capabilities for clients,
 //! including hardware-based filtering and search functionality.
 
-use crate::repository::{client_repository::ClientRepository, hardware_repository::HardwareRepository};
+use crate::repository::{
+    client_repository::ClientRepository, hardware_repository::HardwareRepository,
+};
 use common::entity::hardware::Hardware;
 use common::models::{Client, FilterOptions};
 use serde::Deserialize;
@@ -50,10 +52,7 @@ pub struct ClientFilterService {
 
 impl ClientFilterService {
     /// Create a new client filter service
-    pub fn new(
-        client_repo: Arc<ClientRepository>,
-        hardware_repo: Arc<HardwareRepository>,
-    ) -> Self {
+    pub fn new(client_repo: Arc<ClientRepository>, hardware_repo: Arc<HardwareRepository>) -> Self {
         Self {
             client_repo,
             hardware_repo,
@@ -62,7 +61,11 @@ impl ClientFilterService {
 
     /// Search clients with basic filters
     pub async fn search_clients(&self, query: &SearchQuery) -> Result<Vec<Client>, String> {
-        let clients = self.client_repo.list_all().await.map_err(|e| e.to_string())?;
+        let clients = self
+            .client_repo
+            .list_all()
+            .await
+            .map_err(|e| e.to_string())?;
 
         let mut filtered_clients = Vec::new();
 
@@ -124,7 +127,11 @@ impl ClientFilterService {
         &self,
         params: &HardwareFilterQuery,
     ) -> Result<Vec<Client>, String> {
-        let clients = self.client_repo.list_all().await.map_err(|e| e.to_string())?;
+        let clients = self
+            .client_repo
+            .list_all()
+            .await
+            .map_err(|e| e.to_string())?;
 
         let mut filtered_clients = Vec::new();
 
@@ -203,6 +210,10 @@ impl ClientFilterService {
         // Search client basic info
         let client_matches = client.hostname.to_lowercase().contains(&search_lower)
             || client.ip_address.to_lowercase().contains(&search_lower)
+            || client
+                .primary_ip
+                .as_deref()
+                .is_some_and(|ip| ip.to_lowercase().contains(&search_lower))
             || client
                 .os
                 .as_ref()
@@ -497,8 +508,10 @@ impl ClientFilterService {
         };
 
         // Network type filter
-        let matches_network_type = if let Some(ref network_type_filter) = params.network_type_filter {
-            if network_type_filter.is_empty() || network_type_filter == crate::constants::FILTER_ALL {
+        let matches_network_type = if let Some(ref network_type_filter) = params.network_type_filter
+        {
+            if network_type_filter.is_empty() || network_type_filter == crate::constants::FILTER_ALL
+            {
                 true
             } else {
                 hw.nics
@@ -510,24 +523,28 @@ impl ClientFilterService {
         };
 
         // Network model filter
-        let matches_network_model = if let Some(ref network_model_filter) = params.network_model_filter {
-            if network_model_filter.is_empty() || network_model_filter == crate::constants::FILTER_ALL {
-                true
+        let matches_network_model =
+            if let Some(ref network_model_filter) = params.network_model_filter {
+                if network_model_filter.is_empty()
+                    || network_model_filter == crate::constants::FILTER_ALL
+                {
+                    true
+                } else {
+                    hw.nics.iter().any(|nic| nic.model == *network_model_filter)
+                }
             } else {
-                hw.nics.iter().any(|nic| nic.model == *network_model_filter)
-            }
-        } else {
-            true
-        };
+                true
+            };
 
         // Storage type filter
         let matches_storage = if let Some(ref storage_type_filter) = params.storage_type_filter {
-            if storage_type_filter.is_empty() || storage_type_filter == crate::constants::FILTER_ALL {
+            if storage_type_filter.is_empty() || storage_type_filter == crate::constants::FILTER_ALL
+            {
                 true
             } else {
-                hw.disks.iter().any(|disk| {
-                    disk.storage_type.to_string() == *storage_type_filter
-                })
+                hw.disks
+                    .iter()
+                    .any(|disk| disk.storage_type.to_string() == *storage_type_filter)
             }
         } else {
             true
@@ -564,6 +581,7 @@ impl ClientFilterService {
             client_id: client.id.clone(),
             hostname: client.hostname.clone(),
             ip_address: client.ip_address.clone(),
+            primary_ip: client.primary_ip.clone(),
             os: client.os.clone().unwrap_or_default(),
             kernel_version: client.kernel_version.clone().unwrap_or_default(),
             sys_vendor: client.sys_vendor.clone().unwrap_or_default(),
@@ -571,36 +589,96 @@ impl ClientFilterService {
             serial_number: client.serial_number.clone().unwrap_or_default(),
             last_seen: client.last_seen.clone().unwrap_or_default(),
             registered_at: client.registered_at.clone().unwrap_or_default(),
-            cpu_vendor: hardware.as_ref().map(|h| h.cpu.vendor_id.clone()).unwrap_or_default(),
-            cpu_model: hardware.as_ref().map(|h| h.cpu.model_name.clone()).unwrap_or_default(),
+            cpu_vendor: hardware
+                .as_ref()
+                .map(|h| h.cpu.vendor_id.clone())
+                .unwrap_or_default(),
+            cpu_model: hardware
+                .as_ref()
+                .map(|h| h.cpu.model_name.clone())
+                .unwrap_or_default(),
             cpu_cores: hardware.as_ref().map(|h| h.cpu.cores).unwrap_or(0),
             cpu_threads: hardware.as_ref().map(|h| h.cpu.threads).unwrap_or(0),
-            cpu_frequency: hardware.as_ref().map(|h| format!("{} MHz", h.cpu.speed)).unwrap_or_default(),
-            memory_total: hardware.as_ref().map(|h| format!("{} GB", h.ram.total_size)).unwrap_or_default(),
-            memory_vendor: hardware.as_ref().map(|h| h.ram.vendor.clone()).unwrap_or_default(),
-            memory_speed: hardware.as_ref().map(|h| format!("{} MHz", h.ram.speed)).unwrap_or_default(),
+            cpu_frequency: hardware
+                .as_ref()
+                .map(|h| format!("{} MHz", h.cpu.speed))
+                .unwrap_or_default(),
+            memory_total: hardware
+                .as_ref()
+                .map(|h| format!("{} GB", h.ram.total_size))
+                .unwrap_or_default(),
+            memory_vendor: hardware
+                .as_ref()
+                .map(|h| h.ram.vendor.clone())
+                .unwrap_or_default(),
+            memory_speed: hardware
+                .as_ref()
+                .map(|h| format!("{} MHz", h.ram.speed))
+                .unwrap_or_default(),
             memory_modules: hardware.as_ref().map(|h| h.ram.count as u32).unwrap_or(0),
             gpu_count: hardware.as_ref().map(|h| h.gpus.len() as u32).unwrap_or(0),
-            gpu_models: hardware.as_ref().map(|h| {
-                h.gpus.iter().map(|g| g.model.clone()).collect::<Vec<_>>().join(", ")
-            }).unwrap_or_default(),
-            gpu_vendors: hardware.as_ref().map(|h| {
-                h.gpus.iter().map(|g| g.vendor.clone()).collect::<Vec<_>>().join(", ")
-            }).unwrap_or_default(),
+            gpu_models: hardware
+                .as_ref()
+                .map(|h| {
+                    h.gpus
+                        .iter()
+                        .map(|g| g.model.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
+            gpu_vendors: hardware
+                .as_ref()
+                .map(|h| {
+                    h.gpus
+                        .iter()
+                        .map(|g| g.vendor.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
             storage_count: hardware.as_ref().map(|h| h.disks.len() as u32).unwrap_or(0),
-            storage_total: hardware.as_ref().map(|h| {
-                h.disks.iter().map(|d| format!("{} {}", d.size, d.size_unit)).collect::<Vec<_>>().join(", ")
-            }).unwrap_or_default(),
-            storage_types: hardware.as_ref().map(|h| {
-                h.disks.iter().map(|d| d.storage_type.to_string()).collect::<Vec<_>>().join(", ")
-            }).unwrap_or_default(),
+            storage_total: hardware
+                .as_ref()
+                .map(|h| {
+                    h.disks
+                        .iter()
+                        .map(|d| format!("{} {}", d.size, d.size_unit))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
+            storage_types: hardware
+                .as_ref()
+                .map(|h| {
+                    h.disks
+                        .iter()
+                        .map(|d| d.storage_type.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
             network_count: hardware.as_ref().map(|h| h.nics.len() as u32).unwrap_or(0),
-            network_types: hardware.as_ref().map(|h| {
-                h.nics.iter().map(|n| n.nic_type.to_string()).collect::<Vec<_>>().join(", ")
-            }).unwrap_or_default(),
-            network_speeds: hardware.as_ref().map(|h| {
-                h.nics.iter().map(|n| format!("{} Mbps", n.speed)).collect::<Vec<_>>().join(", ")
-            }).unwrap_or_default(),
+            network_types: hardware
+                .as_ref()
+                .map(|h| {
+                    h.nics
+                        .iter()
+                        .map(|n| n.nic_type.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
+            network_speeds: hardware
+                .as_ref()
+                .map(|h| {
+                    h.nics
+                        .iter()
+                        .map(|n| format!("{} Mbps", n.speed))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
         };
 
         Ok(Some(export_data))

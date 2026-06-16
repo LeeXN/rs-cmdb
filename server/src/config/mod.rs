@@ -1,4 +1,5 @@
 use config::{Config, ConfigError, File};
+use ipnet::IpNet;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -10,6 +11,7 @@ pub enum ConfigValidationError {
     InvalidJwtSecret(String),
     JwtSecretTooShort,
     JwtSecretEmpty,
+    InvalidPrimaryIp(String),
 }
 
 impl std::fmt::Display for ConfigValidationError {
@@ -22,11 +24,38 @@ impl std::fmt::Display for ConfigValidationError {
                 write!(f, "JWT secret must be at least 32 characters")
             }
             ConfigValidationError::JwtSecretEmpty => write!(f, "JWT secret cannot be empty"),
+            ConfigValidationError::InvalidPrimaryIp(msg) => {
+                write!(f, "Invalid primary IP configuration: {}", msg)
+            }
         }
     }
 }
 
 impl std::error::Error for ConfigValidationError {}
+
+/// Validate primary IP configuration
+pub fn validate_primary_ip_config(
+    config: &Option<PrimaryIpConfig>,
+) -> Result<Option<IpNet>, ConfigValidationError> {
+    match config {
+        None => Ok(None),
+        Some(cfg) => {
+            let subnet = cfg.subnet.trim();
+            if subnet.is_empty() {
+                return Err(ConfigValidationError::InvalidPrimaryIp(
+                    "primary_ip.subnet cannot be empty".to_string(),
+                ));
+            }
+            match subnet.parse::<IpNet>() {
+                Ok(net) => Ok(Some(net)),
+                Err(e) => Err(ConfigValidationError::InvalidPrimaryIp(format!(
+                    "Invalid primary_ip.subnet CIDR '{}': {}",
+                    subnet, e
+                ))),
+            }
+        }
+    }
+}
 
 /// Validate JWT secret configuration
 ///
@@ -55,6 +84,33 @@ pub fn validate_jwt_secret(secret: &str) -> Result<(), ConfigValidationError> {
     Ok(())
 }
 
+/// Primary IP auto-detection configuration
+#[derive(Debug, Clone, Serialize)]
+pub struct PrimaryIpConfig {
+    /// CIDR subnet for auto-detection of primary IP from NICs (e.g., "10.0.0.0/8")
+    pub subnet: String,
+}
+
+impl<'de> Deserialize<'de> for PrimaryIpConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        /// Helper enum to accept either a string or a struct
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum PrimaryIpConfigHelper {
+            Shorthand(String),
+            Full { subnet: String },
+        }
+
+        match PrimaryIpConfigHelper::deserialize(deserializer)? {
+            PrimaryIpConfigHelper::Shorthand(s) => Ok(PrimaryIpConfig { subnet: s }),
+            PrimaryIpConfigHelper::Full { subnet } => Ok(PrimaryIpConfig { subnet }),
+        }
+    }
+}
+
 /// Server configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
@@ -66,6 +122,8 @@ pub struct ServerConfig {
     pub database: DatabaseConfig,
     /// Message queue configuration
     pub queue: QueueConfig,
+    /// Primary IP auto-detection configuration
+    pub primary_ip: Option<PrimaryIpConfig>,
     /// Poll interval for clients (in seconds)
     pub poll_interval: u64,
     /// Client timeout (in seconds)
@@ -190,6 +248,7 @@ fn default_config() -> ServerConfig {
             queue_type: "flume".to_string(),
             capacity: 1000,
         },
+        primary_ip: None,
         poll_interval: 300,   // 5 minutes
         client_timeout: 3600, // 1 hour
         log_level: "info".to_string(),
@@ -265,5 +324,57 @@ mod tests {
             result.is_err(),
             "31-character JWT secret should be rejected"
         );
+    }
+
+    #[test]
+    fn test_validate_primary_ip_config_none() {
+        let result = validate_primary_ip_config(&None).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_validate_primary_ip_config_valid_cidr() {
+        let config = Some(PrimaryIpConfig {
+            subnet: "10.0.0.0/8".to_string(),
+        });
+        let result = validate_primary_ip_config(&config).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), "10.0.0.0/8".parse::<IpNet>().unwrap());
+    }
+
+    #[test]
+    fn test_validate_primary_ip_config_valid_cidr_v6() {
+        let config = Some(PrimaryIpConfig {
+            subnet: "2001:db8::/32".to_string(),
+        });
+        let result = validate_primary_ip_config(&config).unwrap();
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_validate_primary_ip_config_empty_rejected() {
+        let config = Some(PrimaryIpConfig {
+            subnet: "".to_string(),
+        });
+        let result = validate_primary_ip_config(&config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_primary_ip_config_invalid_cidr_rejected() {
+        let config = Some(PrimaryIpConfig {
+            subnet: "not-a-cidr".to_string(),
+        });
+        let result = validate_primary_ip_config(&config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_primary_ip_config_bad_prefix_rejected() {
+        let config = Some(PrimaryIpConfig {
+            subnet: "10.0.0.0/33".to_string(),
+        });
+        let result = validate_primary_ip_config(&config);
+        assert!(result.is_err());
     }
 }

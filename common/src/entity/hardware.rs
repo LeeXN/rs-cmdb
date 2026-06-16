@@ -213,19 +213,14 @@ pub struct IpmiUser {
     pub privilege_level: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum IpmiStatus {
     Available,
     NotConfigured,
+    #[default]
     NotAvailable,
     AccessDenied,
     Error(String),
-}
-
-impl Default for IpmiStatus {
-    fn default() -> Self {
-        IpmiStatus::NotAvailable
-    }
 }
 
 impl Hardware {

@@ -2,9 +2,9 @@ use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableRow};
 use crate::hooks::use_trans::use_trans;
+use crate::icons::{Monitor, Server};
 use crate::types::Client;
 use crate::utils::format::format_time_ago;
-use lucide_yew::{Monitor, Server};
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -22,10 +22,10 @@ pub fn recent_clients_card(props: &RecentClientsCardProps) -> Html {
             <CardHeader>
                 <div class="flex justify-between items-center">
                     <div>
-                        <CardTitle>{t.t("dashboard.recent_active_title")}</CardTitle>
-                        <CardDescription>{t.t("dashboard.recent_active_desc")}</CardDescription>
+                        <CardTitle>{t.t("dashboard.recent_offline_title")}</CardTitle>
+                        <CardDescription>{t.t("dashboard.recent_offline_desc")}</CardDescription>
                     </div>
-                    <Badge variant={BadgeVariant::Default} class="bg-blue-500 hover:bg-blue-600">{t.t("dashboard.realtime")}</Badge>
+                    <Badge variant={BadgeVariant::Destructive} class="bg-red-600 text-white hover:bg-red-700">{t.t("dashboard.offline")}</Badge>
                 </div>
             </CardHeader>
             <CardContent>
@@ -34,7 +34,7 @@ pub fn recent_clients_card(props: &RecentClientsCardProps) -> Html {
                         html! {
                             <div class="flex flex-col items-center justify-center py-10 text-muted-foreground">
                                 <Monitor class="h-12 w-12 opacity-50" />
-                                <p class="mt-2">{t.t("dashboard.no_clients_registered")}</p>
+                                <p class="mt-2">{t.t("dashboard.no_recent_offline_clients")}</p>
                             </div>
                         }
                     } else {
@@ -52,10 +52,10 @@ pub fn recent_clients_card(props: &RecentClientsCardProps) -> Html {
                                                 })
                                                 .unwrap_or(false);
 
-                                            let (variant, status_text) = if is_online {
-                                                (BadgeVariant::Default, t.t("dashboard.online")) // Default is primary (cyan/green)
+                                            let (badge_class, status_text) = if is_online {
+                                                ("bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-700", t.t("dashboard.online"))
                                             } else {
-                                                (BadgeVariant::Secondary, t.t("dashboard.offline"))
+                                                ("bg-red-600 text-white border-red-500 hover:bg-red-700", t.t("dashboard.offline"))
                                             };
 
                                             html! {
@@ -67,15 +67,15 @@ pub fn recent_clients_card(props: &RecentClientsCardProps) -> Html {
                                                             </div>
                                                             <div>
                                                                 <div class="font-medium whitespace-nowrap">{client.hostname.clone()}</div>
-                                                                <div class="text-xs text-muted-foreground">{client.ip_address.clone()}</div>
+                                                                <div class="text-xs text-muted-foreground">{client.primary_ip.clone().unwrap_or(client.ip_address.clone())}</div>
                                                             </div>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Badge variant={variant}>{status_text}</Badge>
+                                                        <Badge variant={BadgeVariant::Outline} class={badge_class}>{status_text}</Badge>
                                                     </TableCell>
                                                     <TableCell class="text-right text-xs text-muted-foreground whitespace-nowrap">
-                                                        {client.registered_at.as_ref().map(|t| format_time_ago(t)).unwrap_or(t.t("unknown"))}
+                                                        {client.last_seen.as_ref().map(|t| format_time_ago(t)).unwrap_or(t.t("unknown"))}
                                                     </TableCell>
                                                 </TableRow>
                                             }
