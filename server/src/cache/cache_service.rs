@@ -16,6 +16,7 @@ pub struct CacheConfig {
     /// Time-to-live for cache entries
     pub ttl: std::time::Duration,
     /// Whether to cache null results (to prevent cache stampede)
+    #[allow(dead_code)]
     pub cache_nulls: bool,
 }
 
@@ -30,6 +31,7 @@ impl Default for CacheConfig {
 }
 
 /// Cache configurations for different data types
+#[allow(dead_code)]
 pub struct CacheConfigs {
     /// Configuration for frequently accessed reference data (dictionaries, racks, etc.)
     pub reference_data: CacheConfig,
@@ -140,16 +142,19 @@ where
     }
 
     /// Get the number of entries in the cache
+    #[allow(dead_code)]
     pub fn entry_count(&self) -> u64 {
         self.cache.entry_count()
     }
 
     /// Check if the cache contains a key
+    #[allow(dead_code)]
     pub fn contains_key(&self, key: &K) -> bool {
         self.cache.contains_key(key)
     }
 
     /// Get cache statistics
+    #[allow(dead_code)]
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             entry_count: self.cache.entry_count(),
@@ -171,6 +176,7 @@ where
 }
 
 /// Cache statistics
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
     pub entry_count: u64,
@@ -181,6 +187,7 @@ pub struct CacheStats {
 
 impl CacheStats {
     /// Calculate cache hit rate
+    #[allow(dead_code)]
     pub fn hit_rate(&self) -> f64 {
         let total = self.hit_count + self.miss_count;
         if total == 0 {
@@ -191,12 +198,14 @@ impl CacheStats {
     }
 
     /// Calculate cache miss rate
+    #[allow(dead_code)]
     pub fn miss_rate(&self) -> f64 {
         100.0 - self.hit_rate()
     }
 }
 
 /// Cache key prefixes for different data types
+#[allow(dead_code)]
 pub mod cache_keys {
     /// Prefix for client cache keys
     pub const CLIENT: &str = "client";
@@ -217,6 +226,7 @@ pub mod cache_keys {
 }
 
 /// Helper functions for creating cache keys
+#[allow(dead_code)]
 pub mod key_builder {
     use super::cache_keys;
 

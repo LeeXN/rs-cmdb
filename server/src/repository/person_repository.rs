@@ -87,6 +87,7 @@ mod tests {
             department: Some("Engineering".to_string()),
             title: Some("Developer".to_string()),
             cost_center: Some("CC-001".to_string()),
+            created_by: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         }

@@ -40,6 +40,7 @@ impl StatsService {
     }
 
     /// Create a new stats service with custom cache configs
+    #[allow(dead_code)]
     pub fn with_cache(
         client_repo: Arc<ClientRepository>,
         hardware_repo: Arc<HardwareRepository>,
@@ -994,4 +995,72 @@ pub struct OverallStats {
     pub online_clients: usize,
     pub offline_clients: usize,
     pub categories: Vec<CategoryStats>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+    use crate::tests::fixtures::{create_test_hardware_info, setup_test_db};
+    use common::models::Client;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_empty_stats() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+        let svc = StatsService::new(client_repo, hardware_repo);
+
+        let stats = svc.get_overall_stats(None).await.unwrap();
+        assert_eq!(stats.total_clients, 0);
+        assert_eq!(stats.online_clients, 0);
+        assert_eq!(stats.offline_clients, 0);
+    }
+
+    #[tokio::test]
+    async fn test_hardware_stats_with_seeded() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+
+        let client = Client::new("test-host.example.com".into(), "10.0.0.1".into());
+        client_repo.save(&client).await.unwrap();
+
+        let hw = create_test_hardware_info(&client.id);
+        hardware_repo.save_hardware(&client.id, &hw, false).await.unwrap();
+
+        let svc = StatsService::new(client_repo, hardware_repo);
+        let stats = svc.get_overall_stats(None).await.unwrap();
+        assert_eq!(stats.total_clients, 1);
+    }
+
+    #[tokio::test]
+    async fn test_filter_options_empty() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+        let svc = StatsService::new(client_repo, hardware_repo);
+
+        let options = svc.get_filter_options().await.unwrap();
+        assert!(options.cpu_vendors.is_empty());
+        assert!(options.os_names.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_detailed_stats() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+        let svc = StatsService::new(client_repo, hardware_repo);
+
+        let stats = svc.get_detailed_stats().await.unwrap();
+        assert_eq!(stats.total_clients, 0);
+        assert_eq!(stats.online_clients, 0);
+        assert_eq!(stats.offline_clients, 0);
+    }
 }

@@ -130,3 +130,17 @@ impl PullService {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_new_pull_service() {
+        let config = Arc::new(crate::config::default_config());
+        let cache = Arc::new(Mutex::new(None));
+        let svc = PullService::new(config, "test-client".into(), cache);
+        assert_eq!(svc.client_id, "test-client");
+        assert!(svc.hardware_cache.lock().await.is_none());
+    }
+}

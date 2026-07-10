@@ -1,8 +1,15 @@
 pub mod client_repository;
+pub mod command_repository;
+pub mod execution_session_repository;
 pub mod component_repository;
 pub mod dictionary_repository;
 pub mod hardware_repository;
 pub mod person_repository;
 pub mod project_repository;
 pub mod rack_repository;
+pub mod permission_repository;
+pub mod approval_repository;
+pub mod exec_policy_repository;
 pub mod user_repository;
+pub mod web_terminal_policy_repository;
+pub mod terminal_session_repository;

@@ -8,9 +8,10 @@ use axum::{
 };
 use axum_macros::debug_handler;
 use serde::{Deserialize, Serialize};
+use once_cell::sync::Lazy;
 use std::sync::Arc;
 use tokio::fs;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, warn};
 
 use crate::config::ServerConfig;
 use crate::service::client_service::ClientService;
@@ -21,6 +22,29 @@ pub struct DownloadQuery {
     platform: Option<String>,
     #[serde(default)]
     arch: Option<String>,
+}
+
+static ALLOWED_PLATFORMS: Lazy<Vec<&str>> = Lazy::new(|| vec!["linux", "windows", "darwin"]);
+static ALLOWED_ARCHS: Lazy<Vec<&str>> = Lazy::new(|| vec!["amd64", "x86_64", "arm64", "aarch64", "i386"]);
+
+fn is_path_traversal(s: &str) -> bool {
+    s.contains("..") || s.contains('/') || s.contains('\\')
+}
+
+fn validate_download_params(platform: &str, arch: &str, binary_name: &str) -> Result<(), &'static str> {
+    if !ALLOWED_PLATFORMS.contains(&platform) {
+        warn!("Invalid download platform: {}", platform);
+        return Err("Invalid platform");
+    }
+    if !ALLOWED_ARCHS.contains(&arch) {
+        warn!("Invalid download arch: {}", arch);
+        return Err("Invalid architecture");
+    }
+    if is_path_traversal(binary_name) {
+        warn!("Invalid binary_name (path traversal detected): {}", binary_name);
+        return Err("Invalid binary name");
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -90,8 +114,11 @@ pub async fn get_client_info(
 pub async fn download_client(
     Path((platform, arch, binary_name)): Path<(String, String, String)>,
 ) -> Result<Response, (StatusCode, &'static str)> {
+    if let Err(msg) = validate_download_params(&platform, &arch, &binary_name) {
+        return Err((StatusCode::BAD_REQUEST, msg));
+    }
     let file_path = format!("binaries/{}/{}/{}", platform, arch, binary_name);
-    println!("Downloading client binary from path: {}", file_path);
+    info!("Downloading client binary from path: {}", file_path);
 
     match fs::read(&file_path).await {
         Ok(content) => {
@@ -304,4 +331,47 @@ file = "/var/log/rs-cmdb-client.log"
 "#,
         server_url
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_path_traversal() {
+        assert!(is_path_traversal("../../etc/passwd"));
+        assert!(is_path_traversal("foo/bar"));
+        assert!(is_path_traversal("foo\\bar"));
+        assert!(is_path_traversal(".."));
+        assert!(!is_path_traversal("rs-cmdb-client"));
+        assert!(!is_path_traversal("rs-cmdb-client.exe"));
+        assert!(!is_path_traversal("client-binary-v1.0"));
+    }
+
+    #[test]
+    fn test_validate_download_params_valid() {
+        assert!(validate_download_params("linux", "amd64", "rs-cmdb-client").is_ok());
+        assert!(validate_download_params("windows", "x86_64", "rs-cmdb-client.exe").is_ok());
+        assert!(validate_download_params("darwin", "arm64", "rs-cmdb-client").is_ok());
+        assert!(validate_download_params("linux", "aarch64", "rs-cmdb-client").is_ok());
+    }
+
+    #[test]
+    fn test_validate_download_params_invalid_platform() {
+        assert!(validate_download_params("solaris", "amd64", "rs-cmdb-client").is_err());
+        assert!(validate_download_params("", "amd64", "rs-cmdb-client").is_err());
+    }
+
+    #[test]
+    fn test_validate_download_params_invalid_arch() {
+        assert!(validate_download_params("linux", "mips", "rs-cmdb-client").is_err());
+        assert!(validate_download_params("linux", "", "rs-cmdb-client").is_err());
+    }
+
+    #[test]
+    fn test_validate_download_params_path_traversal() {
+        assert!(validate_download_params("linux", "amd64", "../../etc/passwd").is_err());
+        assert!(validate_download_params("linux", "amd64", "foo/bar").is_err());
+        assert!(validate_download_params("linux", "amd64", "foo\\bar").is_err());
+    }
 }

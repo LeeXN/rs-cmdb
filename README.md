@@ -4,343 +4,150 @@
 
 **rs-cmdb** is a lightweight Configuration Management Database (CMDB) system built entirely in Rust.
 
-## 📌 Primary IP Feature
-
-The **Primary IP** feature introduces a dedicated `primary_ip` field on each client record, displayed preferentially alongside the original `ip_address`. The field is sourced through the following priority chain:
-
-1. **Manual override** — Set via the frontend edit form or `PUT /api/v1/clients/{id}/primary-ip` API
-2. **Client agent auto-detection** — If the client agent config has `[primary_ip] subnet = "10.0.0.0/8"`, the agent matches its NIC IPv4 against the CIDR and sends the result on registration
-3. **Server auto-detection** — If the server config has `[primary_ip] subnet = "10.0.0.0/8"`, the server automatically detects the primary IP from NICs after each hardware push
-4. **Fallback** — If none of the above apply, the field remains `None` and the UI falls back to the original `ip_address`
-
-### Upgrade & Compatibility
-
-**Compatibility Matrix** — All combinations work without breaking:
-
-| Server | Client | Behavior |
-|---|---|---|
-| New | New | Full primary_ip support: agent detects on registration + server auto-detects on hardware push + manual override via UI/API |
-| New | Old | Server auto-detects `primary_ip` from NICs on hardware push (if `[primary_ip]` subnet configured). Agent registration does NOT include `primary_ip`. Works seamlessly. |
-| Old | New | New client sends `primary_ip` in registration payload; old server ignores the unknown field (no `deny_unknown_fields`). `primary_ip` is not stored or displayed. Non-breaking. |
-
-No database migration is needed — the field is `Option<String>` and defaults to `None` on existing records.
-
-**Server** (`rs-cmdb-server`) upgrade steps:
-
-1. Binary update: Replace the server binary with the new build and restart.
-2. (Optional) Add auto-detection CIDR to `config/default.toml` or environment variable.
-   Two formats are accepted — shorthand (single line) or full struct:
-
-   **Shorthand (recommended):**
-   ```toml
-   primary_ip = "10.0.0.0/8"
-   ```
-   **Full struct (equivalent):**
-   ```toml
-   [primary_ip]
-   subnet = "10.0.0.0/8"
-   ```
-
-   Environment variable equivalent:
-   ```bash
-   CMDB_PRIMARY_IP__SUBNET=10.0.0.0/8
-   ```
-3. Auto-detection runs on the next hardware push from each client; manually set `primary_ip` via the UI or API at any time.
-
-**Client Agent** (`rs-cmdb-client`) upgrade steps:
-
-1. Binary update: Replace the client binary with the new build and restart.
-2. (Optional) Add `[primary_ip]` section to `client.toml` to enable local detection on registration:
-   ```toml
-   [primary_ip]
-   subnet = "10.0.0.0/8"
-   ```
-3. If no config is added, the agent sends `primary_ip: null` and falls back to server-side auto-detection.
-
 ## 🚀 Features
 
-*   **Full Stack Rust**: Built with Rust from the kernel to the UI, ensuring memory safety and high performance.
-*   **Automated Discovery**: Cross-platform agents (`rs-cmdb-client`) automatically collect hardware specifications (CPU, RAM, Disk, Network) and report to the server.
-*   **Asset Management**:
-    *   Detailed hardware inventory tracking.
-    *   **Efficient change history**: Stores only deltas (not full snapshots), with built-in CLI for analysis, cleanup, and migration (`rs-cmdb-server history analyze | cleanup | migrate`).
-    *   Rack and data center visualization.
-*   **Modern Dashboard**: Real-time analytics, resource usage statistics, and health monitoring.
-*   **Security**: Role-Based Access Control (RBAC) and secure API authentication.
-*   **Zero-Dependency Database**: Uses `Redb`, an embedded key-value store, eliminating the need for external database setup (like PostgreSQL or MySQL).
-*   **Internationalization**: Native support for English and Simplified Chinese.
+- **Full Stack Rust**: Built with Rust from backend to UI, ensuring memory safety and high performance.
+- **Automated Discovery**: Cross-platform agents (`rs-cmdb-client`) automatically collect hardware specifications (CPU, RAM, Disk, Network, GPU, IPMI/BMC) and report to the server.
+- **Asset Management**: Detailed hardware inventory, component stock tracking, rack/data-center visualization, and project/person relationship management.
+- **Efficient Change History**: Stores only hardware deltas (not full snapshots), with built-in CLI for analysis, cleanup, and migration.
+- **Remote Command Execution**: Admin-controlled remote exec with three-layer security (enable check → exec policy → danger detection), SSE log streaming, and an approval workflow.
+- **Permission System**: Three-role RBAC (Admin/User/Viewer) with resource-level ownership enforcement, data-scope filtering, exec policies, and web terminal policies.
+- **Audit Logging**: All security-relevant operations are recorded with operator identity.
+- **Modern Dashboard**: Real-time analytics, resource usage statistics, and health monitoring.
+- **Zero-Dependency Database**: Uses `Redb`, an embedded key-value store — no PostgreSQL or MySQL required.
+- **Internationalization**: Native support for English and Simplified Chinese.
 
 ## 📺 Demo
 
-Experience the live demo:
-*   **URL**: http://138.2.83.32:8080/
-*   **Username**: `demo`
-*   **Password**: `demo@2025.com`
+- **URL**: http://138.2.83.32:8080/
+- **Username**: `demo`
+- **Password**: `demo@2025.com`
+
+---
+
+## ✨ What's New
+
+### Permission System & Remote Command Execution
+
+This release introduces a complete permission system and a secure remote command execution framework.
+
+#### Permission System
+
+A three-role RBAC (Admin / User / Viewer) model now applies at three levels:
+
+| Level | What it controls |
+|---|---|
+| Route-level | Which API endpoints each role can call |
+| Ownership-level | Users can only modify resources they created; Admin bypasses |
+| Data-scope | List endpoints automatically filter results based on the caller's scope |
+
+**Resource ownership** is tracked on every entity via a `created_by` field. Non-Admin users that attempt to update or delete a resource they did not create receive `403 Forbidden`.
+
+**Data-scope filtering** is injected via `PermissionMiddleware`. By default:
+- Admin → sees all records
+- User → sees only own records
+- Viewer → sees all records (read-only)
+
+Custom `PermissionRule`s (stored in Redb, cached in memory) allow overriding the default scope per subject per resource type.
+
+**Exec Policies** add a second layer of control for remote command execution: allowlist/blocklist command patterns, per-target-scope restrictions, and an optional `require_approval` gate.
+
+**Web Terminal Policies** control terminal session behavior: ReadOnly / ReadWrite mode, command whitelist for ReadOnly sessions, idle timeout, and concurrent session limits.
+
+**Approval Workflow**: when a policy has `require_approval: true`, submitting a command creates a `PendingApproval` record instead of executing immediately. Admins approve or reject; requests auto-expire every 5 minutes via a cron job.
+
+**New API endpoints:**
+
+```
+# Permission rules (Admin only)
+GET/POST   /api/v1/permissions/rules
+GET/PUT/DELETE /api/v1/permissions/rules/{id}
+
+# Exec policies (Admin only)
+GET/POST   /api/v1/permissions/exec-policies
+GET/PUT/DELETE /api/v1/permissions/exec-policies/{id}
+
+# Web terminal policies (Admin only)
+GET/POST   /api/v1/permissions/web-terminal-policies
+GET/PUT/DELETE /api/v1/permissions/web-terminal-policies/{id}
+
+# Approval workflow
+GET    /api/v1/permissions/pending-approvals        (Admin: list all)
+GET    /api/v1/permissions/pending-approvals/{id}   (Admin)
+POST   /api/v1/permissions/pending-approvals/{id}/approve
+POST   /api/v1/permissions/pending-approvals/{id}/reject
+GET    /api/v1/permissions/my-approvals             (any authenticated user)
+```
+
+#### Remote Command Execution
+
+Admins can execute commands on registered clients. The system uses a **three-layer security model**:
+
+1. **Layer 1 — Feature gate**: remote exec must be explicitly enabled (`PUT /api/v1/remote-exec/config`)
+2. **Layer 2 — Exec Policy**: `ExecPolicyEngine` evaluates matching policies (highest priority first) → Allow / Deny / Warning / RequireApproval
+3. **Layer 3 — Danger Detection**: built-in rules classify commands as Safe / Warning / Blocked (e.g. `rm -rf /`, `mkfs`, `shutdown` are always blocked regardless of policies)
+
+Commands that pass all three layers are queued as `CommandTask`s, dispatched to the agent, and streamed back via SSE.
+
+**New API endpoints:**
+
+```
+GET  /api/v1/remote-exec/config                     Read current config
+PUT  /api/v1/remote-exec/config                     Enable/disable (Admin)
+POST /api/v1/remote-exec/commands                   Submit a command (Admin)
+GET  /api/v1/remote-exec/commands                   List commands
+GET  /api/v1/remote-exec/commands/{id}              Get command detail
+GET  /api/v1/remote-exec/commands/{id}/logs         Get buffered logs
+GET  /api/v1/remote-exec/commands/{id}/stream       SSE real-time log stream
+
+# Agent-side (agent token auth)
+GET  /api/v1/agent/commands/pending
+POST /api/v1/agent/commands/{id}/start
+POST /api/v1/agent/commands/{id}/logs
+POST /api/v1/agent/commands/{id}/complete
+```
+
+#### Audit Log
+
+All security-relevant operations are written to the audit log with the real operator username:
+
+| Action | Trigger |
+|---|---|
+| `user_created` | Admin registers a new user |
+| `user_deleted` | Admin deletes a user |
+| `user_role_changed` | Admin changes a user's role |
+| `config_change` | Admin enables/disables remote exec |
+| `command_create` | Command queued |
+| `command_blocked` | Danger detection blocks a command |
+| `command_completed` | Command execution finishes |
+| `client_created` | Client registered via import |
+| `component_created` | Component created |
+
+#### Other improvements in this release
+
+- **API error messages sanitized**: internal database/server details no longer leak to API consumers; full errors are logged server-side only.
+- **Batch operation limits**: `import_clients` and `batch_create_components` now return `413 Payload Too Large` if the payload exceeds `max_batch_size` (default 1000).
+- **Search parameter length validation**: search/filter string params are limited to 256 characters.
+- **`expose_version` config switch**: set `expose_version = false` to hide version info from the public `/api/v1/version` endpoint.
+- **Docker non-root user**: the container now runs as a dedicated `cmdb` system user.
+
+---
 
 ## ⚡ Quick Start
 
-You can quickly start the rs-cmdb server using Docker.
-
 ```bash
-# 1. Create a directory for the project
 mkdir -p /opt/rs-cmdb
 cd /opt/rs-cmdb
-
-# 2. Set the version
 export RSCMDB_VERSION="0.0.1"
 
-# 3. Prepare directories for client binaries (optional, for auto-update/download from server)
 mkdir -p binaires/linux/{x86_64,aarch64}
-
-# 4. Download client binaries
-# You can download them from the GitHub Release page or build them yourself.
-# https://github.com/LeeXN/rs-cmdb/releases
-curl -L -o ./binaires/linux/x86_64/rs-cmdb-client https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-x86_64-linux-musl
-curl -L -o ./binaires/linux/aarch64/rs-cmdb-client https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-aarch64-linux-musl
-
-# 5. Make binaries executable
+curl -L -o ./binaires/linux/x86_64/rs-cmdb-client \
+  https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-x86_64-linux-musl
+curl -L -o ./binaires/linux/aarch64/rs-cmdb-client \
+  https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-aarch64-linux-musl
 chmod +x ./binaires/linux/x86_64/rs-cmdb-client
 chmod +x ./binaires/linux/aarch64/rs-cmdb-client
 
-# 6. Run the server using Docker
-docker run -itd \
-  --name rs-cmdb \
-  -p 8080:8080 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/binaires:/app/binaires \
-  leex2019/rs-cmdb:${RSCMDB_VERSION}
-```
-
-After starting, access the UI at `http://localhost:8080`.
-
-**⚠️ Important:** The server requires secure environment variables to be set for first-time initialization. See the [Configuration](#-configuration) section below.
-
-## �� Architecture
-
-The project follows a monorepo structure:
-
-*   **`server/`**: The backend API server built with **Axum**. It handles API requests, manages the **Redb** database, and serves the frontend static files.
-*   **`front/`**: The single-page application (SPA) frontend built with **Yew** (WebAssembly) and **TailwindCSS**.
-*   **`client/`**: The lightweight agent that runs on target machines to collect system information.
-*   **`common/`**: Shared Rust crates containing data models and utility functions used by all components.
-
-## 🛠️ Build & Run
-
-### Using Makefile (Recommended)
-
-We provide a `Makefile` to simplify the build and test process.
-
-*   **Build Everything (glibc)**: `make build`
-*   **Build Static Musl Binaries**: `make build-musl` (fully static, no libc dependency)
-*   **Run Tests**: `make test`
-*   **Build Docker Image**: `make docker`
-*   **Clean Artifacts**: `make clean`
-*   **Show Help**: `make help`
-
-### Using Docker
-
-You can build and run the entire system using Docker.
-
-```bash
-# Build the image
-docker build -t rs-cmdb .
-
-# Run the container
-docker run -p 8080:8080 -v /path/to/data:/app/data rs-cmdb
-```
-
-### Manual Build
-
-#### Prerequisites
-
-*   [Rust](https://www.rust-lang.org/tools/install) (latest stable)
-*   [Trunk](https://trunkrs.dev/) (for building the frontend): `cargo install trunk`
-*   Node.js & npm (for TailwindCSS)
-
-#### 1. Build Frontend
-
-The frontend compiles to WebAssembly.
-
-```bash
-cd front
-npm install
-trunk build --release
-```
-
-The build artifacts will be generated in `front/dist`.
-
-#### 2. Build Server
-
-```bash
-cargo build --release --package server
-```
-
-The binary will be located at `target/release/rs-cmdb-server`.
-
-#### 3. Build Client (Agent)
-
-```bash
-cargo build --release --package client
-```
-
-The binary will be located at `target/release/rs-cmdb-client`.
-
-## 💻 Client Standalone Usage
-
-The `rs-cmdb-client` can run as a standalone tool to collect and display detailed hardware information directly in the terminal, in addition to reporting to the server.
-
-**How to Run:**
-
-Execute the compiled binary directly:
-
-```bash
-./rs-cmdb-client
-```
-
-**Sample Output:**
-
-```text
-================================================================================
-                               System Information                               
-================================================================================
-System Vendor:          Dell
-System Product Name:    Dell PowerEdge R740
-System Serial Number:   SN-EXAMPLE-01
-System Product Version:  
-
-================================================================================
-                          Operating System Information                          
-================================================================================
-System Name:    Rocky Linux
-System Version: 8.8
-Kernel Version: 4.18.0-477.10.1.el8_8.x86_64
-Architecture:   x86_64
-Hostname:       node-01-example
-IP Address:     192.168.1.100
-DNS Servers:    8.8.8.8
-
-================================================================================
-                                CPU Information                                 
-================================================================================
-Vendor ID:      GenuineIntel
-Model Name:     Intel(R) Xeon(R) Silver 4410Y
-CPU Count:      2
-Core Count:     24
-Thread Count:   48
-CPU Speed:      3900 MHz
-...
-
-================================================================================
-                                Disk Information                                
-================================================================================
-Vendor          Model           Capacity     Type                 Firmware       
---------------------------------------------------------------------------------
-ATA             INTEL SSDSC2KB96 894.3      GB SSD                  0120           
-Unknown         Unknown         0          B  HDD                  Unknown        
-ATA             INTEL SSDSCKKB48 447.1      GB SSD                  0120           
-...
-
-================================================================================
-                         Network Interface Information                          
-================================================================================
-Interface Name:   ens14f0
-Vendor:           Intel Corporation(0x8086)
-Model:            I350 Gigabit Network Connection(0x1521)
-MAC Address:      00:11:22:33:44:55
-PCI Slot:         0000:99:00.0
-Driver:           igb
-NIC Type:         Ethernet
-Link Status:      Up
-Link Speed:       1000 Mbps
-...
-
-================================================================================
-                                GPU Information                                 
-================================================================================
-Vendor:         NVIDIA
-Model:          AD102GL [L20]
-Device ID:      0000:63:00.0
-Serial Number:  GPU-SN-001
-Driver Version: 550.163.01
-...
-
-================================================================================
-                                RAM Information                                 
-================================================================================
-Total Memory:    256 GB (8 modules)
-Memory Type:     DDR5
-Vendor:          Samsung
-Speed:           4800 MHz
-================================================================================
-
-================================================================================
-                              IPMI/BMC Information                              
-================================================================================
-IPMI Status:    Available
-IP Address:     10.0.0.10
-MAC Address:    b0:31:a6:4f:d6:57
-Subnet Mask:    255.255.254.0
-Gateway:        10.0.0.254
-Channel:        1
-Device ID:      32
-Firmware:       6.76
-Manufacturer:   0x019046
-
-BMC Users:
-User ID  Username         Enabled  Privilege   
---------------------------------------------------
-2        Test           No       User   ****
-```
-
-## ⚙️ Configuration
-
-The server is configured via a TOML file. By default, it looks for `config/default.toml`. You can also override settings using environment variables (prefixed with `CMDB_`).
-
-### 🔐 Security Configuration (Required)
-
-For security reasons, the server requires two environment variables to be set before first-time startup:
-
-#### 1. JWT Secret (`CMDB_JWT_SECRET`)
-
-The JWT secret is used to sign authentication tokens. **The server will NOT start** if this is not set or uses the default value.
-
-**Generate a secure JWT secret (32+ characters):**
-
-```bash
-# Using OpenSSL (recommended)
-export CMDB_JWT_SECRET=$(openssl rand -base64 32)
-
-# Or use /dev/urandom
-export CMDB_JWT_SECRET=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
-
-# Or generate a longer secret for extra security
-export CMDB_JWT_SECRET=$(openssl rand -hex 64)
-```
-
-#### 2. Admin Password (`CMDB_ADMIN_PASSWORD`)
-
-On first startup, the server checks if an admin user exists. If not, it creates one using this password. The password must meet complexity requirements:
-- At least 12 characters
-- At least one uppercase letter (A-Z)
-- At least one lowercase letter (a-z)
-- At least one number (0-9)
-- At least one special character
-
-> **Note:** The initial admin password cannot be set via `config/default.toml`. It must be provided via the `CMDB_ADMIN_PASSWORD` environment variable or interactively on first startup.
-
-**Set a secure admin password:**
-
-```bash
-# Example (change this to your own secure password)
-export CMDB_ADMIN_PASSWORD="YourSecureP@ssword123"
-
-# Or generate a random secure password
-export CMDB_ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d '=' | tr '+/' '@#')
-```
-
-**Docker Example with Environment Variables:**
-
-```bash
 docker run -itd \
   --name rs-cmdb \
   -p 8080:8080 \
@@ -351,207 +158,249 @@ docker run -itd \
   leex2019/rs-cmdb:${RSCMDB_VERSION}
 ```
 
-**Without Environment Variables:**
+Access the UI at `http://localhost:8080`. Default admin username is `admin`.
 
-If you don't set `CMDB_ADMIN_PASSWORD`, the server will prompt you interactively for the admin password on first startup (not recommended for automated deployments).
+## 🏗️ Architecture
 
-### Configuration File (`config/default.toml`)
+```
+rs-cmdb-client (Linux agent)
+    └── HTTP JSON push → server
+
+rs-cmdb-server (Axum, :8080)
+    ├── API → Middleware (Auth / RBAC / Permission / RateLimit)
+    │         → Service → Repository → Redb (embedded KV)
+    ├── Message Queue (Flume) — async hardware processing & audit
+    ├── SSE Hub — real-time command log streaming
+    └── Scheduler (tokio-cron) — approval expiry, cleanup jobs
+
+rs-cmdb-front (Yew WASM SPA)
+    └── served as static files by the server
+```
+
+**Cargo workspace crates:**
+
+| Crate | Description |
+|---|---|
+| `server/` | Backend API server (Axum) |
+| `client/` | Hardware collection agent |
+| `front/` | Yew WASM frontend |
+| `common/` | Shared models, errors, entities |
+
+## ⚙️ Configuration
+
+The server reads `config/default.toml` and any environment variable with the `CMDB_` prefix.
+
+### Security (required)
+
+```bash
+# JWT secret — must be at least 32 characters; server refuses to start without it
+export CMDB_JWT_SECRET=$(openssl rand -base64 32)
+
+# Initial admin password — used on first startup to create the admin account
+export CMDB_ADMIN_PASSWORD="YourSecureP@ssword123"
+```
+
+Password requirements: ≥12 chars, uppercase, lowercase, digit, special character.
+
+### `config/default.toml`
 
 ```toml
-# Server settings
-host = "0.0.0.0"           # Bind address
-port = 8080                # Server port
-log_level = "info"         # Log level: debug, info, warn, error
+host = "0.0.0.0"
+port = 8080
+log_level = "info"
 
-# Security
-# jwt_secret should be set via CMDB_JWT_SECRET environment variable
-# Do NOT use the default value in production!
+# Must be overridden via CMDB_JWT_SECRET
 jwt_secret = "change_me_in_production"
 
-# SSH Configuration (for remote service management)
-ssh_known_hosts_file = "/etc/cmdb/ssh_known_hosts"  # Path to SSH known_hosts file
+# Batch import/create limit (returns 413 if exceeded)
+max_batch_size = 1000
 
-# TLS (Optional)
+# Set false to hide version info from the /api/v1/version endpoint
+expose_version = true
+
+poll_interval = 300          # seconds between client heartbeats
+client_timeout = 3600        # seconds before client is marked offline
+component_missing_grace_period_hours = 24
+
+ssh_known_hosts_file = "/etc/cmdb/ssh_known_hosts"
+
 enable_tls = false
 # tls_cert = "path/to/cert.pem"
 # tls_key = "path/to/key.pem"
 
-# Client Management
-poll_interval = 300        # How often clients should report (seconds)
-client_timeout = 3600      # Time before a client is marked offline (seconds)
-component_missing_grace_period_hours = 24 # Grace period before alerting on missing components
-
-# Database
 [database]
-path = "data/cmdb.redb"    # Path to the Redb database file
+path = "data/cmdb.redb"
 
-# Primary IP Auto-Detection (Optional)
+# Primary IP auto-detection (optional)
 [primary_ip]
-# CIDR subnet for automatic primary IP detection from NICs
-# When hardware is reported, the server scans NIC IPv4 addresses
-# and assigns the first matching Ethernet NIC's IP as primary_ip.
-# Leave commented out to skip auto-detection.
 # subnet = "10.0.0.0/8"
 
-# Message Queue
 [queue]
-capacity = 1000            # Internal message queue capacity
+capacity = 1000
 ```
 
-### Environment Variables
+### Environment variables
 
-Every setting can be overridden by environment variables. Use double underscores `__` for nested keys (e.g. `CMDB_DATABASE__PATH`). Single-level keys stay as `CMDB_<KEY>` (e.g. `CMDB_JWT_SECRET`). For safety, `CMDB_JWT_SECRET` is read explicitly and always overrides defaults.
+| Variable | Default | Description |
+|---|---|---|
+| `CMDB_JWT_SECRET` | — | **Required**, ≥32 chars |
+| `CMDB_ADMIN_PASSWORD` | — | **Required on first startup** |
+| `CMDB_HOST` | `0.0.0.0` | Bind address |
+| `CMDB_PORT` | `8080` | Server port |
+| `CMDB_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `CMDB_DATABASE__PATH` | `data/cmdb.redb` | Redb file path |
+| `CMDB_PRIMARY_IP__SUBNET` | — | CIDR for primary IP auto-detection |
+| `CMDB_MAX_BATCH_SIZE` | `1000` | Max items per batch import/create |
+| `CMDB_EXPOSE_VERSION` | `true` | Expose version via `/api/v1/version` |
+| `CMDB_SSH_KNOWN_HOSTS_FILE` | `/etc/cmdb/ssh_known_hosts` | SSH known hosts path |
 
-**Security Variables:**
-- `CMDB_JWT_SECRET` - **Required**, minimum 32 characters (use `openssl rand -base64 32` to generate)
-- `CMDB_ADMIN_PASSWORD` - **Required on first startup**, must meet complexity requirements
+## 🛠️ Build & Run
 
-**Optional Variables:**
-- `CMDB_HOST` - Server bind address (default: `0.0.0.0`)
-- `CMDB_PORT` - Server port (default: `8080`)
-- `CMDB_LOG_LEVEL` - Log level: debug, info, warn, error (default: `info`)
-- `CMDB_DATABASE__PATH` - Path to database file (default: `data/cmdb.redb`)
-- `CMDB_PRIMARY_IP__SUBNET` - CIDR subnet for primary IP auto-detection (e.g., `10.0.0.0/8`)
-- `CMDB_SSH_KNOWN_HOSTS_FILE` - Path to SSH known_hosts file (default: `/etc/cmdb/ssh_known_hosts`)
-
-### SSH Known Hosts Setup
-
-For remote service management via SSH, you need to set up the SSH known_hosts file:
+### Makefile (recommended)
 
 ```bash
-# Create the directory
-sudo mkdir -p /etc/cmdb
-
-# Add a client host to known_hosts (run from server)
-ssh-keyscan -H 192.168.1.100 >> /etc/cmdb/ssh_known_hosts
-
-# Set proper permissions
-sudo chmod 644 /etc/cmdb/ssh_known_hosts
+make build          # Build all crates (glibc)
+make build-musl     # Build fully static musl binaries
+make test           # Run all tests
+make docker         # Build Docker image
+make clean          # Remove build artifacts
+make help           # Show all targets
 ```
 
-### Password Complexity Requirements
+### Docker
 
-When creating users or changing passwords, the following requirements apply:
+```bash
+docker build -t rs-cmdb .
+docker run -p 8080:8080 \
+  -v /path/to/data:/app/data \
+  -e CMDB_JWT_SECRET="$(openssl rand -base64 32)" \
+  -e CMDB_ADMIN_PASSWORD="YourSecureP@ssword123" \
+  rs-cmdb
+```
 
-- **Minimum length:** 12 characters
-- **Uppercase letter:** At least one (A-Z)
-- **Lowercase letter:** At least one (a-z)
-- **Number:** At least one (0-9)
-- **Special character:** At least one (!@#$%^&*, etc.)
+### Manual
 
-**Example valid passwords:**
-- `SecureP@ssword123`
-- `MyStr0ng!Pass`
-- `C0mplex#SecuriTy`
+**Prerequisites:** Rust (stable), [Trunk](https://trunkrs.dev/), Node.js + npm
+
+```bash
+# Frontend (WebAssembly)
+cd front && npm install && trunk build --release
+
+# Server
+cargo build --release --package server
+
+# Agent
+cargo build --release --package client
+```
+
+## 💻 Client Standalone Usage
+
+Run the agent as a standalone hardware info tool (no server required):
+
+```bash
+./rs-cmdb-client
+```
+
+Prints a full system report: CPU, OS, RAM, Disk, Network, GPU, IPMI/BMC.
 
 ## 📦 Deployment
 
-To deploy the full system manually:
-
-1.  **Prepare Directory**: Create a deployment folder (e.g., `/opt/rs-cmdb`).
-2.  **Copy Binaries**:
-    *   Copy `target/release/rs-cmdb-server` to `/opt/rs-cmdb/`.
-    *   Copy `target/release/rs-cmdb-client` to target client machines.
-3.  **Copy Static Files**:
-    *   Copy the `front/dist` directory to `/opt/rs-cmdb/dist`.
-4.  **Configuration**:
-    *   Create `/opt/rs-cmdb/config/default.toml`.
-    *   Ensure the `data` directory exists or is writable.
-
-**Directory Structure:**
+**Directory structure:**
 
 ```text
 /opt/rs-cmdb
   ├── rs-cmdb-server
-  ├── dist/              <-- Static frontend files
-  │    ├── index.html
-  │    └── ...
+  ├── dist/              # Frontend static files
+  │   └── index.html
   ├── config/
-  │    └── default.toml
-  └── data/              <-- Database file will be created here
+  │   └── default.toml
+  └── data/              # Redb database (auto-created)
 ```
-
-**Run the Server:**
 
 ```bash
 cd /opt/rs-cmdb
-
-# Set required environment variables
 export CMDB_JWT_SECRET=$(openssl rand -base64 32)
 export CMDB_ADMIN_PASSWORD="YourSecureP@ssword123"
-
-# Run the server
 ./rs-cmdb-server
 ```
 
-Access the UI at `http://localhost:8080`.
+First login: username `admin`, password as set above.
 
-**First Login:**
+### SSH Known Hosts
 
-Use the admin username and the password you set via `CMDB_ADMIN_PASSWORD`:
-- Username: `admin`
-- Password: *(your chosen password)*
+Required for remote service management:
+
+```bash
+sudo mkdir -p /etc/cmdb
+ssh-keyscan -H 192.168.1.100 >> /etc/cmdb/ssh_known_hosts
+sudo chmod 644 /etc/cmdb/ssh_known_hosts
+```
+
+---
+
+## 📌 Primary IP
+
+Each client record has a `primary_ip` field displayed preferentially over `ip_address`. It is populated via the following priority chain:
+
+1. **Manual override** — `PUT /api/v1/clients/{id}/primary-ip` or the frontend edit form
+2. **Agent auto-detection** — if `[primary_ip] subnet = "10.0.0.0/8"` is set in `client.toml`, the agent matches its NIC IPv4 on registration
+3. **Server auto-detection** — if `[primary_ip] subnet` is set in `config/default.toml`, the server auto-detects on each hardware push
+4. **Fallback** — `None`; UI shows `ip_address`
+
+No database migration needed — the field is `Option<String>` and defaults to `None` on all existing records.
+
+**Upgrade compatibility matrix:**
+
+| Server | Client | Behavior |
+|---|---|---|
+| New | New | Full support: agent detects on registration + server auto-detects on hardware push |
+| New | Old | Server auto-detects from NICs on hardware push (if subnet configured) |
+| Old | New | New client sends `primary_ip`; old server ignores the unknown field (no `deny_unknown_fields`) |
 
 ## 🔧 History Maintenance (CLI)
 
-The server binary includes built-in CLI commands for managing the hardware change history database.
-
-```text
+```
 rs-cmdb-server history <COMMAND>
 
 Commands:
-  analyze   Analyze history storage — show per-client snapshot counts and age
-  cleanup   Remove old history entries, keeping only the newest N per client
-  migrate   Convert old full-snapshot history entries to delta format (only needed
-            for databases created before the delta-history feature)
-  compact   Rewrite database to reclaim unused space (run after migrate + cleanup)
+  analyze   Show per-client snapshot counts and age
+  cleanup   Remove old entries, keep newest N per client
+  migrate   Convert old full-snapshot entries to delta format
+  compact   Rewrite DB to reclaim disk space
 ```
-
-### `history analyze`
-Scans all history keys and prints:
-- Total number of clients with history
-- Total history entries
-- Top-20 clients by history count, with oldest/newest timestamps
 
 ```bash
-rs-cmdb-server history analyze --db-path /opt/rs-cmdb/data/cmdb.redb
+# Preview (keep 50 newest per client)
+rs-cmdb-server history cleanup --keep-last 50 --dry-run --db-path data/cmdb.redb
+
+# Execute
+rs-cmdb-server history cleanup --keep-last 50 --db-path data/cmdb.redb
+
+# Compact after cleanup
+rs-cmdb-server history compact --db-path data/cmdb.redb
 ```
 
-### `history cleanup --keep-last <N>`
-Removes the oldest history entries per client, keeping only the newest `N` snapshots per machine. Use `--dry-run` to preview without deleting.
+Example: 121,298 entries / 4.1 GB → 24,814 entries / 26 MB after a full migrate+cleanup+compact cycle.
 
-```bash
-# Preview: show what would be deleted
-rs-cmdb-server history cleanup --keep-last 50 --dry-run --db-path /opt/rs-cmdb/data/cmdb.redb
+---
 
-# Execute cleanup, keeping newest 50 entries per client
-rs-cmdb-server history cleanup --keep-last 50 --db-path /opt/rs-cmdb/data/cmdb.redb
-```
+## 📋 Changelog
 
-### `history migrate`
-Converts old full-snapshot history entries to the new delta-only format, significantly reducing storage usage. Only needed if the database was created before the delta-history feature was introduced. After migration, history stores only changes instead of full hardware snapshots.
+### Permission System & Remote Command Execution
 
-```bash
-rs-cmdb-server history migrate --db-path /opt/rs-cmdb/data/cmdb.redb
-```
+- **Permission system** — Three-level RBAC (route / ownership / data-scope). Resource ownership tracked via `created_by` on all entities. `PermissionMiddleware` injects `PermissionContext` for automatic list-endpoint filtering. Custom `PermissionRule`s configurable via API.
+- **Exec policies** — Fine-grained command execution controls: allowlist/blocklist patterns, per-scope restrictions, `require_approval` gate.
+- **Web terminal policies** — Per-subject session controls: ReadOnly/ReadWrite mode, command whitelist, idle timeout, concurrent session limits.
+- **Approval workflow** — `PendingApproval` entities with approve/reject/auto-expire (5-minute cron). Operators see their own approvals; Admins manage all.
+- **Remote command execution** — Three-layer security (feature gate → exec policy → danger detection). Agent polling + SSE log streaming.
+- **Audit log** — Structured `AuditLogEntry` with `AuditAction` enum; operator username recorded on all security events.
+- **API hardening** — Error messages sanitized (no internal details to clients), batch size limits (413), search param length validation (256 chars), `expose_version` switch, Docker non-root user.
 
-### `history compact`
-Rewrites the entire database to a new file, reclaiming **all** unused space. Run this after `migrate` and `cleanup` to shrink the file to its minimum size (actual data only, no wasted pages).
+### Primary IP & Hardware History Delta
 
-```bash
-rs-cmdb-server history compact --db-path /opt/rs-cmdb/data/cmdb.redb
-```
-
-Example result after a full cycle:
-```text
-# Before: 121,298 entries → 4.1 GB file (2.7 GB actual)
-rs-cmdb-server history migrate --db-path /opt/rs-cmdb/data/cmdb.redb
-rs-cmdb-server history cleanup --keep-last 100 --db-path /opt/rs-cmdb/data/cmdb.redb
-rs-cmdb-server history compact --db-path /opt/rs-cmdb/data/cmdb.redb
-# After: 24,814 entries → 26 MB file
-```
-
-> **Note**: `compact` loads all data into memory, so ensure sufficient RAM for the full database working set.
+- **Primary IP field** — `primary_ip: Option<String>` on `Client`; sourced from manual override, agent detection, or server auto-detection via CIDR subnet config.
+- **Delta hardware history** — History stores only changed fields instead of full snapshots, dramatically reducing storage. Built-in CLI commands: `analyze`, `cleanup`, `migrate`, `compact`.
+- **Export filtered clients** — `POST /api/v1/clients/export_filtered` with hardware-spec filters; returns CSV/JSON.
 
 ## 📄 License
 

@@ -221,3 +221,43 @@ impl ExportService {
         Ok(export_data)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+    use crate::tests::fixtures::{create_test_hardware_info, setup_test_db};
+    use common::models::Client;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_export_empty() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+        let svc = ExportService::new(client_repo, hardware_repo);
+
+        let data = svc.export_client_hardware_data().await.unwrap();
+        assert!(data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_export_with_data() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+
+        let client = Client::new("export-test.example.com".into(), "10.0.0.4".into());
+        client_repo.save(&client).await.unwrap();
+
+        let hw = create_test_hardware_info(&client.id);
+        hardware_repo.save_hardware(&client.id, &hw, false).await.unwrap();
+
+        let svc = ExportService::new(client_repo, hardware_repo);
+        let data = svc.export_client_hardware_data().await.unwrap();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0].hostname, "export-test.example.com");
+    }
+}

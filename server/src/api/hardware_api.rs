@@ -49,7 +49,7 @@ pub async fn get_hardware(
                     error!("Failed to get hardware for client {}: {}", client_id, err);
                     let response = ApiResponse::<Hardware> {
                         status: err.status_code(),
-                        message: err.to_string(),
+                        message: err.log_and_user_message(),
                         data: None,
                     };
 
@@ -74,7 +74,7 @@ pub async fn get_hardware(
             error!("Failed to check client existence {}: {}", client_id, err);
             let response = ApiResponse::<Hardware> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
 
@@ -116,7 +116,7 @@ pub async fn get_hardware_history(
                     );
                     let response = ApiResponse::<Vec<HardwareHistoryEntry>> {
                         status: err.status_code(),
-                        message: err.to_string(),
+                        message: err.log_and_user_message(),
                         data: None,
                     };
 
@@ -141,7 +141,7 @@ pub async fn get_hardware_history(
             error!("Failed to check client existence {}: {}", client_id, err);
             let response = ApiResponse::<Vec<HardwareHistoryEntry>> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
 
@@ -285,7 +285,7 @@ pub async fn update_hardware(
             error!("Failed to check client existence {}: {}", client_id, err);
             let response = ApiResponse::<()> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
 
@@ -358,7 +358,7 @@ pub async fn pull_hardware(
             error!("Failed to check client existence {}: {}", client_id, err);
             let response = ApiResponse::<PullRequest> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
 
@@ -368,5 +368,119 @@ pub async fn pull_hardware(
                 Json(response),
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::fixtures::{TestAppBuilder, auth_headers, create_client_hardware_info};
+    use axum::{
+        body::Body,
+        extract::Request,
+        http::{Method, StatusCode, header},
+    };
+    use serde_json::json;
+    use tower::ServiceExt;
+
+    async fn make_post(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::POST)
+            .uri(path)
+            .header(header::CONTENT_TYPE, "application/json");
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::GET)
+            .uri(path);
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    #[tokio::test]
+    async fn test_push_and_get_hardware() {
+        let app = TestAppBuilder::new().build().await;
+        let client_id = "test-c-001";
+
+        let (status, body) = make_post(&app.router, "/api/v1/clients/register", None, json!({
+            "id": client_id,
+            "hostname": "test-client",
+            "ip_address": "10.0.0.1",
+        })).await;
+        assert_eq!(status, StatusCode::OK, "register failed: {:?}", body);
+
+        let agent_token = body["data"]["agent_token"].as_str().unwrap().to_string();
+        let agent_auth = format!("{}:{}", client_id, agent_token);
+
+        let push_body = serde_json::to_value(create_client_hardware_info(client_id)).unwrap();
+        let (status, body) = make_post(&app.router, &format!("/api/v1/clients/{}/hardware", client_id), Some(&agent_auth), push_body).await;
+        assert_eq!(status, StatusCode::OK, "push failed: {:?}", body);
+
+        let (status, body) = make_get(&app.router, &format!("/api/v1/clients/{}/hardware", client_id), Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK, "get failed: {:?}", body);
+        assert!(body["data"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_get_hardware_not_found() {
+        let app = TestAppBuilder::new().build().await;
+        let (status, body) = make_get(&app.router, "/api/v1/clients/nonexistent/hardware", Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["status"], 404);
+    }
+
+    #[tokio::test]
+    async fn test_get_hardware_history() {
+        let app = TestAppBuilder::new().build().await;
+        let client_id = "test-c-002";
+
+        let (status, body) = make_post(&app.router, "/api/v1/clients/register", None, json!({
+            "id": client_id,
+            "hostname": "test-client-2",
+            "ip_address": "10.0.0.2",
+        })).await;
+        assert_eq!(status, StatusCode::OK, "register failed: {:?}", body);
+
+        let agent_token = body["data"]["agent_token"].as_str().unwrap().to_string();
+        let agent_auth = format!("{}:{}", client_id, agent_token);
+
+        let mut info1 = create_client_hardware_info(client_id);
+        info1.collected_at = "2024-01-01T00:00:00Z".to_string();
+        let (status, _) = make_post(&app.router, &format!("/api/v1/clients/{}/hardware", client_id), Some(&agent_auth), serde_json::to_value(&info1).unwrap()).await;
+        assert_eq!(status, StatusCode::OK, "first push failed");
+
+        let mut info2 = create_client_hardware_info(client_id);
+        info2.collected_at = "2024-06-01T00:00:00Z".to_string();
+        if let Some(ref mut hw) = info2.hardware {
+            hw.cpu.cores = 16;
+            hw.cpu.threads = 32;
+            hw.cpu.model_name = "Intel(R) Xeon(R) Gold 6438M".to_string();
+        }
+        let (status, _) = make_post(&app.router, &format!("/api/v1/clients/{}/hardware", client_id), Some(&agent_auth), serde_json::to_value(&info2).unwrap()).await;
+        assert_eq!(status, StatusCode::OK, "second push failed");
+
+        let (status, body) = make_get(&app.router, &format!("/api/v1/clients/{}/hardware/history", client_id), Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK, "history failed: {:?}", body);
+        assert!(body["data"].as_array().map(|a| a.len() >= 2).unwrap_or(false));
     }
 }

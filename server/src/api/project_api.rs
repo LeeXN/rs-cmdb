@@ -1,3 +1,4 @@
+use crate::middleware::permission::PermissionContext;
 use crate::repository::client_repository::ClientRepository;
 use crate::repository::project_repository::ProjectRepository;
 use crate::service::validation_service::ValidationService;
@@ -7,6 +8,8 @@ use axum::{
     response::IntoResponse,
 };
 use chrono::Utc;
+use common::entity::permission::{PermissionAction, ResourceType, ScopeConstraint};
+use common::entity::user::User;
 use common::models::{ApiResponse, PaginatedResult, Project, ProjectQuery};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -15,9 +18,19 @@ use uuid::Uuid;
 pub async fn list_projects(
     Query(query): Query<ProjectQuery>,
     Extension(project_repo): Extension<Arc<ProjectRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
     match project_repo.list_all().await {
         Ok(mut projects) => {
+            let scope = perm_ctx
+                .evaluate(&ResourceType::Project, &PermissionAction::View)
+                .unwrap_or(ScopeConstraint::None);
+            projects = PermissionContext::filter_by_scope(
+                projects,
+                &scope,
+                &perm_ctx.user_id,
+                |p| p.created_by.as_deref(),
+            );
             // Filter by search term
             if let Some(ref search) = query.search {
                 let search_lower = search.to_lowercase();
@@ -118,6 +131,7 @@ pub async fn get_project(
 
 /// Create a new project
 pub async fn create_project(
+    Extension(user): Extension<User>,
     Extension(project_repo): Extension<Arc<ProjectRepository>>,
     Extension(validation_service): Extension<Arc<ValidationService>>,
     Json(mut project): Json<Project>,
@@ -129,7 +143,7 @@ pub async fn create_project(
     {
         let response = ApiResponse::<Project> {
             status: e.status_code(),
-            message: e.to_string(),
+            message: e.log_and_user_message(),
             data: None,
         };
         return (
@@ -144,8 +158,9 @@ pub async fn create_project(
         project.id = Uuid::new_v4().to_string();
     }
 
-    // Set timestamps
+    // Set ownership and timestamps
     let now = Utc::now().to_rfc3339();
+    project.created_by = Some(user.id);
     project.created_at = now.clone();
     project.updated_at = now;
 
@@ -172,6 +187,7 @@ pub async fn create_project(
 /// Update a project
 pub async fn update_project(
     Path(id): Path<String>,
+    Extension(current_user): Extension<User>,
     Extension(project_repo): Extension<Arc<ProjectRepository>>,
     Extension(validation_service): Extension<Arc<ValidationService>>,
     Json(mut project): Json<Project>,
@@ -183,7 +199,7 @@ pub async fn update_project(
     {
         let response = ApiResponse::<Project> {
             status: e.status_code(),
-            message: e.to_string(),
+            message: e.log_and_user_message(),
             data: None,
         };
         return (
@@ -198,8 +214,21 @@ pub async fn update_project(
         Ok(true) => {
             match project_repo.get(&id).await {
                 Ok(Some(existing_project)) => {
-                    // Preserve creation time and ID
+                    // Ownership check: non-Admin users can only update their own resources
+                    if current_user.role != common::entity::user::Role::Admin
+                        && existing_project.created_by.as_deref() != Some(&current_user.id)
+                    {
+                        let response = ApiResponse::<Project> {
+                            status: 403,
+                            message: "Forbidden: you can only update resources you created".to_string(),
+                            data: None,
+                        };
+                        return (StatusCode::FORBIDDEN, Json(response)).into_response();
+                    }
+
+                    // Preserve creation time, ownership and ID
                     project.id = id;
+                    project.created_by = existing_project.created_by;
                     project.created_at = existing_project.created_at;
                     project.updated_at = Utc::now().to_rfc3339();
 
@@ -251,12 +280,152 @@ pub async fn update_project(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::tests::fixtures::{TestAppBuilder, auth_headers};
+    use axum::{
+        body::Body,
+        extract::Request,
+        http::{Method, StatusCode, header},
+    };
+    use serde_json::json;
+    use tower::ServiceExt;
+
+    async fn make_post(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::POST)
+            .uri(path)
+            .header(header::CONTENT_TYPE, "application/json");
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::GET)
+            .uri(path);
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    async fn make_delete(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::DELETE)
+            .uri(path);
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    #[tokio::test]
+    async fn test_create_project() {
+        let app = TestAppBuilder::new().build().await;
+        let (status, body) = make_post(&app.router, "/api/v1/projects", Some(&app.admin_token), json!({
+            "name": "Project Alpha",
+            "code": "PRJ-001",
+            "department": "Engineering"
+        })).await;
+        assert_eq!(status, StatusCode::CREATED, "body: {:?}", body);
+        assert_eq!(body["data"]["name"], "Project Alpha");
+    }
+
+    #[tokio::test]
+    async fn test_list_projects() {
+        let app = TestAppBuilder::new().build().await;
+        let (create_status, _) = make_post(&app.router, "/api/v1/projects", Some(&app.admin_token), json!({
+            "name": "List Project",
+            "code": "PRJ-LIST"
+        })).await;
+        assert_eq!(create_status, StatusCode::CREATED);
+
+        let (status, body) = make_get(&app.router, "/api/v1/projects", Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+        assert!(body["data"]["total"].as_u64().unwrap_or(0) >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_project() {
+        let app = TestAppBuilder::new().build().await;
+        let (create_status, create_body) = make_post(&app.router, "/api/v1/projects", Some(&app.admin_token), json!({
+            "name": "Get Project",
+            "code": "PRJ-GET"
+        })).await;
+        assert_eq!(create_status, StatusCode::CREATED);
+        let project_id = create_body["data"]["id"].as_str().unwrap().to_string();
+
+        let (status, body) = make_get(&app.router, &format!("/api/v1/projects/{}", project_id), Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+        assert_eq!(body["data"]["name"], "Get Project");
+    }
+
+    #[tokio::test]
+    async fn test_delete_project() {
+        let app = TestAppBuilder::new().build().await;
+        let (create_status, create_body) = make_post(&app.router, "/api/v1/projects", Some(&app.admin_token), json!({
+            "name": "Delete Project",
+            "code": "PRJ-DEL"
+        })).await;
+        assert_eq!(create_status, StatusCode::CREATED);
+        let project_id = create_body["data"]["id"].as_str().unwrap().to_string();
+
+        let (status, _) = make_delete(&app.router, &format!("/api/v1/projects/{}", project_id), Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK, "expected 200 OK on delete");
+
+        let (get_status, _) = make_get(&app.router, &format!("/api/v1/projects/{}", project_id), Some(&app.admin_token)).await;
+        assert_eq!(get_status, StatusCode::NOT_FOUND);
+    }
+}
+
 /// Delete a project
 pub async fn delete_project(
     Path(id): Path<String>,
+    Extension(current_user): Extension<User>,
     Extension(project_repo): Extension<Arc<ProjectRepository>>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
 ) -> impl IntoResponse {
+    // Ownership check: non-Admin users can only delete their own resources
+    match project_repo.get(&id).await {
+        Ok(Some(existing)) => {
+            if current_user.role != common::entity::user::Role::Admin
+                && existing.created_by.as_deref() != Some(&current_user.id)
+            {
+                let response = ApiResponse::<()> {
+                    status: 403,
+                    message: "Forbidden: you can only delete resources you created".to_string(),
+                    data: None,
+                };
+                return (StatusCode::FORBIDDEN, Json(response)).into_response();
+            }
+        }
+        _ => {}
+    }
+
     // Check if any clients are using this project
     match client_repo.count_by_project(&id).await {
         Ok(count) if count > 0 => {

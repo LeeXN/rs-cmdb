@@ -85,6 +85,7 @@ mod tests {
             height_u: 42,
             power_limit: Some(1000),
             description: Some(format!("Test rack {}", id)),
+            created_by: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         }

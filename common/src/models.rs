@@ -1,7 +1,322 @@
+use crate::entity::execution::ExecutionType;
+use crate::entity::permission::{ApprovalStatus, TerminalMode};
 use crate::entity::hardware::{Disk, Hardware, GPU, NIC};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
+
+// ---- Remote Command Execution DTOs ----
+
+/// 创建命令任务请求
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CreateCommandRequest {
+    /// 目标 client_id
+    pub client_id: String,
+    /// 命令（主程序）
+    pub command: String,
+    /// 是否按 shell 脚本块执行（主要用于 batch 多行命令）
+    #[serde(default)]
+    pub shell_mode: bool,
+    /// 命令参数列表（可选，向后兼容；为空时按空格从 command 分割）
+    #[serde(default)]
+    pub args: Option<Vec<String>>,
+    /// 执行来源类型，用于区分单机终端和批量执行历史
+    #[serde(default)]
+    pub execution_type: Option<ExecutionType>,
+    /// 超时秒数（可选，默认 300）
+    pub timeout_secs: Option<u64>,
+    /// 危险命令强制确认标志
+    #[serde(default)]
+    pub force: bool,
+}
+
+/// 命令创建请求最大长度（10KB）
+pub const MAX_COMMAND_LENGTH: usize = 10 * 1024;
+
+/// 创建命令任务响应
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateCommandResponse {
+    /// 任务 ID（仅在成功创建时存在）
+    pub task_id: Option<String>,
+    /// 审批请求 ID（需要审批时存在）
+    #[serde(default)]
+    pub approval_id: Option<String>,
+    /// 危险等级
+    pub danger_level: String,
+    /// 是否需要二次确认
+    #[serde(default)]
+    pub requires_confirmation: bool,
+    /// 匹配的危险规则名称（warning/blocked 时）
+    pub matched_rule: Option<String>,
+    /// 风险说明或拒绝原因
+    pub message: Option<String>,
+}
+
+/// 命令历史列表查询参数
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CommandQuery {
+    pub page: Option<usize>,
+    pub page_size: Option<usize>,
+    pub search: Option<String>,
+    pub client_id: Option<String>,
+    pub user_id: Option<String>,
+    pub submitted_by: Option<String>,
+    pub status: Option<String>,
+    pub execution_type: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CommandTaskListResponse {
+    pub tasks: Vec<crate::command::CommandTask>,
+    pub total: usize,
+    pub page: usize,
+    pub page_size: usize,
+}
+
+/// 远程执行开关配置请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateRemoteExecConfigRequest {
+    pub enabled: bool,
+}
+
+/// 远程执行开关配置响应
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RemoteExecConfigResponse {
+    pub enabled: bool,
+}
+
+/// 权限管理概览响应
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PermissionOverviewResponse {
+    pub rules_count: usize,
+    pub groups_count: usize,
+    pub exec_policies_count: usize,
+    pub web_terminal_policies_count: usize,
+}
+
+/// 审批运营统计响应
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ApprovalSummaryResponse {
+    pub total: usize,
+    pub pending: usize,
+    pub approved: usize,
+    pub rejected: usize,
+    pub expired: usize,
+    pub executed: usize,
+}
+
+impl Default for ApprovalSummaryResponse {
+    fn default() -> Self {
+        Self {
+            total: 0,
+            pending: 0,
+            approved: 0,
+            rejected: 0,
+            expired: 0,
+            executed: 0,
+        }
+    }
+}
+
+impl ApprovalSummaryResponse {
+    pub fn record_status(&mut self, status: &ApprovalStatus, executed_task_id: Option<&String>) {
+        self.total += 1;
+        match status {
+            ApprovalStatus::Pending => self.pending += 1,
+            ApprovalStatus::Approved => self.approved += 1,
+            ApprovalStatus::Rejected => self.rejected += 1,
+            ApprovalStatus::Expired => self.expired += 1,
+        }
+        if executed_task_id.is_some() {
+            self.executed += 1;
+        }
+    }
+}
+
+/// 终端运维统计响应
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct TerminalOpsSummaryResponse {
+    pub total_sessions: usize,
+    pub pending_sessions: usize,
+    pub active_sessions: usize,
+    pub closed_sessions: usize,
+    pub failed_sessions: usize,
+    pub active_clients: usize,
+    pub stale_session_threshold_secs: i64,
+}
+
+/// 远程执行运维总览响应
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct RemoteExecOpsOverviewResponse {
+    pub remote_exec_enabled: bool,
+    pub exec_policies_count: usize,
+    pub web_terminal_policies_count: usize,
+    pub approval_summary: ApprovalSummaryResponse,
+    pub terminal_summary: TerminalOpsSummaryResponse,
+    pub cast_storage_dir: String,
+}
+
+/// Cast 历史清理请求
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CastCleanupRequest {
+    pub retention_days: u64,
+}
+
+/// Cast 历史清理响应
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CastCleanupResponse {
+    pub retention_days: u64,
+    pub deleted_files: usize,
+    pub cast_storage_dir: String,
+}
+
+/// Agent 注册成功响应（包含仅此一次下发的 token）
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RegisterClientResponse {
+    /// The registered/updated client record (agent_token field omitted after this response)
+    pub client: Client,
+    /// Bearer token the agent must include in all subsequent requests.
+    /// Only present in the registration response; not retrievable afterwards.
+    pub agent_token: String,
+}
+
+/// Agent 上传日志请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentLogRequest {
+    pub lines: Vec<crate::command::CommandLogLine>,
+}
+
+/// Agent 完成上报请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentCompleteRequest {
+    pub exit_code: i32,
+    /// "success" | "failed" | "timeout"
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalSessionState {
+    #[default]
+    Pending,
+    Active,
+    Closed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TerminalSessionSummary {
+    pub session_id: String,
+    pub client_id: String,
+    pub user_id: String,
+    pub username: String,
+    pub mode: TerminalMode,
+    pub state: TerminalSessionState,
+    pub shell: String,
+    pub cols: u16,
+    pub rows: u16,
+    pub created_at: String,
+    pub activated_at: Option<String>,
+    pub closed_at: Option<String>,
+    pub last_activity_at: Option<String>,
+    #[serde(default)]
+    pub last_heartbeat_at: Option<String>,
+    #[serde(default)]
+    pub lease_id: Option<String>,
+    #[serde(default)]
+    pub lease_expires_at: Option<String>,
+    pub close_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CreateTerminalSessionRequest {
+    pub client_id: String,
+    pub shell: Option<String>,
+    pub cols: Option<u16>,
+    pub rows: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CreateTerminalSessionResponse {
+    pub session: TerminalSessionSummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TerminalInputRequest {
+    pub input: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ResizeTerminalRequest {
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct TerminalOutputChunk {
+    pub seq: u64,
+    pub data: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentTerminalPollResponse {
+    pub session: TerminalSessionSummary,
+    pub pending_input: Vec<TerminalInputChunk>,
+    pub resize: Option<TerminalResizeInstruction>,
+    pub close_requested: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AgentTerminalStreamServerMessage {
+    Sync { work: AgentTerminalPollResponse },
+    Heartbeat,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AgentTerminalStreamClientMessage {
+    Output {
+        session_id: String,
+        payload: AgentTerminalOutputRequest,
+    },
+    State {
+        session_id: String,
+        payload: AgentTerminalStateRequest,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TerminalInputChunk {
+    pub seq: u64,
+    pub data: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TerminalResizeInstruction {
+    pub cols: u16,
+    pub rows: u16,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentTerminalOutputRequest {
+    #[serde(default)]
+    pub claim_id: Option<String>,
+    pub chunks: Vec<TerminalOutputChunk>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentTerminalStateRequest {
+    #[serde(default)]
+    pub claim_id: Option<String>,
+    pub state: TerminalSessionState,
+    pub message: Option<String>,
+}
 
 fn default_uuid() -> String {
     Uuid::new_v4().to_string()
@@ -118,6 +433,14 @@ pub struct Client {
 
     /// Power Consumption (Watts) - Manual setting
     pub power_consumption: Option<u32>,
+
+    /// Agent authentication token (generated on first registration, stored hashed).
+    /// Only returned once at registration time; thereafter used for verifying agent requests.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub agent_token: Option<String>,
+    /// User ID of the creator
+    #[serde(default)]
+    pub created_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -146,6 +469,7 @@ pub struct Person {
     pub department: Option<String>,
     pub title: Option<String>,
     pub cost_center: Option<String>,
+    pub created_by: Option<String>,
     #[serde(default = "default_now")]
     pub created_at: String,
     #[serde(default = "default_now")]
@@ -163,6 +487,7 @@ impl Default for Person {
             department: None,
             title: None,
             cost_center: None,
+            created_by: None,
             created_at: now.clone(),
             updated_at: now,
         }
@@ -178,6 +503,7 @@ pub struct Project {
     pub department: Option<String>,
     pub cost_center: Option<String>,
     pub manager_id: Option<String>,
+    pub created_by: Option<String>,
     #[serde(default = "default_now")]
     pub created_at: String,
     #[serde(default = "default_now")]
@@ -194,6 +520,7 @@ impl Default for Project {
             department: None,
             cost_center: None,
             manager_id: None,
+            created_by: None,
             created_at: now.clone(),
             updated_at: now,
         }
@@ -228,6 +555,8 @@ impl Default for Client {
             warranty_expiration: None,
             supplier: None,
             power_consumption: None,
+            agent_token: None,
+            created_by: None,
         }
     }
 }
@@ -260,6 +589,8 @@ impl Client {
             warranty_expiration: None,
             supplier: None,
             power_consumption: None,
+            agent_token: None,
+            created_by: None,
         }
     }
 
@@ -445,6 +776,8 @@ pub struct Component {
     // Flapping control
     pub missing_since: Option<String>,
 
+    pub created_by: Option<String>,
+
     #[serde(default = "default_now")]
     pub created_at: String,
     #[serde(default = "default_now")]
@@ -467,6 +800,7 @@ impl Default for Component {
             purchase_date: None,
             warranty_expiration: None,
             missing_since: None,
+            created_by: None,
             created_at: now.clone(),
             updated_at: now,
         }
@@ -1044,6 +1378,7 @@ pub struct Rack {
     pub height_u: u32,            // Total U height (e.g. 42)
     pub power_limit: Option<u32>, // Power limit in Watts
     pub description: Option<String>,
+    pub created_by: Option<String>,
     #[serde(default = "default_now")]
     pub created_at: String,
     #[serde(default = "default_now")]
@@ -1060,8 +1395,114 @@ impl Default for Rack {
             height_u: 42,
             power_limit: None,
             description: None,
+            created_by: None,
             created_at: now.clone(),
             updated_at: now,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_client_round_trip() {
+        let c = Client::new("host1.example.com".into(), "192.168.1.1".into());
+        let json = serde_json::to_string(&c).unwrap();
+        let deserialized: Client = serde_json::from_str(&json).unwrap();
+        assert_eq!(c.id, deserialized.id);
+        assert_eq!(c.hostname, deserialized.hostname);
+        assert_eq!(c.ip_address, deserialized.ip_address);
+        assert!(deserialized.agent_token.is_none());
+    }
+
+    #[test]
+    fn test_client_default_round_trip() {
+        let c = Client::default();
+        let json = serde_json::to_string(&c).unwrap();
+        let deserialized: Client = serde_json::from_str(&json).unwrap();
+        assert_eq!(c.id, deserialized.id);
+    }
+
+    #[test]
+    fn test_component_round_trip() {
+        let c = Component::default();
+        let json = serde_json::to_string(&c).unwrap();
+        let deserialized: Component = serde_json::from_str(&json).unwrap();
+        assert_eq!(c.id, deserialized.id);
+        assert_eq!(c.serial_number, deserialized.serial_number);
+    }
+
+    #[test]
+    fn test_component_with_fields() {
+        let c = Component {
+            serial_number: "SN-001".into(),
+            model: "Tesla T4".into(),
+            vendor: Some("NVIDIA".into()),
+            component_type: ComponentType::GPU,
+            status: ComponentStatus::InUse,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&c).unwrap();
+        let deserialized: Component = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.serial_number, "SN-001");
+        assert_eq!(deserialized.vendor, Some("NVIDIA".into()));
+    }
+
+    #[test]
+    fn test_person_round_trip() {
+        let p = Person::default();
+        let json = serde_json::to_string(&p).unwrap();
+        let deserialized: Person = serde_json::from_str(&json).unwrap();
+        assert_eq!(p.id, deserialized.id);
+    }
+
+    #[test]
+    fn test_project_round_trip() {
+        let p = Project::default();
+        let json = serde_json::to_string(&p).unwrap();
+        let deserialized: Project = serde_json::from_str(&json).unwrap();
+        assert_eq!(p.id, deserialized.id);
+    }
+
+    #[test]
+    fn test_rack_round_trip() {
+        let r = Rack::default();
+        let json = serde_json::to_string(&r).unwrap();
+        let deserialized: Rack = serde_json::from_str(&json).unwrap();
+        assert_eq!(r.id, deserialized.id);
+        assert_eq!(r.height_u, deserialized.height_u);
+    }
+
+    #[test]
+    fn test_apiresponse_round_trip() {
+        let resp: ApiResponse<String> = ApiResponse {
+            status: 200,
+            message: "ok".into(),
+            data: Some("hello".into()),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        let deserialized: ApiResponse<String> = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.status, 200);
+        assert_eq!(deserialized.data, Some("hello".into()));
+    }
+
+    #[test]
+    fn test_client_new() {
+        let c = Client::new("host-a".into(), "10.0.0.5".into());
+        assert_eq!(c.hostname, "host-a");
+        assert_eq!(c.ip_address, "10.0.0.5");
+        assert!(c.last_seen.is_some());
+        assert_eq!(c.u_height, Some(1));
+    }
+
+    #[test]
+    fn test_client_update_last_seen() {
+        let mut c = Client::default();
+        let before = c.last_seen.clone();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        c.update_last_seen();
+        assert_ne!(c.last_seen, before);
     }
 }

@@ -5,13 +5,35 @@ use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::checkbox::Checkbox;
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::hooks::use_trans::use_trans;
-use crate::icons::{Eye, Pencil, Trash2};
+use crate::icons::{Eye, Pencil, Terminal, Trash2};
 use crate::routes::Route;
 use crate::types::{Client, ClientStatus, Environment, Person, Project};
 use common::entity::user::Role;
 use std::collections::HashSet;
 use yew::prelude::*;
 use yew_router::prelude::*;
+
+fn terminal_route(client_id: &str) -> Route {
+    Route::Terminal {
+        id: client_id.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::terminal_route;
+    use crate::routes::Route;
+
+    #[test]
+    fn terminal_route_targets_client_scoped_terminal_page() {
+        assert_eq!(
+            terminal_route("client-123"),
+            Route::Terminal {
+                id: "client-123".to_string()
+            }
+        );
+    }
+}
 
 #[derive(Properties, PartialEq)]
 pub struct TableProps {
@@ -166,6 +188,16 @@ pub fn clients_table(props: &TableProps) -> Html {
 
                                 let is_selected = props.selected_clients.contains(&client.id);
 
+                                let on_open_terminal = {
+                                    let navigator = navigator.clone();
+                                    let id = client.id.clone();
+                                    Callback::from(move |_| {
+                                        if let Some(navigator) = &navigator {
+                                            navigator.push(&terminal_route(&id));
+                                        }
+                                    })
+                                };
+
                                 let is_online = client.last_seen.as_ref()
                                     .and_then(|time| chrono::DateTime::parse_from_rfc3339(time).ok())
                                     .map(|dt| {
@@ -214,6 +246,11 @@ pub fn clients_table(props: &TableProps) -> Html {
                                                 <Button variant={ButtonVariant::Ghost} size={ButtonSize::Icon} onclick={on_view} title={t.t("clients.actions.view")}>
                                                     <Eye class="h-4 w-4" />
                                                 </Button>
+                                                <PermissionGuard min_role={Role::User}>
+                                                    <Button variant={ButtonVariant::Ghost} size={ButtonSize::Icon} onclick={on_open_terminal} title={"Open Terminal"}>
+                                                        <Terminal class="h-4 w-4" />
+                                                    </Button>
+                                                </PermissionGuard>
                                                 <PermissionGuard min_role={Role::User}>
                                                     <Button variant={ButtonVariant::Ghost} size={ButtonSize::Icon} onclick={on_edit_click} title={t.t("clients.actions.edit")}>
                                                         <Pencil class="h-4 w-4" />

@@ -13,6 +13,7 @@ use crate::services::api::{self, ApiError};
 use crate::types::{Client, ClientStatus, Environment, Hardware, Person, Project};
 use crate::utils::format::{format_datetime, format_time_ago};
 use wasm_bindgen_futures::spawn_local;
+use yew_router::prelude::*;
 
 use crate::components::client_edit_modal::ClientEditModal;
 use crate::components::permission_guard::PermissionGuard;
@@ -23,8 +24,9 @@ use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
 use crate::icons::{
     Activity, BoxIcon, Calendar, CircleQuestionMark, Clock, Cpu, Folder, History, Info, MapPin,
-    Pencil, Power, RefreshCw, Server, Tag, TriangleAlert, User,
+    Pencil, Power, RefreshCw, Server, Tag, Terminal, TriangleAlert, User,
 };
+use crate::routes::Route;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ClientDetailTab {
@@ -245,6 +247,7 @@ pub struct ClientDetailPageProps {
 pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
     let t = use_trans();
     let state = use_reducer(ClientDetailState::default);
+    let navigator = use_navigator();
 
     // Timer for auto-refresh
     let state_for_interval = state.clone();
@@ -397,6 +400,7 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
     let render_client_overview = {
         let t = t.clone();
         let state = state.clone();
+        let navigator = navigator.clone();
         move |client: &Client| -> Html {
             let registered_dt = client
                 .registered_at
@@ -443,6 +447,16 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| client.project_id.clone().unwrap_or_else(|| "-".to_string()));
 
+            let on_open_terminal = {
+                let navigator = navigator.clone();
+                let id = client.id.clone();
+                Callback::from(move |_| {
+                    if let Some(navigator) = &navigator {
+                        navigator.push(&Route::Terminal { id: id.clone() });
+                    }
+                })
+            };
+
             html! {
                 <Card>
                     <CardHeader>
@@ -456,6 +470,12 @@ pub fn client_detail_page(props: &ClientDetailPageProps) -> Html {
                                     <Button variant={ButtonVariant::Outline} size={ButtonSize::Sm} onclick={on_edit_click.clone()}>
                                         <Pencil class="h-4 w-4 mr-2" />
                                         <span>{t.t("client_detail.edit")}</span>
+                                    </Button>
+                                </PermissionGuard>
+                                <PermissionGuard min_role={Role::User}>
+                                    <Button variant={ButtonVariant::Outline} size={ButtonSize::Sm} onclick={on_open_terminal}>
+                                        <Terminal class="h-4 w-4 mr-2" />
+                                        <span>{t.t("client_detail.terminal")}</span>
                                     </Button>
                                 </PermissionGuard>
                                 <Button variant={ButtonVariant::Outline} size={ButtonSize::Sm} onclick={on_refresh_client.clone()}>

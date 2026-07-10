@@ -1,20 +1,25 @@
+mod command_executor;
 mod pull_service;
 mod push_service;
+mod sandbox;
+mod terminal_session_manager;
 
+pub use command_executor::CommandExecutor;
 pub use pull_service::PullService;
 pub use push_service::PushService;
+pub use terminal_session_manager::TerminalSessionManager;
 
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::collector::linux_collector;
 use crate::config::ClientConfig;
 use common::entity::hardware::{Hardware, NICType, NIC};
-use common::models::Client;
+use common::models::{Client, RegisterClientResponse};
 
 /// 客户端服务，负责运行推送和拉取服务
 pub struct ClientService {
@@ -84,6 +89,12 @@ impl ClientService {
             .start()
             .await
             .context("Failed to start scheduler")?;
+
+        // 启动远程命令执行长轮询
+        self.start_command_executor().await;
+
+        // 启动终端会话长轮询
+        self.start_terminal_session_manager().await;
 
         Ok(())
     }
@@ -174,6 +185,8 @@ impl ClientService {
             warranty_expiration: None,
             supplier: None,
             power_consumption: None,
+            agent_token: None,
+            created_by: None,
         };
 
         let client = reqwest::Client::builder()
@@ -190,6 +203,25 @@ impl ClientService {
             let error_text = response.text().await?;
             error!("Failed to register client: {:?}", error_text);
             return Err(anyhow::anyhow!("Server returned error: {:?}", error_text));
+        }
+
+        // Parse the registration response to extract and persist the agent token.
+        let body = response.bytes().await?;
+        let parsed: serde_json::Value = serde_json::from_slice(&body)
+            .unwrap_or_else(|_| serde_json::Value::Null);
+
+        if let Some(token) = parsed
+            .get("data")
+            .and_then(|d| d.get("agent_token"))
+            .and_then(|t| t.as_str())
+        {
+            if let Err(e) = save_agent_token(token) {
+                warn!("Failed to persist agent token: {}. Commands will not work until re-registered.", e);
+            } else {
+                info!("Agent token saved successfully.");
+            }
+        } else {
+            warn!("Registration response did not include agent_token. Remote command execution may not work.");
         }
 
         info!("Client registered successfully");
@@ -257,6 +289,23 @@ impl ClientService {
 
         Ok(())
     }
+
+    /// 启动远程命令执行长轮询循环（后台 task）
+    async fn start_command_executor(&self) {
+        let executor = CommandExecutor::new(self.config.clone(), self.client_id.clone());
+        tokio::spawn(async move {
+            executor.run_poll_loop().await;
+        });
+        info!("CommandExecutor: background poll loop started");
+    }
+
+    async fn start_terminal_session_manager(&self) {
+        let manager = TerminalSessionManager::new(self.config.clone(), self.client_id.clone());
+        tokio::spawn(async move {
+            manager.run_poll_loop().await;
+        });
+        info!("TerminalSessionManager: background poll loop started");
+    }
 }
 
 /// Try to detect primary IP by matching NICs against a CIDR subnet.
@@ -278,4 +327,40 @@ fn detect_primary_ip_from_subnet(subnet: &str) -> Option<String> {
         _ => 1,
     });
     candidates.first().map(|nic| nic.ipv4_address.clone())
+}
+
+// ── Agent token persistence ──────────────────────────────────────────────────
+
+/// File path where the agent token is stored.
+fn agent_token_path() -> std::path::PathBuf {
+    // Prefer system-wide path when running as root/service, fallback to user config dir.
+    if std::path::Path::new("/var/lib/rs-cmdb").exists() {
+        std::path::PathBuf::from("/var/lib/rs-cmdb/agent_token")
+    } else if let Ok(home) = std::env::var("HOME") {
+        std::path::PathBuf::from(home).join(".config/rs-cmdb/agent_token")
+    } else {
+        std::path::PathBuf::from("agent_token")
+    }
+}
+
+/// Persist the plain-text agent token to a local file (chmod 600).
+pub fn save_agent_token(token: &str) -> std::io::Result<()> {
+    let path = agent_token_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, token)?;
+    // Set file permissions to owner-read-only (0o600)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
+}
+
+/// Load the persisted agent token from disk.
+/// Returns `None` if the file doesn't exist or cannot be read.
+pub fn load_agent_token() -> Option<String> {
+    std::fs::read_to_string(agent_token_path()).ok().map(|s| s.trim().to_string())
 }

@@ -1,9 +1,11 @@
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
     ZhCn,
     EnUs,
 }
 
+#[allow(dead_code)]
 impl Language {
     pub fn to_str(&self) -> &'static str {
         match self {
@@ -27,6 +29,7 @@ impl Default for Language {
     }
 }
 
+#[allow(dead_code)]
 /// Parse Accept-Language header to determine the preferred language
 /// Supports standard Accept-Language format like "en-US,en;q=0.9,zh-CN;q=0.8"
 pub fn parse_accept_language(header: Option<&str>) -> Language {
@@ -55,6 +58,7 @@ pub fn parse_accept_language(header: Option<&str>) -> Language {
     Language::ZhCn
 }
 
+#[allow(dead_code)]
 /// Parse language parameter from query string or request body
 /// Supports "en-US", "zh-CN" formats
 pub fn parse_lang_param(param: Option<&str>) -> Option<Language> {

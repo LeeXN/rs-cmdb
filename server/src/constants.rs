@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 /// 标准化的统计类别名称（英文）
 pub const CATEGORY_CPU_CONFIG: &str = "cpu_config";
 pub const CATEGORY_MEMORY_CONFIG: &str = "memory_config";
@@ -52,3 +54,6 @@ pub const COUNT_NONE: &str = "none";
 
 /// 筛选默认值（替换中文"全部"）
 pub const FILTER_ALL: &str = "all";
+
+/// Maximum length for search/filter string parameters
+pub const MAX_FILTER_LENGTH: usize = 256;

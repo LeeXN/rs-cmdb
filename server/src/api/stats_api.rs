@@ -187,7 +187,7 @@ pub async fn get_clients_by_criteria(
             error!("Failed to list clients for criteria: {}", err);
             let response = ApiResponse::<Vec<Client>> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
             return (
@@ -301,5 +301,58 @@ pub async fn export_client_hardware_data(
             };
             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::fixtures::{TestAppBuilder, auth_headers};
+    use axum::{
+        body::Body,
+        extract::Request,
+        http::{Method, StatusCode, header},
+    };
+    use serde_json::json;
+    use tower::ServiceExt;
+
+    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::GET).uri(path);
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap(),
+        )
+        .unwrap();
+        (status, body)
+    }
+
+    #[tokio::test]
+    async fn test_hardware_stats() {
+        let app = TestAppBuilder::new().build().await;
+        let (status, body) =
+            make_get(&app.router, "/api/v1/stats/hardware", Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body["data"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_detailed_stats() {
+        let app = TestAppBuilder::new().build().await;
+        let (status, _body) =
+            make_get(&app.router, "/api/v1/stats/detailed", Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_filter_options() {
+        let app = TestAppBuilder::new().build().await;
+        let (status, _body) =
+            make_get(&app.router, "/api/v1/filter_options", Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK);
     }
 }

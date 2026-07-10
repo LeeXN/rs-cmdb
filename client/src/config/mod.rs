@@ -1,4 +1,5 @@
 use config::{Config, ConfigError, File};
+use common::entity::permission::{CommandAction, CommandOverride, CommandRules};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -28,6 +29,15 @@ pub struct ClientConfig {
     pub logging: LoggingConfig,
     /// Primary IP auto-detection configuration
     pub primary_ip: Option<PrimaryIpConfig>,
+    /// 远程执行命令过滤规则（命令执行专用）
+    #[serde(default = "default_command_rules")]
+    pub execution_command_rules: CommandRules,
+    /// 兼容旧配置字段
+    #[serde(default)]
+    pub command_rules: CommandRules,
+    /// 允许远程执行的命令白名单（兼容旧配置）
+    #[serde(default = "default_allowed_commands")]
+    pub allowed_commands: Vec<String>,
 }
 
 /// 服务器配置
@@ -81,7 +91,7 @@ pub fn get_config() -> &'static ClientConfig {
 }
 
 /// 加载配置
-fn load_config() -> Result<ClientConfig, ConfigError> {
+pub fn load_config() -> Result<ClientConfig, ConfigError> {
     // 设置默认配置源
     let mut builder = Config::builder();
 
@@ -125,6 +135,37 @@ pub fn load_from_file(path: &str) -> Result<ClientConfig, Box<dyn std::error::Er
     Ok(config)
 }
 
+/// 默认允许的命令白名单
+fn default_allowed_commands() -> Vec<String> {
+    vec![
+        "ping".to_string(),
+        "traceroute".to_string(),
+        "df".to_string(),
+        "free".to_string(),
+        "uptime".to_string(),
+        "uname".to_string(),
+        "ip".to_string(),
+        "ss".to_string(),
+        "lscpu".to_string(),
+        "lsblk".to_string(),
+        "dmidecode".to_string(),
+        "cat".to_string(),
+        "echo".to_string(),
+        "ls".to_string(),
+        "grep".to_string(),
+        "wc".to_string(),
+        "head".to_string(),
+        "tail".to_string(),
+        "systemctl".to_string(),
+        "journalctl".to_string(),
+        "hostname".to_string(),
+    ]
+}
+
+fn default_command_rules() -> CommandRules {
+    CommandRules::default()
+}
+
 /// 默认配置
 pub fn default_config() -> ClientConfig {
     ClientConfig {
@@ -155,6 +196,9 @@ pub fn default_config() -> ClientConfig {
             file: None,
         },
         primary_ip: None,
+        execution_command_rules: default_command_rules(),
+        command_rules: default_command_rules(),
+        allowed_commands: vec![],
     }
 }
 

@@ -10,7 +10,8 @@ use crate::stores::auth_store::AuthStore;
 use crate::types::{
     ApiResponse, ChangePasswordRequest, Client, CreateUserRequest, DetailedStats, Dictionary,
     FilterCriteria, FilterOptions, Hardware, HardwareHistoryEntry, LoginRequest, LoginResponse,
-    PaginatedResult, Person, Project, Rack, UpdateUserRequest, User,
+    PaginatedResult, Person, Project, Rack, RemoteExecConfigResponse, UpdateRemoteExecConfigRequest,
+    UpdateUserRequest, User,
 };
 
 const API_BASE_URL: &str = "/api/v1";
@@ -1649,6 +1650,53 @@ pub async fn export_filtered_clients(
             error!("{}", error_msg);
             Err(ApiError { message: error_msg })
         }
+    }
+}
+
+/// Fetch remote exec config
+pub async fn fetch_remote_exec_config() -> Result<RemoteExecConfigResponse, ApiError> {
+    let url = format!("{}/remote-exec/config", API_BASE_URL);
+    match request_get(&url).await {
+        Ok(response) => {
+            if response.status() == 200 {
+                match response.json::<ApiResponse<RemoteExecConfigResponse>>().await {
+                    Ok(data) => Ok(data.data.unwrap_or(RemoteExecConfigResponse { enabled: false })),
+                    Err(e) => Err(ApiError {
+                        message: format!("Parse error: {}", e),
+                    }),
+                }
+            } else {
+                let msg = match response.json::<ApiResponse<()>>().await {
+                    Ok(data) => data.message,
+                    Err(_) => format!("HTTP {}", response.status()),
+                };
+                Err(ApiError { message: msg })
+            }
+        }
+        Err(e) => Err(ApiError {
+            message: format!("Network error: {}", e),
+        }),
+    }
+}
+
+/// Update remote exec config
+pub async fn update_remote_exec_config(req: &UpdateRemoteExecConfigRequest) -> Result<(), ApiError> {
+    let url = format!("{}/remote-exec/config", API_BASE_URL);
+    match request_put(&url, req).await {
+        Ok(response) => {
+            if response.status() == 200 {
+                Ok(())
+            } else {
+                let msg = match response.json::<ApiResponse<()>>().await {
+                    Ok(data) => data.message,
+                    Err(_) => format!("HTTP {}", response.status()),
+                };
+                Err(ApiError { message: msg })
+            }
+        }
+        Err(e) => Err(ApiError {
+            message: format!("Network error: {}", e),
+        }),
     }
 }
 

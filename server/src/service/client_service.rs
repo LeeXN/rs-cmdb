@@ -4,8 +4,11 @@
 //! and simplifying business logic.
 
 use crate::dao::{ClientDao, RackDao};
+use crate::queue::{Message, MessageQueue};
 use crate::repository::hardware_repository::HardwareRepository;
+use crate::service::auth_service::{hash_token, generate_client_token};
 use crate::validation::validate_ip_address;
+use common::command::{AuditAction, AuditLogEntry};
 use common::error::{CmdbError, CmdbResult};
 use common::models::Client;
 use std::sync::Arc;
@@ -19,6 +22,7 @@ pub struct ClientService {
     client_dao: Arc<ClientDao>,
     rack_dao: Arc<RackDao>,
     hardware_repo: Arc<HardwareRepository>,
+    message_queue: Option<Arc<dyn MessageQueue>>,
 }
 
 impl ClientService {
@@ -32,9 +36,11 @@ impl ClientService {
             client_dao,
             rack_dao,
             hardware_repo,
+            message_queue: None,
         }
     }
 
+    #[allow(dead_code)]
     /// Create a new client service from repositories (backward compatibility)
     pub fn from_repositories(
         client_repo: Arc<crate::cache::CachedClientRepository>,
@@ -45,6 +51,20 @@ impl ClientService {
             client_dao: Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone())),
             rack_dao: Arc::new(RackDao::new(rack_repo, client_repo)),
             hardware_repo,
+            message_queue: None,
+        }
+    }
+
+    pub fn with_queue(mut self, message_queue: Arc<dyn MessageQueue>) -> Self {
+        self.message_queue = Some(message_queue);
+        self
+    }
+
+    #[allow(dead_code)]
+    fn send_audit(&self, action: AuditAction, operator: &str, detail: &str) {
+        if let Some(ref queue) = self.message_queue {
+            let entry = AuditLogEntry::new(action, operator, detail);
+            let _ = queue.send_message(Message::AuditLog(entry));
         }
     }
 
@@ -116,7 +136,7 @@ impl ClientService {
         os: &str,
         client_id: Option<String>,
         primary_ip: Option<String>,
-    ) -> CmdbResult<Client> {
+    ) -> CmdbResult<(Client, String)> {
         // Create a new client with given or generated ID
         let mut client = Client::new(hostname.to_string(), ip_address.to_string());
         client.primary_ip = primary_ip.clone();
@@ -137,6 +157,12 @@ impl ClientService {
             }
         }
 
+        // Generate a deterministic token bound to this client_id via HMAC.
+        let plain_token = generate_client_token(&client.id);
+
+        // Hash the token before storing
+        let hashed_token = hash_token(&plain_token)?;
+
         // Check if client already exists
         if self.client_dao.get(&client.id).await?.is_some() {
             // Update the client information
@@ -152,21 +178,28 @@ impl ClientService {
                     existing_client.primary_ip = Some(pip.clone());
                 }
                 existing_client.update_last_seen();
+                // Store hashed token
+                existing_client.agent_token = Some(hashed_token);
 
                 self.client_dao.save(&existing_client).await?;
                 info!(
                     "Client updated: {} ({})",
                     existing_client.hostname, existing_client.id
                 );
-                return Ok(existing_client);
+                // Return client without token in the record (token only in the wrapper response)
+                existing_client.agent_token = None;
+                return Ok((existing_client, plain_token));
             }
         }
 
-        // Save the new client
+        // Save the new client with the hashed token
+        client.agent_token = Some(hashed_token);
         self.client_dao.save(&client).await?;
         info!("New client registered: {} ({})", client.hostname, client.id);
 
-        Ok(client)
+        // Strip token from returned record
+        client.agent_token = None;
+        Ok((client, plain_token))
     }
 
     /// Delete a client and associated hardware information
@@ -503,7 +536,7 @@ mod tests {
             .await;
 
         assert!(client.is_ok());
-        let client = client.unwrap();
+        let (client, _token) = client.unwrap();
         assert_eq!(client.hostname, "test-host");
         assert_eq!(client.ip_address, "192.168.1.1");
     }
@@ -529,7 +562,7 @@ mod tests {
             .await;
 
         assert!(client.is_ok());
-        assert_eq!(client.unwrap().id, custom_id);
+        assert_eq!(client.unwrap().0.id, custom_id);
     }
 
     #[tokio::test]
@@ -557,7 +590,7 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
-        let client = result.unwrap();
+        let (client, _token) = result.unwrap();
         assert_eq!(client.id, "test-client");
         assert_eq!(client.hostname, "new-hostname");
     }

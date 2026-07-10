@@ -42,5 +42,8 @@ COPY --from=builder /usr/src/rs-cmdb/target/x86_64-unknown-linux-musl/release/cl
 COPY --from=builder /usr/src/rs-cmdb/front/dist ./dist
 COPY --from=builder /usr/src/rs-cmdb/config/default.toml ./config/default.toml
 
+RUN addgroup -S cmdb && adduser -S cmdb -G cmdb && mkdir -p /app/data && chown cmdb:cmdb /app/data
+
 EXPOSE 8080
+USER cmdb
 CMD ["./rs-cmdb-server"]

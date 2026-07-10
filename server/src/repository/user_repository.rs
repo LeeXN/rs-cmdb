@@ -86,6 +86,7 @@ impl UserRepository {
         Ok(users)
     }
 
+    #[allow(dead_code)]
     /// Update a user
     pub async fn update(&self, user: &User) -> CmdbResult<()> {
         let user_json = serde_json::to_vec(user)

@@ -57,6 +57,31 @@ pub fn validate_primary_ip_config(
     }
 }
 
+#[allow(dead_code)]
+/// Validate CORS allowed origins configuration
+pub fn validate_cors_origins(origins: &[String]) -> Result<(), ConfigValidationError> {
+    if origins.is_empty() {
+        return Err(ConfigValidationError::InvalidJwtSecret(
+            "cors_allowed_origins must contain at least one origin".to_string(),
+        ));
+    }
+    for origin in origins {
+        if origin.is_empty() {
+            return Err(ConfigValidationError::InvalidJwtSecret(
+                "cors_allowed_origins entries must not be empty".to_string(),
+            ));
+        }
+        // Basic validation: must start with http:// or https://
+        if !origin.starts_with("http://") && !origin.starts_with("https://") {
+            return Err(ConfigValidationError::InvalidJwtSecret(
+                format!("cors_allowed_origins entry '{}' must start with http:// or https://", origin),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[allow(dead_code)]
 /// Validate JWT secret configuration
 ///
 /// Ensures the JWT secret:
@@ -142,6 +167,12 @@ pub struct ServerConfig {
     pub component_missing_grace_period_hours: u64,
     /// SSH known_hosts file path
     pub ssh_known_hosts_file: Option<String>,
+    /// CORS allowed origins (whitelist)
+    pub cors_allowed_origins: Vec<String>,
+    /// Maximum batch size for bulk operations
+    pub max_batch_size: usize,
+    /// Whether to expose version info via API
+    pub expose_version: bool,
 }
 
 /// Database configuration
@@ -201,6 +232,13 @@ fn load_config() -> Result<ServerConfig, ConfigError> {
             defaults.component_missing_grace_period_hours,
         )?;
 
+    builder = builder.set_default(
+        "cors_allowed_origins",
+        defaults.cors_allowed_origins.clone(),
+    )?;
+    builder = builder.set_default("max_batch_size", defaults.max_batch_size as i64)?;
+    builder = builder.set_default("expose_version", defaults.expose_version)?;
+
     if let Some(cert) = defaults.tls_cert {
         builder = builder.set_default("tls_cert", cert)?;
     }
@@ -258,6 +296,9 @@ fn default_config() -> ServerConfig {
         jwt_secret: "change_me_in_production".to_string(),
         component_missing_grace_period_hours: 24,
         ssh_known_hosts_file: Some("/etc/cmdb/ssh_known_hosts".to_string()),
+        cors_allowed_origins: vec!["http://localhost:8080".to_string()],
+        max_batch_size: 1000,
+        expose_version: true,
     }
 }
 

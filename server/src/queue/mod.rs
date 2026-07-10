@@ -1,6 +1,7 @@
 pub mod message_queue;
 pub mod mock_queue;
 
+use common::command::AuditLogEntry;
 use common::error::CmdbResult;
 use common::models::{Client, ClientHardwareInfo, PullRequest, PullResponse};
 use std::time::Duration;
@@ -19,6 +20,8 @@ pub enum Message {
     PullResponse(PullResponse),
     /// Client heartbeat message (to update last seen timestamp)
     ClientHeartbeat(String), // Client ID
+    /// Audit log entry for async writing
+    AuditLog(AuditLogEntry),
 }
 
 /// Message queue interface

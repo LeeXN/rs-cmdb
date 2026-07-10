@@ -16,6 +16,8 @@ pub struct ModalProps {
     pub footer: Option<Html>,
     #[prop_or_default]
     pub open: bool, // Alias for is_open to support the pattern seen in errors
+    #[prop_or_default]
+    pub content_class: Classes,
 }
 
 #[function_component(Modal)]
@@ -40,7 +42,7 @@ pub fn modal(props: &ModalProps) -> Html {
 
     html! {
         <div class="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center" onclick={on_backdrop_click}>
-            <div class="z-50 grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg sm:rounded-lg border-primary/20 shadow-[0_0_20px_rgba(6,182,212,0.2)]" onclick={on_content_click}>
+            <div class={classes!("z-50", "grid", "w-full", "max-w-lg", "gap-4", "border", "bg-background", "p-6", "shadow-lg", "sm:rounded-lg", "border-primary/20", "shadow-[0_0_20px_rgba(6,182,212,0.2)]", props.content_class.clone())} onclick={on_content_click}>
                 if !props.title.is_empty() {
                     <div class="flex flex-col space-y-1.5 text-center sm:text-left">
                         <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">{ &props.title }</h2>

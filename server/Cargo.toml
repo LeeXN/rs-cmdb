@@ -12,8 +12,11 @@ rand = "0.8"
 
 [dependencies]
 common = { path = "../common" }
+rand = "0.8"
 tokio = { version = "1.45.0", features = ["full"] }
-axum = { version = "0.8.4", features = ["json"] }
+axum = { version = "0.8.4", features = ["json", "ws"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+async-stream = "0.3"
 axum-macros = "0.5.0"
 tower = { version = "0.5.2", features = ["util"] }
 tower-http = { version = "0.6.4", features = ["trace", "cors", "fs"] }
@@ -43,10 +46,16 @@ governor = "0.7.0"
 rpassword = "7.3"
 moka = { version = "0.12", features = ["future"] }
 ipnet = "2.9"
+rcgen = "0.13"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+tokio-rustls = "0.26"
+rustls = "0.23"
+rustls-pemfile = "2"
+urlencoding = "2.1"
 
-[lints.rust]
-unused = "allow"
-dead_code = "allow"
+
 
 [lints.clippy]
 enum_variant_names = "allow"

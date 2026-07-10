@@ -1,3 +1,4 @@
+use crate::middleware::permission::PermissionContext;
 use crate::repository::client_repository::ClientRepository;
 use crate::repository::component_repository::ComponentRepository;
 use crate::service::validation_service::ValidationService;
@@ -6,7 +7,9 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use common::entity::permission::{PermissionAction, ResourceType, ScopeConstraint};
 use axum_macros::debug_handler;
+use common::entity::user::{Role, User};
 use common::models::{ApiResponse, Component, ComponentStatus, ComponentType, PaginatedResult};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -45,6 +48,7 @@ pub async fn list_components(
     Query(params): Query<ComponentQuery>,
     Extension(component_repo): Extension<Arc<ComponentRepository>>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
     // Map API query to Repository query
     let status = if let Some(s) = &params.status {
@@ -94,6 +98,16 @@ pub async fn list_components(
 
     match component_repo.find_with_query(repo_query).await {
         Ok(mut paginated_result) => {
+            let scope = perm_ctx
+                .evaluate(&ResourceType::Component, &PermissionAction::View)
+                .unwrap_or(ScopeConstraint::None);
+            paginated_result.items = PermissionContext::filter_by_scope(
+                std::mem::take(&mut paginated_result.items),
+                &scope,
+                &perm_ctx.user_id,
+                |c| c.created_by.as_deref(),
+            );
+            paginated_result.total = paginated_result.items.len();
             // Populate client_hostname
             for component in &mut paginated_result.items {
                 if let Some(client_id) = &component.client_id
@@ -121,7 +135,7 @@ pub async fn list_components(
             error!("Failed to list components: {}", err);
             let response = ApiResponse::<PaginatedResult<Component>> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
 
@@ -164,7 +178,7 @@ pub async fn get_component(
             error!("Failed to get component {}: {}", component_id, err);
             let response = ApiResponse::<Component> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
 
@@ -181,9 +195,10 @@ pub async fn get_component(
 #[debug_handler]
 #[instrument(skip(component_repo, validation_service))]
 pub async fn create_component(
+    Extension(user): Extension<User>,
     Extension(component_repo): Extension<Arc<ComponentRepository>>,
     Extension(validation_service): Extension<Arc<ValidationService>>,
-    Json(component): Json<Component>,
+    Json(mut component): Json<Component>,
 ) -> impl IntoResponse {
     info!("Creating component: {}", component.serial_number);
 
@@ -194,7 +209,7 @@ pub async fn create_component(
     {
         let response = ApiResponse::<Component> {
             status: e.status_code(),
-            message: e.to_string(),
+            message: e.log_and_user_message(),
             data: None,
         };
         return (
@@ -202,6 +217,9 @@ pub async fn create_component(
             Json(response),
         );
     }
+
+    // Set ownership
+    component.created_by = Some(user.id);
 
     match component_repo.save(&component).await {
         Ok(_) => {
@@ -216,7 +234,7 @@ pub async fn create_component(
             error!("Failed to create component: {}", err);
             let response = ApiResponse::<Component> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
             (
@@ -233,9 +251,10 @@ pub async fn create_component(
 #[instrument(skip(component_repo, validation_service))]
 pub async fn update_component(
     Path(component_id): Path<String>,
+    Extension(current_user): Extension<User>,
     Extension(component_repo): Extension<Arc<ComponentRepository>>,
     Extension(validation_service): Extension<Arc<ValidationService>>,
-    Json(component): Json<Component>,
+    Json(mut component): Json<Component>,
 ) -> impl IntoResponse {
     info!("Updating component: {}", component_id);
 
@@ -246,7 +265,7 @@ pub async fn update_component(
     {
         let response = ApiResponse::<Component> {
             status: e.status_code(),
-            message: e.to_string(),
+            message: e.log_and_user_message(),
             data: None,
         };
         return (
@@ -256,8 +275,23 @@ pub async fn update_component(
     }
 
     // Check if component exists
-    match component_repo.exists(&component_id).await {
-        Ok(true) => {
+    match component_repo.get(&component_id).await {
+        Ok(Some(existing)) => {
+            // Ownership check
+            if current_user.role != common::entity::user::Role::Admin
+                && existing.created_by.as_deref() != Some(&current_user.id)
+            {
+                let response = ApiResponse::<Component> {
+                    status: 403,
+                    message: "Forbidden: you can only update resources you created".to_string(),
+                    data: None,
+                };
+                return (StatusCode::FORBIDDEN, Json(response));
+            }
+
+            // Preserve ownership fields
+            component.created_by = existing.created_by;
+
             // Ensure ID matches
             if component.id != component_id {
                 let response = ApiResponse::<Component> {
@@ -281,7 +315,7 @@ pub async fn update_component(
                     error!("Failed to update component {}: {}", component_id, err);
                     let response = ApiResponse::<Component> {
                         status: err.status_code(),
-                        message: err.to_string(),
+                        message: err.log_and_user_message(),
                         data: None,
                     };
                     (
@@ -292,7 +326,7 @@ pub async fn update_component(
                 }
             }
         }
-        Ok(false) => {
+        Ok(None) => {
             let response = ApiResponse::<Component> {
                 status: 404,
                 message: format!("Component {} not found", component_id),
@@ -304,7 +338,7 @@ pub async fn update_component(
             error!("Failed to check component {}: {}", component_id, err);
             let response = ApiResponse::<Component> {
                 status: err.status_code(),
-                message: err.to_string(),
+                message: err.log_and_user_message(),
                 data: None,
             };
             (
@@ -319,20 +353,35 @@ pub async fn update_component(
 #[debug_handler]
 #[instrument(skip(component_repo))]
 pub async fn batch_create_components(
+    Extension(user): Extension<User>,
     Extension(component_repo): Extension<Arc<ComponentRepository>>,
-    Json(request): Json<BatchCreateRequest>,
+    Json(mut request): Json<BatchCreateRequest>,
 ) -> impl IntoResponse {
+    let max_batch = crate::config::get_config().max_batch_size;
+    if request.components.len() > max_batch {
+        let response = ApiResponse::<u64> {
+            status: 413,
+            message: format!(
+                "Batch size {} exceeds maximum of {}",
+                request.components.len(),
+                max_batch
+            ),
+            data: None,
+        };
+        return (StatusCode::PAYLOAD_TOO_LARGE, Json(response));
+    }
     info!("Batch creating {} components", request.components.len());
 
     let mut created_count = 0;
     let mut errors = Vec::new();
 
-    for component in request.components {
+    for component in &mut request.components {
+        component.created_by = Some(user.id.clone());
         match component_repo.save(&component).await {
             Ok(_) => created_count += 1,
             Err(e) => errors.push(format!(
                 "Failed to save component {}: {}",
-                component.serial_number, e
+                component.serial_number, e.log_and_user_message()
             )),
         }
     }
@@ -364,6 +413,7 @@ pub async fn batch_create_components(
 #[instrument(skip(component_repo))]
 pub async fn batch_update_components(
     Extension(component_repo): Extension<Arc<ComponentRepository>>,
+    Extension(user): Extension<User>,
     Json(request): Json<BatchUpdateRequest>,
 ) -> impl IntoResponse {
     info!("Batch updating {} components", request.ids.len());
@@ -374,6 +424,17 @@ pub async fn batch_update_components(
     for id in request.ids {
         match component_repo.get(&id).await {
             Ok(Some(mut component)) => {
+                // Ownership check
+                if user.role != Role::Admin
+                    && component.created_by.as_deref() != Some(&user.id)
+                {
+                    errors.push(format!(
+                        "Forbidden: component {} was created by another user",
+                        id
+                    ));
+                    continue;
+                }
+
                 if let Some(status) = &request.status {
                     component.status = status.clone();
                 }
@@ -415,6 +476,7 @@ pub async fn batch_update_components(
 #[instrument(skip(component_repo))]
 pub async fn batch_delete_components(
     Extension(component_repo): Extension<Arc<ComponentRepository>>,
+    Extension(user): Extension<User>,
     Json(request): Json<BatchDeleteRequest>,
 ) -> impl IntoResponse {
     info!("Batch deleting {} components", request.ids.len());
@@ -423,6 +485,29 @@ pub async fn batch_delete_components(
     let mut errors = Vec::new();
 
     for id in request.ids {
+        // Ownership check before delete
+        match component_repo.get(&id).await {
+            Ok(Some(component)) => {
+                if user.role != Role::Admin
+                    && component.created_by.as_deref() != Some(&user.id)
+                {
+                    errors.push(format!(
+                        "Forbidden: component {} was created by another user",
+                        id
+                    ));
+                    continue;
+                }
+            }
+            Ok(None) => {
+                errors.push(format!("Component {} not found", id));
+                continue;
+            }
+            Err(e) => {
+                errors.push(format!("Failed to get component {}: {}", id, e));
+                continue;
+            }
+        }
+
         match component_repo.delete(&id).await {
             Ok(_) => deleted_count += 1,
             Err(e) => errors.push(format!("Failed to delete component {}: {}", id, e)),
@@ -448,5 +533,150 @@ pub async fn batch_delete_components(
             data: Some(deleted_count),
         };
         (StatusCode::MULTI_STATUS, Json(response))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::fixtures::{TestAppBuilder, auth_headers};
+    use axum::{
+        body::Body,
+        extract::Request,
+        http::{Method, StatusCode, header},
+    };
+    use serde_json::json;
+    use tower::ServiceExt;
+
+    async fn make_post(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::POST)
+            .uri(path)
+            .header(header::CONTENT_TYPE, "application/json");
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::GET)
+            .uri(path);
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    async fn make_put(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::PUT)
+            .uri(path)
+            .header(header::CONTENT_TYPE, "application/json");
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    async fn make_delete(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder()
+            .method(Method::DELETE)
+            .uri(path);
+        if let Some(t) = token {
+            let (k, v) = auth_headers(t);
+            req = req.header(k, v);
+        }
+        let req = req.body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
+        ).unwrap();
+        (status, body)
+    }
+
+    #[tokio::test]
+    async fn test_create_component() {
+        let app = TestAppBuilder::new().build().await;
+        let (status, body) = make_post(&app.router, "/api/v1/components", Some(&app.admin_token), json!({
+            "serial_number": "SN-001",
+            "model": "Tesla T4",
+            "component_type": "GPU",
+            "status": "InUse"
+        })).await;
+        assert_eq!(status, StatusCode::CREATED, "body: {:?}", body);
+        assert_eq!(body["status"], 201);
+    }
+
+    #[tokio::test]
+    async fn test_create_and_list_components() {
+        let app = TestAppBuilder::new().build().await;
+        let (_, _) = make_post(&app.router, "/api/v1/components", Some(&app.admin_token), json!({
+            "serial_number": "SN-L1",
+            "model": "Tesla T4",
+            "component_type": "GPU",
+            "status": "InUse"
+        })).await;
+        let (status, body) = make_get(&app.router, "/api/v1/components", Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body["data"]["total"].as_i64().unwrap_or(0) >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_component_not_found() {
+        let app = TestAppBuilder::new().build().await;
+        let (status, body) = make_get(&app.router, "/api/v1/components/nonexistent", Some(&app.admin_token)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "body: {:?}", body);
+    }
+
+    #[tokio::test]
+    async fn test_batch_create_components() {
+        let app = TestAppBuilder::new().build().await;
+        let (status, body) = make_post(&app.router, "/api/v1/components/batch/create", Some(&app.admin_token), json!({
+            "components": [
+                {"serial_number": "SN-B1", "model": "M.2 SSD", "component_type": "Disk", "status": "InStock"},
+                {"serial_number": "SN-B2", "model": "DDR5", "component_type": "Memory", "status": "InStock"}
+            ]
+        })).await;
+        assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+        assert!(body["data"].as_i64().unwrap_or(0) >= 2);
+    }
+
+    #[tokio::test]
+    async fn test_batch_create_exceeds_limit() {
+        let app = TestAppBuilder::new().build().await;
+        let components: Vec<serde_json::Value> = (0..1001)
+            .map(|i| json!({
+                "serial_number": format!("SN-LIMIT-{:04}", i),
+                "model": "Test Component",
+                "component_type": "Disk",
+                "status": "InStock"
+            }))
+            .collect();
+        let (status, body) = make_post(&app.router, "/api/v1/components/batch/create", Some(&app.admin_token), json!({ "components": components })).await;
+        assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE, "body: {:?}", body);
+        assert!(body["message"].as_str().unwrap_or("").contains("exceeds maximum"));
     }
 }
