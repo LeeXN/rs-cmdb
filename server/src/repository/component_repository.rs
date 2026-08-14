@@ -50,6 +50,7 @@ impl ComponentRepository {
     }
 
     /// Check if a component exists
+    #[allow(dead_code)]
     pub async fn exists(&self, component_id: &str) -> CmdbResult<bool> {
         self.db.exists(&self.get_key(component_id)).await
     }
@@ -74,6 +75,7 @@ impl ComponentRepository {
         Ok(components)
     }
 
+    #[allow(dead_code)]
     /// Find component by serial number (This is inefficient in KV store without index, but okay for small scale)
     pub async fn find_by_serial(&self, serial: &str) -> CmdbResult<Option<Component>> {
         let all = self.list_all().await?;
@@ -194,6 +196,7 @@ mod tests {
             status: ComponentStatus::InStock,
             client_id: Some("client-001".to_string()),
             client_hostname: None,
+            created_by: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
             location: None,

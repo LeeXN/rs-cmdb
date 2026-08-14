@@ -56,6 +56,7 @@ pub fn validate_ip_address(ip: &str) -> CmdbResult<String> {
     }
 }
 
+#[allow(dead_code)]
 /// Validate IPv4 address specifically
 pub fn validate_ipv4(ip: &str) -> CmdbResult<String> {
     let validated = validate_ip_address(ip)?;
@@ -70,6 +71,7 @@ pub fn validate_ipv4(ip: &str) -> CmdbResult<String> {
     }
 }
 
+#[allow(dead_code)]
 /// Validate IPv6 address specifically
 pub fn validate_ipv6(ip: &str) -> CmdbResult<String> {
     let validated = validate_ip_address(ip)?;
@@ -84,6 +86,7 @@ pub fn validate_ipv6(ip: &str) -> CmdbResult<String> {
     }
 }
 
+#[allow(dead_code)]
 /// Validate hostname
 ///
 /// Hostnames must:
@@ -152,6 +155,7 @@ pub fn validate_hostname(hostname: &str) -> CmdbResult<String> {
     Ok(hostname.to_string())
 }
 
+#[allow(dead_code)]
 /// Validate SSH command argument
 ///
 /// Ensures that command arguments don't contain potentially dangerous characters

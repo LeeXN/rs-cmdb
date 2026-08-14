@@ -1,6 +1,8 @@
 use crate::config::get_config;
+use crate::queue::{Message, MessageQueue};
 use crate::repository::component_repository::ComponentRepository;
 use chrono::Utc;
+use common::command::{AuditAction, AuditLogEntry};
 use common::entity::hardware::Hardware;
 use common::error::CmdbResult;
 use common::models::{Component, ComponentStatus, ComponentType};
@@ -11,13 +13,37 @@ use uuid::Uuid;
 #[cfg(test)]
 use crate::tests::fixtures::*;
 
+#[allow(dead_code)]
 pub struct ComponentService {
     repo: Arc<ComponentRepository>,
+    message_queue: Option<Arc<dyn MessageQueue>>,
 }
 
 impl ComponentService {
+    #[allow(dead_code)]
     pub fn new(repo: Arc<ComponentRepository>) -> Self {
-        Self { repo }
+        Self {
+            repo,
+            message_queue: None,
+        }
+    }
+
+    pub fn with_queue(
+        repo: Arc<ComponentRepository>,
+        message_queue: Arc<dyn MessageQueue>,
+    ) -> Self {
+        Self {
+            repo,
+            message_queue: Some(message_queue),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn send_audit(&self, action: AuditAction, operator: &str, detail: &str) {
+        if let Some(ref queue) = self.message_queue {
+            let entry = AuditLogEntry::new(action, operator, detail);
+            let _ = queue.send_message(Message::AuditLog(entry));
+        }
     }
 
     fn get_valid_serial(serial: &str, client_id: &str, prefix: &str, index: usize) -> String {
@@ -174,6 +200,7 @@ impl ComponentService {
                 purchase_date: None,
                 warranty_expiration: None,
                 missing_since: None,
+                created_by: None,
                 created_at: now.to_string(),
                 updated_at: now.to_string(),
             };
@@ -192,6 +219,7 @@ mod tests {
     use common::models::{Component, ComponentStatus, ComponentType};
     use uuid::Uuid;
 
+    #[allow(dead_code)]
     fn create_test_component(serial: &str, client_id: &str) -> Component {
         Component {
             id: Uuid::new_v4().to_string(),
@@ -206,6 +234,7 @@ mod tests {
             purchase_date: None,
             warranty_expiration: None,
             missing_since: None,
+            created_by: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         }

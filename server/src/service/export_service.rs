@@ -7,6 +7,7 @@ use crate::repository::{
     client_repository::ClientRepository, hardware_repository::HardwareRepository,
 };
 use common::models::ClientHardwareExport;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::info;
 
@@ -23,13 +24,25 @@ impl ExportService {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn export_client_hardware_data(&self) -> Result<Vec<ClientHardwareExport>, String> {
+        self.export_client_hardware_data_for_client_ids(None).await
+    }
+
+    /// Export hardware data restricted to the supplied client IDs.
+    pub async fn export_client_hardware_data_for_client_ids(
+        &self,
+        allowed_client_ids: Option<&HashSet<String>>,
+    ) -> Result<Vec<ClientHardwareExport>, String> {
         // Get all clients
-        let clients = self
+        let mut clients = self
             .client_repo
             .list_all()
             .await
             .map_err(|e| e.to_string())?;
+        if let Some(allowed_client_ids) = allowed_client_ids {
+            clients.retain(|client| allowed_client_ids.contains(&client.id));
+        }
 
         let mut export_data = Vec::new();
 
@@ -219,5 +232,48 @@ impl ExportService {
 
         info!("Exported data for {} clients", export_data.len());
         Ok(export_data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+    use crate::tests::fixtures::{create_test_hardware_info, setup_test_db};
+    use common::models::Client;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_export_empty() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+        let svc = ExportService::new(client_repo, hardware_repo);
+
+        let data = svc.export_client_hardware_data().await.unwrap();
+        assert!(data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_export_with_data() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+
+        let client = Client::new("export-test.example.com".into(), "10.0.0.4".into());
+        client_repo.save(&client).await.unwrap();
+
+        let hw = create_test_hardware_info(&client.id);
+        hardware_repo
+            .save_hardware(&client.id, &hw, false)
+            .await
+            .unwrap();
+
+        let svc = ExportService::new(client_repo, hardware_repo);
+        let data = svc.export_client_hardware_data().await.unwrap();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0].hostname, "export-test.example.com");
     }
 }

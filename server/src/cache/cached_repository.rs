@@ -95,6 +95,7 @@ impl CachedClientRepository {
     }
 
     /// Find client by serial number
+    #[allow(dead_code)]
     #[instrument(skip(self))]
     pub async fn find_by_serial(&self, serial: &str) -> CmdbResult<Option<Client>> {
         // This could be optimized with a separate cache key
@@ -125,11 +126,13 @@ impl CachedClientRepository {
     }
 
     /// Get cache statistics
+    #[allow(dead_code)]
     pub fn cache_stats(&self) -> crate::cache::cache_service::CacheStats {
         self.cache.stats()
     }
 
     /// Invalidate all cache entries
+    #[allow(dead_code)]
     #[instrument(skip(self))]
     pub fn invalidate_all(&self) {
         self.cache.invalidate_all();
@@ -138,29 +141,83 @@ impl CachedClientRepository {
 
 #[cfg(test)]
 mod tests {
-    // Tests are placeholder for now, so removed unused imports
-    // use super::*;
+    use super::*;
+    use crate::tests::fixtures::setup_test_db;
+    use common::models::Client;
 
-    // Note: These tests would require a proper test database setup
-    // For now, they serve as documentation of expected behavior
+    fn test_client(id: &str, hostname: &str) -> Client {
+        Client {
+            id: id.to_string(),
+            hostname: hostname.to_string(),
+            ip_address: "192.168.1.1".to_string(),
+            ..Default::default()
+        }
+    }
 
     #[tokio::test]
     async fn test_cached_repository_get() {
-        // This test would need a real ClientRepository
-        // let inner = Arc::new(ClientRepository::new(...));
-        // let cached = CachedClientRepository::new(inner, &CacheConfigs::default());
-        //
-        // // First call should hit database
-        // let result1 = cached.get("test-id").await;
-        //
-        // // Second call should hit cache
-        // let result2 = cached.get("test-id").await;
-        //
-        // assert_eq!(result1, result2);
+        let db = setup_test_db().unwrap();
+        let inner = Arc::new(ClientRepository::new(Arc::new(db)));
+        let cached = CachedClientRepository::new(inner, &CacheConfigs::default());
+
+        // Nonexistent client returns None
+        let result = cached.get("nonexistent").await.unwrap();
+        assert!(result.is_none());
+
+        // Save and retrieve
+        let client = test_client("test-001", "test-host");
+        cached.save(&client).await.unwrap();
+
+        let result = cached.get("test-001").await.unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().hostname, "test-host");
     }
 
     #[tokio::test]
     async fn test_cached_repository_invalidation() {
-        // Test that save/delete properly invalidate cache
+        let db = setup_test_db().unwrap();
+        let inner = Arc::new(ClientRepository::new(Arc::new(db)));
+        let cached = CachedClientRepository::new(inner.clone(), &CacheConfigs::default());
+
+        let client = test_client("test-002", "original");
+        cached.save(&client).await.unwrap();
+
+        // Verify save works
+        let result = cached.get("test-002").await.unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().hostname, "original");
+
+        // Update directly in inner repo (bypass cache)
+        let updated = test_client("test-002", "updated");
+        inner.save(&updated).await.unwrap();
+
+        // Invalidate cache
+        cached.invalidate_all();
+
+        // Next get should fetch fresh from DB
+        let result = cached.get("test-002").await.unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().hostname, "updated");
+    }
+
+    #[tokio::test]
+    async fn test_cached_repository_delete() {
+        let db = setup_test_db().unwrap();
+        let inner = Arc::new(ClientRepository::new(Arc::new(db)));
+        let cached = CachedClientRepository::new(inner, &CacheConfigs::default());
+
+        let client = test_client("test-003", "to-delete");
+        cached.save(&client).await.unwrap();
+
+        // Verify exists
+        let result = cached.get("test-003").await.unwrap();
+        assert!(result.is_some());
+
+        // Delete
+        cached.delete("test-003").await.unwrap();
+
+        // Should return None after delete
+        let result = cached.get("test-003").await.unwrap();
+        assert!(result.is_none());
     }
 }

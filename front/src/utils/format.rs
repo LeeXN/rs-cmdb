@@ -7,7 +7,7 @@ pub fn format_datetime(iso_time: &str) -> String {
             let local_time = dt.with_timezone(&Local);
             local_time.format("%Y-%m-%d %H:%M:%S").to_string()
         }
-        Err(_) => iso_time.to_string(),
+        Err(_) => "Unknown".to_string(),
     }
 }
 
@@ -34,6 +34,15 @@ pub fn format_time_ago(iso_time: &str) -> String {
         }
         Err(_) => iso_time.to_string(),
     }
+}
+
+/// 同时展示本地时间与相对时间
+pub fn format_datetime_with_ago(iso_time: &str) -> String {
+    let absolute = format_datetime(iso_time);
+    if absolute == "Unknown" {
+        return iso_time.to_string();
+    }
+    format!("{} ({})", absolute, format_time_ago(iso_time))
 }
 
 /// 格式化字节大小为人类可读格式
@@ -87,5 +96,58 @@ pub fn format_frequency(freq_hz: u64) -> String {
         format!("{:.2} KHz", freq_hz as f64 / KHZ as f64)
     } else {
         format!("{} Hz", freq_hz)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_datetime_valid() {
+        let input = "2024-01-15T10:30:00+08:00";
+        let expected = DateTime::parse_from_rfc3339(input)
+            .unwrap()
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        assert_eq!(format_datetime(input), expected);
+    }
+
+    #[test]
+    fn test_format_datetime_invalid() {
+        assert_eq!(format_datetime(""), "Unknown");
+        assert_eq!(format_datetime("not-a-date"), "Unknown");
+    }
+
+    #[test]
+    fn test_format_bytes() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(1023), "1023 B");
+        assert_eq!(format_bytes(1024), "1.00 KB");
+        assert_eq!(format_bytes(1536), "1.50 KB");
+        assert_eq!(format_bytes(1048576), "1.00 MB");
+        assert_eq!(format_bytes(1073741824), "1.00 GB");
+        assert_eq!(format_bytes(1099511627776), "1.00 TB");
+    }
+
+    #[test]
+    fn test_format_number() {
+        assert_eq!(format_number(0), "0");
+        assert_eq!(format_number(1), "1");
+        assert_eq!(format_number(999), "999");
+        assert_eq!(format_number(1000), "1,000");
+        assert_eq!(format_number(1234567), "1,234,567");
+        assert_eq!(format_number(1000000000), "1,000,000,000");
+    }
+
+    #[test]
+    fn test_format_frequency() {
+        assert_eq!(format_frequency(0), "0 Hz");
+        assert_eq!(format_frequency(500), "500 Hz");
+        assert_eq!(format_frequency(1000), "1.00 KHz");
+        assert_eq!(format_frequency(1500), "1.50 KHz");
+        assert_eq!(format_frequency(1000000), "1.00 MHz");
+        assert_eq!(format_frequency(1000000000), "1.00 GHz");
     }
 }

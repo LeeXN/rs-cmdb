@@ -1,4 +1,5 @@
 // 使用公共模块中的类型
+pub use common::command::{CommandLogLine, CommandStatus, CommandTask, DangerLevel, LogStream};
 pub use common::entity::dictionary::Dictionary;
 pub use common::entity::hardware::Hardware;
 pub use common::entity::hardware::NICStatus;

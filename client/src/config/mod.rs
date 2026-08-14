@@ -1,5 +1,6 @@
+use common::entity::permission::{CommandAction, CommandOverride, CommandRules};
 use config::{Config, ConfigError, File};
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -28,6 +29,15 @@ pub struct ClientConfig {
     pub logging: LoggingConfig,
     /// Primary IP auto-detection configuration
     pub primary_ip: Option<PrimaryIpConfig>,
+    /// 远程执行命令过滤规则（命令执行专用）
+    #[serde(default = "default_command_rules")]
+    pub execution_command_rules: CommandRules,
+    /// 兼容旧配置字段
+    #[serde(default)]
+    pub command_rules: CommandRules,
+    /// 允许远程执行的命令白名单（兼容旧配置）
+    #[serde(default = "default_allowed_commands")]
+    pub allowed_commands: Vec<String>,
 }
 
 /// 服务器配置
@@ -75,13 +85,18 @@ static CONFIG: Lazy<ClientConfig> = Lazy::new(|| {
     }
 });
 
+/// Configuration file used by the running service. Keeping this path lets a
+/// successful registration persist the canonical server-side client ID when
+/// migrating an old configuration that contained an empty ID.
+static ACTIVE_CONFIG_PATH: OnceCell<PathBuf> = OnceCell::new();
+
 /// 获取客户端配置
 pub fn get_config() -> &'static ClientConfig {
     &CONFIG
 }
 
 /// 加载配置
-fn load_config() -> Result<ClientConfig, ConfigError> {
+pub fn load_config() -> Result<ClientConfig, ConfigError> {
     // 设置默认配置源
     let mut builder = Config::builder();
 
@@ -125,6 +140,37 @@ pub fn load_from_file(path: &str) -> Result<ClientConfig, Box<dyn std::error::Er
     Ok(config)
 }
 
+/// 默认允许的命令白名单
+fn default_allowed_commands() -> Vec<String> {
+    vec![
+        "ping".to_string(),
+        "traceroute".to_string(),
+        "df".to_string(),
+        "free".to_string(),
+        "uptime".to_string(),
+        "uname".to_string(),
+        "ip".to_string(),
+        "ss".to_string(),
+        "lscpu".to_string(),
+        "lsblk".to_string(),
+        "dmidecode".to_string(),
+        "cat".to_string(),
+        "echo".to_string(),
+        "ls".to_string(),
+        "grep".to_string(),
+        "wc".to_string(),
+        "head".to_string(),
+        "tail".to_string(),
+        "systemctl".to_string(),
+        "journalctl".to_string(),
+        "hostname".to_string(),
+    ]
+}
+
+fn default_command_rules() -> CommandRules {
+    CommandRules::default()
+}
+
 /// 默认配置
 pub fn default_config() -> ClientConfig {
     ClientConfig {
@@ -155,6 +201,9 @@ pub fn default_config() -> ClientConfig {
             file: None,
         },
         primary_ip: None,
+        execution_command_rules: default_command_rules(),
+        command_rules: default_command_rules(),
+        allowed_commands: default_allowed_commands(),
     }
 }
 
@@ -194,6 +243,73 @@ pub fn save_config_to_file(
 /// 保存配置到指定路径
 pub fn save_to_file(path: String, config: &ClientConfig) -> Result<(), Box<dyn std::error::Error>> {
     save_config_to_file(config, &PathBuf::from(path))
+}
+
+fn non_empty(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let value = value.trim().to_string();
+        (!value.is_empty()).then_some(value)
+    })
+}
+
+/// Normalize legacy empty-string identity fields and ensure that the client ID
+/// is persisted in the same file systemd actually loads.
+pub fn prepare_service_config(
+    mut config: ClientConfig,
+    path: &std::path::Path,
+) -> anyhow::Result<ClientConfig> {
+    let original_client_id = config.client_id.clone();
+    let original_hostname = config.hostname.clone();
+    config.hostname = non_empty(config.hostname);
+    config.client_id = non_empty(config.client_id);
+
+    if config.client_id.is_none() {
+        // Older versions could accidentally save the generated identity in
+        // the user's default config while systemd loaded /etc/rs-cmdb/client.toml.
+        // Recover that identity before generating a new one.
+        let default_path = get_default_config_path();
+        if default_path != path {
+            if let Ok(legacy) = load_from_file(default_path.to_string_lossy().as_ref()) {
+                config.client_id = non_empty(legacy.client_id);
+            }
+        }
+    }
+
+    if config.client_id.is_none() {
+        config.client_id = Some(Uuid::new_v4().to_string());
+    }
+
+    if config.client_id != original_client_id || config.hostname != original_hostname {
+        save_config_to_file(&config, &path.to_path_buf())
+            .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    }
+    let _ = ACTIVE_CONFIG_PATH.set(path.to_path_buf());
+    Ok(config)
+}
+
+/// Persist the canonical ID returned by the server. This is important when an
+/// old empty-ID registration is reconciled to an existing serial-number record.
+pub fn persist_active_client_id(client_id: &str) -> anyhow::Result<()> {
+    let client_id = client_id.trim();
+    if client_id.is_empty() {
+        return Err(anyhow::anyhow!("server returned an empty client ID"));
+    }
+    let path = ACTIVE_CONFIG_PATH
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("active client configuration path is unavailable"))?;
+    let mut config = load_from_file(path.to_string_lossy().as_ref())
+        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    if config.client_id.as_deref().map(str::trim) == Some(client_id)
+        && config
+            .hostname
+            .as_deref()
+            .is_none_or(|hostname| !hostname.trim().is_empty())
+    {
+        return Ok(());
+    }
+    config.client_id = Some(client_id.to_string());
+    config.hostname = non_empty(config.hostname);
+    save_config_to_file(&config, path).map_err(|err| anyhow::anyhow!(err.to_string()))
 }
 
 /// 确保客户端有一个持久化的ID
@@ -248,5 +364,35 @@ pub fn ensure_client_id() -> String {
         }
 
         new_id
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    #[test]
+    fn empty_identity_fields_are_normalized_and_persisted() {
+        let test_dir =
+            std::env::temp_dir().join(format!("rs-cmdb-client-config-{}", Uuid::new_v4()));
+        let config_path = test_dir.join("client.toml");
+        let mut config = default_config();
+        config.client_id = Some("   ".to_string());
+        config.hostname = Some(String::new());
+        save_config_to_file(&config, &config_path).unwrap();
+
+        let prepared = prepare_service_config(config, &config_path).unwrap();
+        let persisted = load_from_file(config_path.to_string_lossy().as_ref()).unwrap();
+
+        assert!(prepared
+            .client_id
+            .as_deref()
+            .is_some_and(|id| !id.is_empty()));
+        assert_eq!(prepared.hostname, None);
+        assert_eq!(persisted.client_id, prepared.client_id);
+        assert_eq!(persisted.hostname, None);
+
+        std::fs::remove_file(&config_path).unwrap();
+        std::fs::remove_dir(&test_dir).unwrap();
     }
 }

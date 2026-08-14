@@ -3,8 +3,8 @@ use crate::components::ui::input::Input;
 use crate::hooks::use_trans::use_trans;
 use crate::i18n::Language;
 use crate::icons::{
-    Bell, ChartBar, Code, Cpu, Download, Folder, HardDrive, Key, Languages, LayoutDashboard, List,
-    LogOut, Menu, Search, Server, Shield, User, Users,
+    Bell, ChartBar, Code, Cpu, Download, Folder, HardDrive, History, Key, Languages,
+    LayoutDashboard, List, LogOut, Menu, Search, Server, Shield, Terminal, User, Users,
 };
 use crate::routes::Route;
 use crate::stores::auth_store::AuthStore;
@@ -197,10 +197,20 @@ pub fn layout(props: &LayoutProps) -> Html {
                         { sidebar_item(Route::Analytics, html!{ <ChartBar class="h-4 w-4" /> }, &t.t("menu.analytics")) }
                         { sidebar_item(Route::ClientSetup, html!{ <Download class="h-4 w-4" /> }, &t.t("menu.setup_guide")) }
                         { sidebar_item(Route::BaseData, html!{ <List class="h-4 w-4" /> }, &t.t("menu.base_data")) }
+                        <div class="mt-4 mb-2 px-4 text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t.t("menu.execution")}</div>
+                        { sidebar_item(Route::ExecutionBatch, html!{ <Terminal class="h-4 w-4" /> }, &t.t("menu.batch_execution")) }
+                        { sidebar_item(Route::ExecutionHistory, html!{ <History class="h-4 w-4" /> }, &t.t("menu.execution_history")) }
 
                         if let Some(user) = &auth_store.user {
                             if user.role == Role::Admin {
                                 { sidebar_item(Route::Accounts, html!{ <Shield class="h-4 w-4" /> }, &t.t("menu.accounts")) }
+                                { sidebar_item(Route::SettingsRemoteExec, html!{ <Terminal class="h-4 w-4" /> }, &t.t("menu.remote_exec_settings")) }
+
+                                <div class="mt-4 mb-2 px-4 text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t.t("menu.permissions")}</div>
+                                { sidebar_item(Route::PermissionManage, html!{ <Shield class="h-4 w-4" /> }, "权限规则与分组") }
+                                { sidebar_item(Route::ExecPolicies, html!{ <Shield class="h-4 w-4" /> }, &t.t("menu.exec_policies")) }
+                                { sidebar_item(Route::WebTerminalPolicies, html!{ <Shield class="h-4 w-4" /> }, &t.t("menu.web_terminal_policies")) }
+                                { sidebar_item(Route::Approvals, html!{ <List class="h-4 w-4" /> }, &t.t("menu.approvals")) }
                             }
                         }
                     </nav>

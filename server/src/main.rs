@@ -11,45 +11,105 @@ mod repository;
 mod service;
 #[cfg(test)]
 mod tests;
+mod tls;
 mod validation;
 
 use anyhow::Result;
 use clap::{Arg, Command, arg};
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::signal;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use tracing::{error, info};
+use tracing::{Level, debug, error, info};
 
 use crate::cache::{CacheConfigs, CachedClientRepository};
-use crate::config::{get_config, validate_jwt_secret, validate_primary_ip_config};
+use crate::config::{get_config, validate_primary_ip_config};
 use crate::dao::{ClientDao, RackDao};
 use crate::db::Database;
 use crate::db::redb_store::RedbStore;
 use crate::queue::message_queue::MessageQueueFactory;
 use crate::repository::{
-    client_repository::ClientRepository, component_repository::ComponentRepository,
-    dictionary_repository::DictionaryRepository, hardware_repository::HardwareRepository,
+    approval_repository::ApprovalRepository, client_repository::ClientRepository,
+    command_repository::CommandRepository, component_repository::ComponentRepository,
+    dictionary_repository::DictionaryRepository, exec_policy_repository::ExecPolicyRepository,
+    execution_session_repository::ExecutionSessionRepository,
+    hardware_repository::HardwareRepository, permission_repository::PermissionRepository,
     person_repository::PersonRepository, project_repository::ProjectRepository,
-    rack_repository::RackRepository, user_repository::UserRepository,
+    rack_repository::RackRepository, terminal_session_repository::TerminalSessionRepository,
+    user_repository::UserRepository, web_terminal_policy_repository::WebTerminalPolicyRepository,
 };
 use crate::service::{
-    auth_service::{AuthService, validate_password_complexity},
+    approval_service::ApprovalService,
+    auth_service::{AuthService, init_master_client_key_from_db, validate_password_complexity},
     client_filter_service::ClientFilterService,
     client_service::ClientService,
+    command_service::CommandService,
     component_service::ComponentService,
+    danger_detection::DangerDetectionService,
+    exec_policy_engine::ExecPolicyEngine,
+    execution_session_service::ExecutionSessionService,
     export_service::ExportService,
     hardware_service::HardwareService,
     message_processor::MessageProcessor,
+    permission_service::PermissionService,
+    sse_hub::SseHub,
     stats_service::StatsService,
+    terminal_session_service::TerminalSessionService,
+    token_blacklist::TokenBlacklist,
     validation_service::ValidationService,
+    web_terminal_service::WebTerminalService,
 };
 use chrono::Utc;
 use common::entity::user::{Role, User};
 use std::env;
 use uuid::Uuid;
+
+fn mask_secret(secret: &str) -> String {
+    if secret.is_empty() {
+        return "<empty>".to_string();
+    }
+    if secret.len() <= 8 {
+        return "<redacted>".to_string();
+    }
+    format!("{}***{}", &secret[..4], &secret[secret.len() - 4..])
+}
+
+fn log_effective_config(config: &config::ServerConfig) {
+    if !tracing::enabled!(Level::DEBUG) {
+        return;
+    }
+
+    let snapshot = serde_json::json!({
+        "host": config.host,
+        "port": config.port,
+        "database": {
+            "db_type": config.database.db_type,
+            "path": config.database.path,
+        },
+        "queue": {
+            "queue_type": config.queue.queue_type,
+            "capacity": config.queue.capacity,
+        },
+        "primary_ip": config.primary_ip,
+        "poll_interval": config.poll_interval,
+        "client_timeout": config.client_timeout,
+        "log_level": config.log_level,
+        "enable_tls": config.enable_tls,
+        "tls_cert": config.tls_cert,
+        "tls_key": config.tls_key,
+        "jwt_secret": mask_secret(&config.jwt_secret),
+        "component_missing_grace_period_hours": config.component_missing_grace_period_hours,
+        "ssh_known_hosts_file": config.ssh_known_hosts_file,
+        "cors_allowed_origins": config.cors_allowed_origins,
+        "max_batch_size": config.max_batch_size,
+        "expose_version": config.expose_version,
+    });
+
+    debug!(config = %snapshot, "Effective server configuration loaded");
+}
 
 /// Prompt for admin password interactively (for non-automated setups)
 fn prompt_admin_password() -> anyhow::Result<String> {
@@ -280,15 +340,54 @@ async fn main() -> Result<()> {
     // Load configuration
     let mut config = get_config().clone();
 
-    // Validate JWT secret (fail fast if invalid)
-    if let Err(e) = validate_jwt_secret(&config.jwt_secret) {
-        eprintln!("Configuration validation failed: {}", e);
-        eprintln!();
-        eprintln!("CRITICAL: JWT secret validation failed!");
-        eprintln!("Please set CMDB_JWT_SECRET environment variable to a secure value.");
-        eprintln!("Example: export CMDB_JWT_SECRET='your-secure-secret-min-32-chars'");
-        eprintln!();
-        return Err(anyhow::anyhow!("JWT secret validation failed: {}", e));
+    // Auto-generate or load JWT secret
+    {
+        let jwt_secret_path = {
+            let home = env::var("HOME").unwrap_or_else(|_| "/etc/rs-cmdb".to_string());
+            let base = Path::new(&home);
+            if home.starts_with('/') && base.is_absolute() {
+                base.join(".rs-cmdb").join("jwt_secret")
+            } else {
+                Path::new("/etc/rs-cmdb/jwt_secret").to_path_buf()
+            }
+        };
+
+        // If CMDB_JWT_SECRET env var is set, it takes precedence
+        if env::var("CMDB_JWT_SECRET").is_ok() {
+            info!("Using JWT secret from environment variable CMDB_JWT_SECRET");
+        } else if jwt_secret_path.exists() {
+            let stored = fs::read_to_string(&jwt_secret_path)
+                .map_err(|e| anyhow::anyhow!("Failed to read JWT secret file: {}", e))?;
+            let stored = stored.trim().to_string();
+            if stored.len() >= 32 {
+                info!("Loaded JWT secret from {}", jwt_secret_path.display());
+                config.jwt_secret = stored;
+            }
+        }
+
+        // If still not set or too short, auto-generate and persist
+        if config.jwt_secret.len() < 32 {
+            use rand::Rng;
+            let secret: String = rand::thread_rng()
+                .sample_iter(&rand::distributions::Alphanumeric)
+                .take(64)
+                .map(char::from)
+                .collect();
+
+            // Ensure parent directory exists
+            if let Some(parent) = jwt_secret_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(&jwt_secret_path, &secret)?;
+            // Set permissions to 0o600 (owner read/write only)
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&jwt_secret_path, fs::Permissions::from_mode(0o600))?;
+            }
+            info!("Generated new JWT secret at {}", jwt_secret_path.display());
+            config.jwt_secret = secret;
+        }
     }
 
     // Validate primary IP config (parse CIDR, fail fast if invalid)
@@ -321,6 +420,7 @@ async fn main() -> Result<()> {
         .init();
 
     info!("Starting CMDB server...");
+    log_effective_config(&config);
 
     // Ensure database directory exists
     let db_path = Path::new(&config.database.path);
@@ -355,8 +455,22 @@ async fn main() -> Result<()> {
     let dictionary_repo = Arc::new(DictionaryRepository::new(db.clone()));
     let rack_repo = Arc::new(RackRepository::new(db.clone()));
 
-    // Initialize auth service
-    let auth_service = Arc::new(AuthService::new(config.jwt_secret.clone()));
+    // Initialize token blacklist and auth service
+    let token_blacklist = Arc::new(TokenBlacklist::new(db.clone()));
+    let auth_service = Arc::new(
+        AuthService::new(config.jwt_secret.clone()).with_blacklist(token_blacklist.clone()),
+    );
+
+    // Initialize the durable master key used for HMAC-based agent token
+    // generation. It must survive server restarts so registered agents keep
+    // working without receiving a new token on every boot.
+    if let Err(e) = init_master_client_key_from_db(db.clone()).await {
+        error!("Failed to initialize master client key: {}", e);
+        return Err(anyhow::anyhow!(
+            "Failed to initialize master client key: {}",
+            e
+        ));
+    }
 
     // Ensure admin user exists with secure credentials
     if let Err(e) = ensure_admin_exists(&user_repo, &auth_service).await {
@@ -367,17 +481,33 @@ async fn main() -> Result<()> {
     // Initialize message queue
     let message_queue = MessageQueueFactory::create_flume_queue();
 
+    // Initialize permission engine
+    let perm_repo = Arc::new(PermissionRepository::new(db.clone()));
+    let perm_svc = Arc::new(PermissionService::new(perm_repo.clone()));
+    if let Err(e) = perm_svc.ensure_default_rules().await {
+        tracing::warn!("Failed to ensure default permission rules: {}", e);
+    }
+    if let Err(e) = perm_svc.refresh_cache().await {
+        tracing::warn!("Failed to refresh permission cache: {}", e);
+    }
+
     // Initialize services
     // Use DAOs for client service
     let client_dao = Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone()));
     let rack_dao = Arc::new(RackDao::new(rack_repo.clone(), client_repo.clone()));
 
-    let client_service = Arc::new(ClientService::new(
-        client_dao,
-        rack_dao,
-        hardware_repo.clone(), // ClientService still keeps a ref to hardware_repo
+    let client_service = Arc::new(
+        ClientService::new(
+            client_dao,
+            rack_dao,
+            hardware_repo.clone(), // ClientService still keeps a ref to hardware_repo
+        )
+        .with_queue(message_queue.clone()),
+    );
+    let component_service = Arc::new(ComponentService::with_queue(
+        component_repo.clone(),
+        message_queue.clone(),
     ));
-    let component_service = Arc::new(ComponentService::new(component_repo.clone()));
     // Note: HardwareService constructor expects ClientRepository, but we have CachedClientRepository.
     // We need to check if HardwareService uses ClientRepository or CachedClientRepository.
     // It likely uses ClientRepository. CachedClientRepository does NOT impl Deref to ClientRepository or a common trait.
@@ -419,12 +549,52 @@ async fn main() -> Result<()> {
         hardware_repo.clone(),
     ));
 
+    // Initialize remote command execution services
+    let command_repo = Arc::new(CommandRepository::new(db.clone()));
+    let danger_svc = Arc::new(DangerDetectionService::new());
+
     // Initialize message processor
     let message_processor = Arc::new(MessageProcessor::new(
         message_queue.clone(),
         client_service.clone(),
         hardware_service.clone(),
+        command_repo.clone(),
     ));
+    let sse_hub = SseHub::new();
+    let exec_policy_repo = Arc::new(ExecPolicyRepository::new(db.clone()));
+    let exec_policy_engine = Arc::new(
+        ExecPolicyEngine::new(exec_policy_repo.clone()).with_client_repo(client_repo_inner.clone()),
+    );
+    let web_terminal_policy_repo = Arc::new(WebTerminalPolicyRepository::new(db.clone()));
+    let web_terminal_service = Arc::new(
+        WebTerminalService::new(web_terminal_policy_repo.clone())
+            .with_client_repo(client_repo_inner.clone()),
+    );
+    let approval_repo = Arc::new(ApprovalRepository::new(db.clone()));
+    let approval_svc = Arc::new(ApprovalService::new(
+        approval_repo.clone(),
+        command_repo.clone(),
+    ));
+    let execution_session_repo = Arc::new(ExecutionSessionRepository::new(db.clone()));
+    let terminal_session_repo = Arc::new(TerminalSessionRepository::new(db.clone()));
+    let session_svc = Arc::new(ExecutionSessionService::new(
+        execution_session_repo,
+        client_repo_inner.clone(),
+    ));
+    let terminal_svc = TerminalSessionService::new(terminal_session_repo, web_terminal_service);
+    terminal_svc.configure_history(session_svc.clone());
+    let _ = service::cast_recorder::CastRecorderInner::ensure_cast_dir();
+    let cast_recorder = std::sync::Arc::new(service::cast_recorder::CastRecorderInner);
+
+    let command_service = Arc::new(
+        CommandService::new(command_repo.clone(), danger_svc.clone(), sse_hub.clone())
+            .await
+            .expect("Failed to initialize CommandService")
+            .with_policy_engine(exec_policy_engine.clone())
+            .with_approval_svc(approval_svc.clone())
+            .with_session_svc(session_svc.clone())
+            .with_cast_recorder(cast_recorder),
+    );
 
     // Start message processor in a separate task
     let processor = message_processor.clone();
@@ -454,6 +624,80 @@ async fn main() -> Result<()> {
     )?;
 
     scheduler.add(poll_job).await?;
+
+    // Scheduled job: expire pending tasks that exceeded their deadline (every minute)
+    let cmd_svc_expire = command_service.clone();
+    let expire_job = Job::new_async("0 * * * * *", move |_, _| {
+        let svc = cmd_svc_expire.clone();
+        Box::pin(async move {
+            match svc.expire_pending_tasks().await {
+                Ok(n) if n > 0 => info!("Expired {} pending command tasks", n),
+                Err(e) => error!("expire_pending_tasks: {}", e),
+                _ => {}
+            }
+            match svc.expire_running_tasks().await {
+                Ok(n) if n > 0 => info!("Timed out {} running command tasks", n),
+                Err(e) => error!("expire_running_tasks: {}", e),
+                _ => {}
+            }
+        })
+    })?;
+    scheduler.add(expire_job).await?;
+
+    // Close terminal sessions that were never claimed or have stopped
+    // heartbeating, releasing their in-memory concurrency slots.
+    let terminal_svc_cleanup = terminal_svc.clone();
+    let terminal_cleanup_job = Job::new_async("0 * * * * *", move |_, _| {
+        let svc = terminal_svc_cleanup.clone();
+        Box::pin(async move {
+            if let Err(e) = svc.list_all_sessions().await {
+                error!("terminal session cleanup: {}", e);
+            }
+        })
+    })?;
+    scheduler.add(terminal_cleanup_job).await?;
+
+    // Scheduled job: clean up old command history (daily at 03:00)
+    let cmd_svc_cleanup = command_service.clone();
+    let cleanup_job = Job::new_async("0 0 3 * * *", move |_, _| {
+        let svc = cmd_svc_cleanup.clone();
+        Box::pin(async move {
+            match svc.cleanup_old_tasks(90).await {
+                Ok(n) if n > 0 => info!("Cleaned up {} old command tasks (>90 days)", n),
+                Err(e) => error!("cleanup_old_tasks: {}", e),
+                _ => {}
+            }
+        })
+    })?;
+    scheduler.add(cleanup_job).await?;
+
+    // Scheduled job: clean up expired token blacklist entries (hourly)
+    let bl_cleanup = token_blacklist.clone();
+    let bl_cleanup_job = Job::new_async("0 0 * * * *", move |_, _| {
+        let bl = bl_cleanup.clone();
+        Box::pin(async move {
+            let n = bl.cleanup_expired().await;
+            if n > 0 {
+                info!("Cleaned up {} expired token blacklist entries", n);
+            }
+        })
+    })?;
+    scheduler.add(bl_cleanup_job).await?;
+
+    // Scheduled job: expire pending approvals (every 5 minutes)
+    let approval_svc_expire = approval_svc.clone();
+    let approval_expire_job = Job::new_async("0 */5 * * * *", move |_, _| {
+        let svc = approval_svc_expire.clone();
+        Box::pin(async move {
+            match svc.expire_old().await {
+                Ok(n) if n > 0 => info!("Expired {} pending approval requests", n),
+                Err(e) => error!("expire pending approvals: {}", e),
+                _ => {}
+            }
+        })
+    })?;
+    scheduler.add(approval_expire_job).await?;
+
     scheduler.start().await?;
 
     // Create router
@@ -474,17 +718,43 @@ async fn main() -> Result<()> {
         client_filter_service,
         export_service,
         Arc::new(config.clone()),
+        command_service,
+        sse_hub,
+        perm_svc,
+        perm_repo,
+        exec_policy_repo,
+        web_terminal_policy_repo,
+        approval_repo,
+        approval_svc,
+        session_svc,
+        terminal_svc,
     );
 
-    // Start server
-    let addr = format!("{}:{}", config.host, config.port);
-    let listener = TcpListener::bind(&addr).await?;
-    info!("Server listening on {}", addr);
+    // Configure TLS
+    let tls_config = crate::tls::load_or_generate_tls_config(
+        &config.tls_cert,
+        &config.tls_key,
+        config.enable_tls,
+    )?;
 
-    // Run server
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    let addr = format!("{}:{}", config.host, config.port);
+
+    match tls_config {
+        Some(tls_config) => {
+            info!("TLS enabled - starting HTTPS server on {}", addr);
+            let listener = crate::tls::TlsListener::bind(&addr, tls_config).await?;
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
+        }
+        None => {
+            info!("Server listening on {} (HTTP)", addr);
+            let listener = TcpListener::bind(&addr).await?;
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
+        }
+    }
 
     info!("Server shutdown complete");
 
@@ -561,7 +831,7 @@ async fn run_history_cleanup(
 
     // Sort each client's entries newest-first
     let mut to_delete = Vec::new();
-    for (_client_id, entries) in buckets.iter_mut() {
+    for entries in buckets.values_mut() {
         entries.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         if entries.len() > keep_last {
             for (key, _) in entries.iter().skip(keep_last) {
@@ -590,7 +860,7 @@ async fn run_history_cleanup(
 /// If interrupted mid-run, partially migrated entries are still readable
 /// (read path handles both old and new format). Re-running is idempotent.
 async fn run_history_migrate(db: &Arc<dyn Database>) -> Result<()> {
-    use common::models::{HardwareHistoryEntry, build_hardware_history_entries};
+    use common::models::build_hardware_history_entries;
 
     // Get all client IDs that have history
     let keys = db.list_keys("hardware:").await?;

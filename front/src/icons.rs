@@ -592,3 +592,21 @@ pub fn Zap(props: &IconProps) -> Html {
         </svg>
     }
 }
+
+#[function_component]
+pub fn Terminal(props: &IconProps) -> Html {
+    html! {
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={props.class.clone()}>
+            <polyline points="4 17 10 11 4 5" /><line x1="12" x2="20" y1="19" y2="19" />
+        </svg>
+    }
+}
+
+#[function_component]
+pub fn PlayCircle(props: &IconProps) -> Html {
+    html! {
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={props.class.clone()}>
+            <circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" />
+        </svg>
+    }
+}

@@ -1,6 +1,8 @@
 use crate::db::Database;
+use crate::service::auth_service::verify_token;
 use common::error::{CmdbError, CmdbResult};
 use common::models::Client;
+use moka::future::Cache;
 use serde_json;
 use std::sync::Arc;
 
@@ -8,6 +10,7 @@ use std::sync::Arc;
 pub struct ClientRepository {
     db: Arc<dyn Database>,
     key_prefix: String,
+    token_cache: Cache<String, String>, // client_id -> hashed_token
 }
 
 impl ClientRepository {
@@ -16,6 +19,10 @@ impl ClientRepository {
         Self {
             db,
             key_prefix: "client:".to_string(),
+            token_cache: Cache::builder()
+                .time_to_live(std::time::Duration::from_secs(300)) // 5 min TTL
+                .max_capacity(10_000)
+                .build(),
         }
     }
 
@@ -46,6 +53,7 @@ impl ClientRepository {
         Ok(Some(client))
     }
 
+    #[allow(dead_code)]
     /// Check if a client exists
     pub async fn exists(&self, client_id: &str) -> CmdbResult<bool> {
         self.db.exists(&self.get_key(client_id)).await
@@ -152,6 +160,33 @@ impl ClientRepository {
             .await
     }
 
+    /// Verify an agent token for a given client.
+    /// Uses argon2 hash comparison (constant-time by nature) with Moka cache.
+    pub async fn verify_agent_token(&self, client_id: &str, token: &str) -> CmdbResult<bool> {
+        // Check cache first
+        if let Some(hashed) = self.token_cache.get(client_id).await {
+            return verify_token(token, &hashed)
+                .map_err(|_| CmdbError::Internal("Failed to verify token hash".to_string()));
+        }
+
+        // Fetch from DB
+        let hashed = match self.get(client_id).await? {
+            Some(client) => match client.agent_token {
+                Some(ref t) if !t.is_empty() => t.clone(),
+                _ => return Ok(false),
+            },
+            None => return Ok(false),
+        };
+
+        // Cache the hash
+        self.token_cache
+            .insert(client_id.to_string(), hashed.clone())
+            .await;
+
+        verify_token(token, &hashed)
+            .map_err(|_| CmdbError::Internal("Failed to verify token hash".to_string()))
+    }
+
     /// Find client by serial number
     pub async fn find_by_serial(&self, serial_number: &str) -> CmdbResult<Option<Client>> {
         if serial_number.is_empty() || serial_number == "N/A" || serial_number == "Unknown" {
@@ -193,9 +228,12 @@ mod tests {
             status: Some(ClientStatus::Active),
             environment: Some(Environment::Prod),
             asset_tag: Some(format!("TAG-{}", id)),
+            tags: Vec::new(),
             warranty_expiration: Some("2025-12-31".to_string()),
             supplier: Some("Dell".to_string()),
             power_consumption: Some(500),
+            agent_token: None,
+            created_by: None,
         }
     }
 

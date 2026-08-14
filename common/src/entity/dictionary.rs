@@ -11,6 +11,8 @@ pub struct Dictionary {
     pub description: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// User ID of the creator
+    pub created_by: Option<String>,
 }
 
 impl Default for Dictionary {
@@ -24,6 +26,7 @@ impl Default for Dictionary {
             description: None,
             created_at: now.clone(),
             updated_at: now,
+            created_by: None,
         }
     }
 }

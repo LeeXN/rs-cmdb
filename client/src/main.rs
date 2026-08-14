@@ -92,14 +92,21 @@ enum Commands {
 }
 
 /// 加载配置
-fn load_client_config(config_path: Option<&str>) -> Arc<ClientConfig> {
+fn load_client_config(config_path: Option<&str>) -> Result<Arc<ClientConfig>> {
     if let Some(path) = config_path {
-        // 用户指定了配置文件，如果加载失败则使用默认配置
+        // A service must keep its identity in the exact configuration file it
+        // loads. Silently falling back would create a new client on restart.
         match config::load_from_file(path) {
-            Ok(cfg) => return Arc::new(cfg),
+            Ok(cfg) => {
+                let cfg = config::prepare_service_config(cfg, std::path::Path::new(path))?;
+                return Ok(Arc::new(cfg));
+            }
             Err(e) => {
-                eprintln!("Warning: Failed to load config from {}: {}", path, e);
-                // 继续使用默认配置
+                return Err(anyhow::anyhow!(
+                    "Failed to load config from {}: {}",
+                    path,
+                    e
+                ));
             }
         }
     }
@@ -108,7 +115,8 @@ fn load_client_config(config_path: Option<&str>) -> Arc<ClientConfig> {
     if config::default_config_exists() {
         let default_path = config::get_default_config_path();
         if let Ok(cfg) = config::load_from_file(default_path.to_str().unwrap()) {
-            return Arc::new(cfg);
+            let cfg = config::prepare_service_config(cfg, &default_path)?;
+            return Ok(Arc::new(cfg));
         }
     }
 
@@ -121,7 +129,9 @@ fn load_client_config(config_path: Option<&str>) -> Arc<ClientConfig> {
     // 使用确保的客户端ID
     config.client_id = Some(client_id);
 
-    Arc::new(config)
+    let default_path = config::get_default_config_path();
+    let config = config::prepare_service_config(config, &default_path)?;
+    Ok(Arc::new(config))
 }
 
 /// 配置日志
@@ -156,7 +166,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // 加载配置
-    let config = load_client_config(cli.config.as_deref());
+    let config = load_client_config(cli.config.as_deref())?;
 
     // 设置日志
     let _guard = setup_logging(&config);

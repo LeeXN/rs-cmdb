@@ -1,100 +1,174 @@
-//! Rate limiting middleware for authentication endpoints
-//!
-//! Provides rate limiting using the governor crate to prevent brute force attacks.
-
-use axum::{http::StatusCode, response::Response};
-use governor::{
-    Quota, RateLimiter,
-    clock::DefaultClock,
-    state::{InMemoryState, NotKeyed},
+use axum::{
+    Json,
+    body::Body,
+    extract::{ConnectInfo, State},
+    http::{Request, StatusCode},
+    middleware::Next,
+    response::{IntoResponse, Response},
 };
+use governor::{
+    Quota, RateLimiter, clock::DefaultClock, middleware::NoOpMiddleware,
+    state::keyed::DefaultKeyedStateStore,
+};
+use serde_json::json;
+use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-/// Rate limiter for login endpoint (10 requests per minute)
-pub type LoginRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
+pub type KeyedRateLimiter =
+    RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock, NoOpMiddleware>;
 
-/// Rate limiter for registration endpoint (5 requests per hour)
-pub type RegistrationRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
+pub mod strategies {
+    use super::*;
 
-/// Rate limiting configuration
-#[derive(Clone, Debug)]
-pub struct RateLimitConfig {
-    /// Login requests allowed per minute
-    pub login_requests_per_minute: NonZeroU32,
-    /// Registration requests allowed per hour
-    pub registration_requests_per_hour: NonZeroU32,
-}
+    pub fn login() -> Quota {
+        Quota::per_minute(NonZeroU32::new(10).unwrap())
+    }
 
-impl Default for RateLimitConfig {
-    fn default() -> Self {
-        Self {
-            login_requests_per_minute: NonZeroU32::new(10).unwrap(),
-            registration_requests_per_hour: NonZeroU32::new(5).unwrap(),
-        }
+    pub fn register() -> Quota {
+        Quota::per_hour(NonZeroU32::new(5).unwrap())
+    }
+
+    pub fn change_password() -> Quota {
+        Quota::per_hour(NonZeroU32::new(5).unwrap())
     }
 }
 
-/// Create a login rate limiter
-pub fn create_login_rate_limiter(config: &RateLimitConfig) -> LoginRateLimiter {
-    Arc::new(RateLimiter::direct(Quota::per_minute(
-        config.login_requests_per_minute,
-    )))
+pub fn make_limiter(quota: Quota) -> Arc<KeyedRateLimiter> {
+    Arc::new(RateLimiter::keyed(quota))
 }
 
-/// Create a registration rate limiter
-pub fn create_registration_rate_limiter(config: &RateLimitConfig) -> RegistrationRateLimiter {
-    Arc::new(RateLimiter::direct(Quota::per_hour(
-        config.registration_requests_per_hour,
-    )))
-}
-
-/// Check if rate limited and return appropriate response
-pub fn check_rate_limit(
-    limiter: &RateLimiter<NotKeyed, InMemoryState, DefaultClock>,
-) -> Result<(), RateLimitResponse> {
-    if limiter.check().is_err() {
-        Err(RateLimitResponse::new())
-    } else {
-        Ok(())
-    }
-}
-
-/// Response when rate limit is exceeded
-#[derive(Debug)]
-pub struct RateLimitResponse {
-    status: StatusCode,
-    body: String,
-    retry_after: Option<u64>,
-}
-
-impl RateLimitResponse {
-    pub fn new() -> Self {
-        Self {
-            status: StatusCode::TOO_MANY_REQUESTS,
-            body: r#"{"error":"Rate limit exceeded. Please try again later."}"#.to_string(),
-            retry_after: Some(60), // Default retry after 60 seconds
+pub fn extract_client_ip<B>(req: &Request<B>) -> IpAddr {
+    if let Some(fwd) = req.headers().get("x-forwarded-for") {
+        if let Ok(val) = fwd.to_str() {
+            if let Some(ip_str) = val.split(',').next().map(|s| s.trim()) {
+                if let Ok(ip) = ip_str.parse::<IpAddr>() {
+                    return ip;
+                }
+            }
         }
     }
+    if let Some(ci) = req.extensions().get::<ConnectInfo<IpAddr>>() {
+        return ci.0;
+    }
+    IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))
 }
 
-impl From<RateLimitResponse> for Response {
-    fn from(val: RateLimitResponse) -> Self {
-        let mut builder = Response::builder().status(val.status);
+pub async fn rate_limit_middleware(
+    State(limiter): State<Arc<KeyedRateLimiter>>,
+    req: Request<Body>,
+    next: Next,
+) -> Response {
+    let ip = extract_client_ip(&req);
+    if limiter.check_key(&ip).is_err() {
+        let retry_after = 60u64;
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [("Retry-After", retry_after.to_string())],
+            Json(json!({
+                "status": 429,
+                "message": "Rate limit exceeded. Please try again later."
+            })),
+        )
+            .into_response();
+    }
+    next.run(req).await
+}
 
-        if let Some(retry_after) = val.retry_after {
-            builder = builder.header("Retry-After", retry_after.to_string());
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_request() -> Request<Body> {
+        Request::builder().uri("/test").body(Body::empty()).unwrap()
+    }
+
+    fn dummy_request_with_ip(ip: &str) -> Request<Body> {
+        Request::builder()
+            .uri("/test")
+            .extension(ConnectInfo(ip.parse::<IpAddr>().unwrap()))
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    fn dummy_request_with_xff(ip: &str) -> Request<Body> {
+        Request::builder()
+            .uri("/test")
+            .header("x-forwarded-for", ip)
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    #[test]
+    fn test_extract_client_ip_fallback() {
+        let ip = extract_client_ip(&dummy_request());
+        assert_eq!(ip, IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
+    }
+
+    #[test]
+    fn test_extract_client_ip_from_connect_info() {
+        let ip = extract_client_ip(&dummy_request_with_ip("10.0.0.1"));
+        assert_eq!(ip, "10.0.0.1".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn test_extract_client_ip_from_xff() {
+        let ip = extract_client_ip(&dummy_request_with_xff("192.168.1.1"));
+        assert_eq!(ip, "192.168.1.1".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn test_extract_client_ip_xff_preferred() {
+        let req = Request::builder()
+            .uri("/test")
+            .extension(ConnectInfo("10.0.0.1".parse::<IpAddr>().unwrap()))
+            .header("x-forwarded-for", "192.168.1.1")
+            .body(Body::empty())
+            .unwrap();
+        let ip = extract_client_ip(&req);
+        assert_eq!(ip, "192.168.1.1".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn test_make_limiter_accepts_within_limit() {
+        let limiter = make_limiter(strategies::login());
+        let ip = "10.0.0.1".parse().unwrap();
+        for _ in 0..10 {
+            assert!(limiter.check_key(&ip).is_ok());
         }
+        assert!(limiter.check_key(&ip).is_err());
+    }
 
-        builder
-            .body(axum::body::Body::from(val.body))
-            .unwrap_or_else(|e| {
-                tracing::error!("Failed to build rate limit response: {}", e);
-                // Return a minimal fallback response
-                Response::builder()
-                    .status(StatusCode::TOO_MANY_REQUESTS)
-                    .body(axum::body::Body::from("Rate limit exceeded"))
-                    .expect("Fallback response should always be valid")
-            })
+    #[test]
+    fn test_make_limiter_different_ips_independent() {
+        let limiter = make_limiter(strategies::login());
+        let ip_a: IpAddr = "10.0.0.1".parse().unwrap();
+        let ip_b: IpAddr = "10.0.0.2".parse().unwrap();
+
+        for _ in 0..10 {
+            assert!(limiter.check_key(&ip_a).is_ok());
+        }
+        assert!(limiter.check_key(&ip_a).is_err());
+
+        for _ in 0..10 {
+            assert!(limiter.check_key(&ip_b).is_ok());
+        }
+    }
+
+    #[test]
+    fn test_rate_limit_response_429() {
+        let resp: Response = (
+            StatusCode::TOO_MANY_REQUESTS,
+            [("Retry-After", "60")],
+            Json(json!({"status": 429, "message": "Rate limit exceeded."})),
+        )
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            resp.headers()
+                .get("Retry-After")
+                .and_then(|v| v.to_str().ok()),
+            Some("60")
+        );
     }
 }

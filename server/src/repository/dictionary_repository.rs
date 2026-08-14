@@ -91,6 +91,7 @@ mod tests {
             description: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
+            created_by: None,
         }
     }
 

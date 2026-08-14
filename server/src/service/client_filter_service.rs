@@ -770,3 +770,96 @@ impl ClientFilterService {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+    use crate::tests::fixtures::{create_test_hardware_info, setup_test_db};
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_search_clients_by_hostname() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+
+        let client = Client::new("test-host.example.com".into(), "10.0.0.1".into());
+        client_repo.save(&client).await.unwrap();
+
+        let svc = ClientFilterService::new(client_repo, hardware_repo);
+        let query = SearchQuery {
+            q: Some("test-host".into()),
+            os: None,
+            status: None,
+        };
+        let results = svc.search_clients(&query).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].hostname, "test-host.example.com");
+    }
+
+    #[tokio::test]
+    async fn test_search_clients_empty() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+
+        let svc = ClientFilterService::new(client_repo, hardware_repo);
+        let query = SearchQuery {
+            q: Some("nonexistent".into()),
+            os: None,
+            status: None,
+        };
+        let results = svc.search_clients(&query).await.unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_hardware_export_data() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+
+        let client = Client::new("export-host.example.com".into(), "10.0.0.2".into());
+        client_repo.save(&client).await.unwrap();
+
+        let hw = create_test_hardware_info(&client.id);
+        hardware_repo
+            .save_hardware(&client.id, &hw, false)
+            .await
+            .unwrap();
+
+        let svc = ClientFilterService::new(client_repo, hardware_repo);
+        let export = svc.get_hardware_export_data(&client.id).await.unwrap();
+        assert!(export.is_some());
+        let data = export.unwrap();
+        assert_eq!(data.hostname, "export-host.example.com");
+    }
+
+    #[tokio::test]
+    async fn test_get_filter_options_by_client_ids() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+        let client_repo = Arc::new(ClientRepository::new(db.clone()));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+
+        let client = Client::new("filter-test.example.com".into(), "10.0.0.3".into());
+        client_repo.save(&client).await.unwrap();
+
+        let hw = create_test_hardware_info(&client.id);
+        hardware_repo
+            .save_hardware(&client.id, &hw, false)
+            .await
+            .unwrap();
+
+        let svc = ClientFilterService::new(client_repo, hardware_repo);
+        let options = svc
+            .get_filter_options_by_client_ids(std::slice::from_ref(&client.id))
+            .await
+            .unwrap();
+        assert!(options.cpu_vendors.contains(&"GenuineIntel".to_string()));
+    }
+}

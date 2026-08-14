@@ -17,6 +17,10 @@ pub struct ClientInfo {
     pub server_url: String,
     pub download_url: String,
     pub install_script: String,
+    #[serde(default)]
+    pub upgrade_script: String,
+    #[serde(default)]
+    pub ansible_example: String,
     pub systemd_service: String,
     pub config_template: String,
 }
@@ -283,6 +287,62 @@ pub fn client_setup_page() -> Html {
                                                 <code class="text-success font-monospace">{format!("curl -fsSL {}/install.sh | bash", client_info.server_url)}</code>
                                             </div>
                                             <p class="text-xs text-slate-500 mt-2">{t.t("client_setup.quick_install_desc")}</p>
+                                        </div>
+                                    }
+                                } else {
+                                    html! {}
+                                }
+                            }
+
+                            // Upgrade Script
+                            {
+                                if state.platform == "linux" && !client_info.upgrade_script.is_empty() {
+                                    html! {
+                                        <div class="mb-4">
+                                            <h6 class="text-white mb-3">{t.t("client_setup.agent_upgrade_title")}</h6>
+                                            <p class="text-sm text-slate-400 mb-2">{t.t("client_setup.agent_upgrade_desc")}</p>
+                                            <div class="alert alert-warning text-white" role="alert">
+                                                {t.t("client_setup.agent_upgrade_preserve")}
+                                            </div>
+                                            <p class="text-sm text-slate-400 mb-2">{t.t("client_setup.agent_upgrade_command_label")}</p>
+                                            <div class="bg-slate-950 rounded p-3 border border-slate-800 mb-3">
+                                                <code class="text-success font-monospace">{format!("curl -fsSL {}/upgrade.sh | bash", client_info.server_url)}</code>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mb-2">{t.t("client_setup.agent_upgrade_command_desc")}</p>
+                                            <div class="bg-slate-950 rounded border border-slate-800">
+                                                <div class="p-3 border-b border-slate-800 d-flex justify-content-between align-items-center">
+                                                    <span class="text-sm text-slate-300 font-monospace">{"upgrade.sh"}</span>
+                                                </div>
+                                                <div class="p-3 overflow-auto" style="max-height: 420px;">
+                                                    <pre class="text-xs text-slate-300 font-monospace m-0">
+                                                        {client_info.upgrade_script.clone()}
+                                                    </pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                } else {
+                                    html! {}
+                                }
+                            }
+
+                            // Ansible Example
+                            {
+                                if state.platform == "linux" && !client_info.ansible_example.is_empty() {
+                                    html! {
+                                        <div class="mb-4">
+                                            <h6 class="text-white mb-3">{t.t("client_setup.ansible_title")}</h6>
+                                            <p class="text-sm text-slate-400 mb-2">{t.t("client_setup.ansible_desc")}</p>
+                                            <div class="bg-slate-950 rounded border border-slate-800">
+                                                <div class="p-3 border-b border-slate-800 d-flex justify-content-between align-items-center">
+                                                    <span class="text-sm text-slate-300 font-monospace">{"upgrade-agent.yml"}</span>
+                                                </div>
+                                                <div class="p-3 overflow-auto" style="max-height: 520px;">
+                                                    <pre class="text-xs text-slate-300 font-monospace m-0">
+                                                        {client_info.ansible_example.clone()}
+                                                    </pre>
+                                                </div>
+                                            </div>
                                         </div>
                                     }
                                 } else {

@@ -5,10 +5,14 @@ pub fn get_translations() -> HashMap<String, String> {
 
     // 通用
     translations.insert("all".to_string(), "All".to_string());
+    translations.insert("name".to_string(), "Name".to_string());
+    translations.insert("mode".to_string(), "Mode".to_string());
     translations.insert("unknown".to_string(), "Unknown".to_string());
     translations.insert("online".to_string(), "Online".to_string());
     translations.insert("offline".to_string(), "Offline".to_string());
+    translations.insert("None".to_string(), "None".to_string());
     translations.insert("none".to_string(), "None".to_string());
+    translations.insert("Role".to_string(), "Role".to_string());
     translations.insert("never".to_string(), "Never".to_string());
     translations.insert("count".to_string(), "".to_string());
 
@@ -211,6 +215,1339 @@ pub fn get_translations() -> HashMap<String, String> {
     );
     translations.insert("common.refresh".to_string(), "Refresh".to_string());
     translations.insert("common.load_more".to_string(), "Load More".to_string());
+
+    // Execution
+    translations.insert(
+        "execution.status.pending".to_string(),
+        "Pending".to_string(),
+    );
+    translations.insert(
+        "execution.status.running".to_string(),
+        "Running".to_string(),
+    );
+    translations.insert(
+        "execution.status.success".to_string(),
+        "Success".to_string(),
+    );
+    translations.insert("execution.status.failed".to_string(), "Failed".to_string());
+    translations.insert(
+        "execution.status.partial".to_string(),
+        "Partial".to_string(),
+    );
+    translations.insert(
+        "execution.status.timeout".to_string(),
+        "Timeout".to_string(),
+    );
+    translations.insert(
+        "execution.status.expired".to_string(),
+        "Expired".to_string(),
+    );
+    translations.insert(
+        "execution.type.terminal".to_string(),
+        "Terminal".to_string(),
+    );
+    translations.insert("execution.type.batch".to_string(), "Batch".to_string());
+    translations.insert(
+        "execution.actions.reset_filters".to_string(),
+        "Reset filters".to_string(),
+    );
+    translations.insert("execution.actions.hide".to_string(), "Hide".to_string());
+    translations.insert(
+        "execution.actions.details".to_string(),
+        "Details".to_string(),
+    );
+    translations.insert("execution.actions.rerun".to_string(), "Rerun".to_string());
+    translations.insert(
+        "execution.actions.replay".to_string(),
+        "View Replay".to_string(),
+    );
+    translations.insert(
+        "execution.history.title".to_string(),
+        "Execution History".to_string(),
+    );
+    translations.insert(
+        "execution.history.description".to_string(),
+        "Unified operations history for terminal sessions and batch executions.".to_string(),
+    );
+    translations.insert(
+        "execution.history.records_badge".to_string(),
+        "{count} records".to_string(),
+    );
+    translations.insert(
+        "execution.history.search_label".to_string(),
+        "Search executions".to_string(),
+    );
+    translations.insert(
+        "execution.history.search_placeholder".to_string(),
+        "command / user / session id / client id".to_string(),
+    );
+    translations.insert(
+        "execution.history.client_scope".to_string(),
+        "Client scope".to_string(),
+    );
+    translations.insert("execution.history.status".to_string(), "Status".to_string());
+    translations.insert(
+        "execution.history.execution_type".to_string(),
+        "Execution type".to_string(),
+    );
+    translations.insert("execution.history.from".to_string(), "From".to_string());
+    translations.insert("execution.history.to".to_string(), "To".to_string());
+    translations.insert(
+        "execution.history.loading".to_string(),
+        "Loading execution history...".to_string(),
+    );
+    translations.insert(
+        "execution.history.empty".to_string(),
+        "No execution records match the current filters.".to_string(),
+    );
+    translations.insert(
+        "execution.history.all_clients".to_string(),
+        "All clients".to_string(),
+    );
+    translations.insert(
+        "execution.history.all_statuses".to_string(),
+        "All statuses".to_string(),
+    );
+    translations.insert(
+        "execution.history.all_execution_types".to_string(),
+        "All execution types".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.time".to_string(),
+        "Time".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.type".to_string(),
+        "Type".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.targets".to_string(),
+        "Targets".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.command".to_string(),
+        "Command".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.status".to_string(),
+        "Status".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.duration".to_string(),
+        "Duration".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.user".to_string(),
+        "User".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.actions".to_string(),
+        "Actions".to_string(),
+    );
+    translations.insert(
+        "execution.history.full_command".to_string(),
+        "Full command / script".to_string(),
+    );
+    translations.insert(
+        "execution.history.status_summary".to_string(),
+        "Status summary".to_string(),
+    );
+    translations.insert(
+        "execution.history.started".to_string(),
+        "Started".to_string(),
+    );
+    translations.insert("execution.history.ended".to_string(), "Ended".to_string());
+    translations.insert(
+        "execution.history.recording".to_string(),
+        "Recording".to_string(),
+    );
+    translations.insert(
+        "execution.history.recording_available".to_string(),
+        "Available".to_string(),
+    );
+    translations.insert(
+        "execution.history.recording_missing".to_string(),
+        "Not recorded".to_string(),
+    );
+    translations.insert(
+        "execution.history.details_title".to_string(),
+        "Execution details".to_string(),
+    );
+    translations.insert(
+        "execution.history.details_description".to_string(),
+        "Review the full command, output, and execution metadata in one place.".to_string(),
+    );
+    translations.insert(
+        "execution.history.open_replay".to_string(),
+        "Open replay".to_string(),
+    );
+    translations.insert(
+        "execution.batch.title".to_string(),
+        "Batch Execution".to_string(),
+    );
+    translations.insert("execution.batch.description".to_string(), "Fast multi-client command workspace with exact command preservation and per-client results.".to_string());
+    translations.insert(
+        "execution.batch.selected_badge".to_string(),
+        "{count} selected".to_string(),
+    );
+    translations.insert(
+        "execution.batch.limit_badge".to_string(),
+        "Over 50-client limit".to_string(),
+    );
+    translations.insert(
+        "execution.batch.preloaded_badge".to_string(),
+        "Preloaded from history".to_string(),
+    );
+    translations.insert(
+        "execution.batch.back_to_workspace".to_string(),
+        "Back to workspace".to_string(),
+    );
+    translations.insert("execution.batch.targets".to_string(), "Targets".to_string());
+    translations.insert("execution.batch.running".to_string(), "Running".to_string());
+    translations.insert(
+        "execution.batch.completed".to_string(),
+        "Completed".to_string(),
+    );
+    translations.insert(
+        "execution.batch.output_title".to_string(),
+        "Per-client output".to_string(),
+    );
+    translations.insert(
+        "execution.batch.output_description".to_string(),
+        "Inspect one target at a time without losing the full batch context.".to_string(),
+    );
+    translations.insert(
+        "execution.batch.single_output".to_string(),
+        "Single node".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_output".to_string(),
+        "All nodes".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_output_title".to_string(),
+        "All node outputs".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_output_description".to_string(),
+        "Review every node result from this batch in one place.".to_string(),
+    );
+    translations.insert(
+        "execution.batch.command_label".to_string(),
+        "Command".to_string(),
+    );
+    translations.insert(
+        "execution.batch.target_client".to_string(),
+        "Target client".to_string(),
+    );
+    translations.insert("execution.batch.task_id".to_string(), "Task ID".to_string());
+    translations.insert(
+        "execution.batch.waiting_output".to_string(),
+        "Waiting for client output...".to_string(),
+    );
+    translations.insert(
+        "execution.batch.output_load_failed".to_string(),
+        "Failed to load output. Switch nodes to retry.".to_string(),
+    );
+    translations.insert("execution.batch.no_output_terminal".to_string(), "The task has finished, but the client returned no output. For failed tasks, check the error log, command whitelist, or client execution environment.".to_string());
+    translations.insert(
+        "execution.batch.select_target_prompt".to_string(),
+        "Select a target from the left to inspect its output.".to_string(),
+    );
+    translations.insert(
+        "execution.batch.select_targets".to_string(),
+        "Select targets".to_string(),
+    );
+    translations.insert(
+        "execution.batch.search_label".to_string(),
+        "Search clients".to_string(),
+    );
+    translations.insert(
+        "execution.batch.search_placeholder".to_string(),
+        "hostname / ip / client id / serial / location / rack".to_string(),
+    );
+    translations.insert(
+        "execution.batch.project_filter".to_string(),
+        "Project".to_string(),
+    );
+    translations.insert(
+        "execution.batch.rack_filter".to_string(),
+        "Rack / location".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_projects".to_string(),
+        "All projects".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_racks".to_string(),
+        "All racks / locations".to_string(),
+    );
+    translations.insert(
+        "execution.batch.select_visible".to_string(),
+        "Select visible".to_string(),
+    );
+    translations.insert(
+        "execution.batch.clear_all".to_string(),
+        "Clear all".to_string(),
+    );
+    translations.insert(
+        "execution.batch.matches".to_string(),
+        "{count} matches".to_string(),
+    );
+    translations.insert(
+        "execution.batch.summary_title".to_string(),
+        "Selection summary".to_string(),
+    );
+    translations.insert(
+        "execution.batch.reduce_limit".to_string(),
+        "Reduce selection to 50 or fewer".to_string(),
+    );
+    translations.insert("execution.batch.summary_empty".to_string(), "Choose one or more clients from the left. You can also land here from history with clients preselected.".to_string());
+    translations.insert(
+        "execution.batch.editor_title".to_string(),
+        "Command or script".to_string(),
+    );
+    translations.insert("execution.batch.editor_help".to_string(), "Exact input is preserved for reruns: flags, whitespace, and multi-line script content are submitted exactly as shown below.".to_string());
+    translations.insert(
+        "execution.batch.editor_placeholder".to_string(),
+        "Single-line command or multi-line shell script\nShift+Enter: newline\nCtrl+Enter: execute"
+            .to_string(),
+    );
+    translations.insert(
+        "execution.batch.shortcut_newline".to_string(),
+        "Shift+Enter = newline".to_string(),
+    );
+    translations.insert(
+        "execution.batch.shortcut_execute".to_string(),
+        "Ctrl+Enter = execute".to_string(),
+    );
+    translations.insert(
+        "execution.batch.submitting".to_string(),
+        "Submitting...".to_string(),
+    );
+    translations.insert(
+        "execution.batch.execute".to_string(),
+        "Execute on selected clients".to_string(),
+    );
+    translations.insert(
+        "execution.batch.validation.command_required".to_string(),
+        "Please enter a command or script".to_string(),
+    );
+    translations.insert(
+        "execution.batch.validation.targets_required".to_string(),
+        "Select at least one client".to_string(),
+    );
+    translations.insert(
+        "execution.batch.validation.limit".to_string(),
+        "Batch execution is limited to 50 clients".to_string(),
+    );
+    translations.insert(
+        "execution.batch.notifications.no_tasks".to_string(),
+        "No tasks were created".to_string(),
+    );
+    translations.insert(
+        "execution.batch.notifications.partial_failures".to_string(),
+        "Batch started with {count} failed task submissions".to_string(),
+    );
+    translations.insert(
+        "execution.batch.notifications.started".to_string(),
+        "Batch execution started".to_string(),
+    );
+    translations.insert(
+        "execution.batch.notifications.approvals_created".to_string(),
+        "{count} target(s) were submitted for approval".to_string(),
+    );
+    translations.insert(
+        "execution.replay.title".to_string(),
+        "Execution Replay".to_string(),
+    );
+    translations.insert(
+        "execution.replay.description".to_string(),
+        "Review the recorded output captured for a finished or in-progress execution session."
+            .to_string(),
+    );
+    translations.insert(
+        "execution.replay.loading".to_string(),
+        "Loading replay...".to_string(),
+    );
+    translations.insert(
+        "execution.replay.load_session_error".to_string(),
+        "Failed to load session".to_string(),
+    );
+    translations.insert(
+        "execution.replay.load_cast_error".to_string(),
+        "Failed to load replay file".to_string(),
+    );
+    translations.insert(
+        "execution.replay.load_output_error".to_string(),
+        "Failed to load replay output".to_string(),
+    );
+    translations.insert(
+        "execution.replay.command".to_string(),
+        "Command".to_string(),
+    );
+    translations.insert("execution.replay.status".to_string(), "Status".to_string());
+    translations.insert(
+        "execution.replay.output_title".to_string(),
+        "Recorded output".to_string(),
+    );
+    translations.insert(
+        "execution.replay.output_description".to_string(),
+        "Replay data is shown exactly as captured by the session recorder.".to_string(),
+    );
+    translations.insert(
+        "execution.replay.back".to_string(),
+        "Back to history".to_string(),
+    );
+    translations.insert(
+        "execution.replay.read_only".to_string(),
+        "Read-only".to_string(),
+    );
+    translations.insert(
+        "execution.replay.waiting".to_string(),
+        "Waiting for replay data...".to_string(),
+    );
+    translations.insert("execution.replay.play".to_string(), "Play".to_string());
+    translations.insert("execution.replay.pause".to_string(), "Pause".to_string());
+    translations.insert(
+        "execution.replay.restart".to_string(),
+        "Restart replay".to_string(),
+    );
+    translations.insert(
+        "execution.settings.title".to_string(),
+        "Remote Execution Settings".to_string(),
+    );
+    translations.insert(
+        "execution.settings.description".to_string(),
+        "Control whether operators are allowed to submit remote commands to connected agents."
+            .to_string(),
+    );
+    translations.insert(
+        "execution.settings.enabled".to_string(),
+        "Enabled".to_string(),
+    );
+    translations.insert(
+        "execution.settings.disabled".to_string(),
+        "Disabled".to_string(),
+    );
+    translations.insert(
+        "execution.settings.loading".to_string(),
+        "Loading remote execution settings...".to_string(),
+    );
+    translations.insert(
+        "execution.settings.toggle_title".to_string(),
+        "Enable remote command execution".to_string(),
+    );
+    translations.insert("execution.settings.toggle_description".to_string(), "When enabled, administrators can dispatch remote commands from the CMDB execution workflows.".to_string());
+    translations.insert(
+        "execution.settings.allow".to_string(),
+        "Allow remote execution".to_string(),
+    );
+    translations.insert(
+        "execution.settings.block".to_string(),
+        "Block remote execution".to_string(),
+    );
+    translations.insert("execution.settings.warning".to_string(), "Disabling this switch should immediately prevent new command submissions while preserving existing history and recordings.".to_string());
+    translations.insert(
+        "execution.settings.saving".to_string(),
+        "Saving...".to_string(),
+    );
+    translations.insert(
+        "execution.settings.save".to_string(),
+        "Save settings".to_string(),
+    );
+    translations.insert(
+        "execution.settings.updated".to_string(),
+        "Remote execution settings updated".to_string(),
+    );
+    translations.insert("execution.actions.cancel".to_string(), "Cancel".to_string());
+    translations.insert("execution.danger.safe".to_string(), "Safe".to_string());
+    translations.insert(
+        "execution.danger.warning".to_string(),
+        "Warning".to_string(),
+    );
+    translations.insert(
+        "execution.danger.blocked".to_string(),
+        "Blocked".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.title".to_string(),
+        "Web Terminal".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.description".to_string(),
+        "Single-client live command workspace with streamed output.".to_string(),
+    );
+    translations.insert("execution.terminal.auto_attach_hint".to_string(), "This page automatically reuses an active terminal session. If no reusable session exists, a new one is created for you.".to_string());
+    translations.insert("execution.terminal.auto_create_hint".to_string(), "Each page visit creates a terminal session dedicated to this browser, and the session is closed automatically when you leave.".to_string());
+    translations.insert(
+        "execution.terminal.console_title".to_string(),
+        "Terminal Console".to_string(),
+    );
+    translations.insert("execution.terminal.console_description".to_string(), "The page auto-attaches to an active session or creates a new one, so this panel only keeps sizing, refresh, and session switching controls.".to_string());
+    translations.insert("execution.terminal.console_new_session_description".to_string(), "This page owns its own terminal session, so this panel only keeps sizing, reconnect, and history controls.".to_string());
+    translations.insert("execution.terminal.mode_hint".to_string(), "Restricted terminal is not a view-only console. It still accepts input, but only commands explicitly allowed by terminal policy can run.".to_string());
+    translations.insert(
+        "execution.terminal.switchable_sessions".to_string(),
+        "Switchable sessions".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.live_shell".to_string(),
+        "Live Shell".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.enabled".to_string(),
+        "Remote exec enabled".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.disabled".to_string(),
+        "Remote exec disabled".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.view_history".to_string(),
+        "View history".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.reconnect".to_string(),
+        "Reconnect stream".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.close".to_string(),
+        "Close session".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.target_client".to_string(),
+        "Target client".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.hostname".to_string(),
+        "Hostname".to_string(),
+    );
+    translations.insert("execution.terminal.ip".to_string(), "IP".to_string());
+    translations.insert("execution.terminal.os".to_string(), "OS".to_string());
+    translations.insert(
+        "execution.terminal.current_session".to_string(),
+        "Current session".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.available_sessions".to_string(),
+        "Available sessions".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.no_available_sessions".to_string(),
+        "No reusable terminal sessions were found for this client.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.attach".to_string(),
+        "Attach".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.attached".to_string(),
+        "Attached".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.session_id".to_string(),
+        "Session ID".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.created_at".to_string(),
+        "Created at".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.last_activity".to_string(),
+        "Last activity".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.last_heartbeat".to_string(),
+        "Last heartbeat".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.lease".to_string(),
+        "Lease expires".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.live_terminal".to_string(),
+        "Live terminal".to_string(),
+    );
+    translations.insert("execution.terminal.live_terminal_description".to_string(), "Open a real interactive shell in the browser. Keyboard input is streamed directly to the remote PTY.".to_string());
+    translations.insert(
+        "execution.terminal.live_terminal_empty".to_string(),
+        "Open or attach to a terminal session to start interactive work.".to_string(),
+    );
+    translations.insert("execution.terminal.browser_terminal_note".to_string(), "This view now behaves like a browser terminal: keystrokes, paste, and Enter are sent as terminal input instead of submitting a textarea as one batch command.".to_string());
+    translations.insert(
+        "execution.terminal.open_terminal".to_string(),
+        "Open terminal".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.opening_terminal".to_string(),
+        "Opening terminal...".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.connecting".to_string(),
+        "Connecting".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.connected".to_string(),
+        "Connected".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.disconnected".to_string(),
+        "Disconnected".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.preloaded_command".to_string(),
+        "Preloaded command".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.notifications.opened".to_string(),
+        "Terminal session opened.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.task_id".to_string(),
+        "Task ID".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.exit_code".to_string(),
+        "Exit code".to_string(),
+    );
+    translations.insert("execution.terminal.shell".to_string(), "Shell".to_string());
+    translations.insert(
+        "execution.terminal.size".to_string(),
+        "Terminal size".to_string(),
+    );
+    translations.insert("execution.terminal.cols".to_string(), "Columns".to_string());
+    translations.insert("execution.terminal.rows".to_string(), "Rows".to_string());
+    translations.insert("execution.terminal.state".to_string(), "State".to_string());
+    translations.insert(
+        "execution.terminal.state_closed".to_string(),
+        "Closed".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_read_only".to_string(),
+        "Read-only".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_read_write".to_string(),
+        "Read-write".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_restricted".to_string(),
+        "Restricted terminal".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_standard".to_string(),
+        "Standard terminal".to_string(),
+    );
+    translations.insert(
+        "permissions.web_terminal.page_description".to_string(),
+        "Control Web Terminal access mode, session constraints, and restricted command rules."
+            .to_string(),
+    );
+    translations.insert("permissions.web_terminal.modal_description".to_string(), "Terminal policy is separate from command execution policy; it only constrains Web Terminal sessions and restricted command behavior.".to_string());
+    translations.insert(
+        "execution.terminal.close_reason".to_string(),
+        "Close reason".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.no_session".to_string(),
+        "No command has been executed in this terminal yet.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.run_command".to_string(),
+        "Run command".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.command_label".to_string(),
+        "Command or script".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.command_placeholder".to_string(),
+        "Supports exact command text, flags, and multi-line scripts.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.timeout".to_string(),
+        "Timeout (seconds)".to_string(),
+    );
+    translations.insert("execution.terminal.pinned_note".to_string(), "The terminal stays pinned to this client. New commands are blocked until the current command finishes.".to_string());
+    translations.insert(
+        "execution.terminal.submitting".to_string(),
+        "Submitting...".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.running".to_string(),
+        "Running...".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.execute".to_string(),
+        "Run in terminal".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.output_title".to_string(),
+        "Live output".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.output_description".to_string(),
+        "Streaming output from the current terminal command.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.current_command".to_string(),
+        "Current command".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.output_empty".to_string(),
+        "Run a command to open the live terminal output stream.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.output_waiting".to_string(),
+        "Waiting for output...".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.client_load_failed".to_string(),
+        "Unable to load the selected client for terminal access.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.validation.command_required".to_string(),
+        "Please enter a command".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.notifications.submitted".to_string(),
+        "Command submitted".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.notifications.closed".to_string(),
+        "Terminal session close requested".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.danger_title".to_string(),
+        "Dangerous command detected".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.matched_rule".to_string(),
+        "Matched rule: {rule}".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.confirm_prefix".to_string(),
+        "Type ".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.confirm_suffix".to_string(),
+        " to continue.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.confirm_placeholder".to_string(),
+        "CONFIRM".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.execute_anyway".to_string(),
+        "Execute anyway".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.disabled_message".to_string(),
+        "Remote command execution is currently disabled by policy.".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.websocket_error".to_string(),
+        "Terminal connection error. Please try again.".to_string(),
+    );
+    translations.insert(
+        "execution.ops.summary.exec_policies".to_string(),
+        "Execution policies".to_string(),
+    );
+    translations.insert(
+        "execution.ops.summary.web_terminal_policies".to_string(),
+        "Terminal policies".to_string(),
+    );
+    translations.insert(
+        "execution.ops.summary.pending_approvals".to_string(),
+        "Pending approvals".to_string(),
+    );
+    translations.insert(
+        "execution.ops.summary.active_terminal_sessions".to_string(),
+        "Active terminal sessions".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.title".to_string(),
+        "Remote Execution Operations".to_string(),
+    );
+    translations.insert("execution.ops.overview.description".to_string(), "Review approval backlog, terminal activity, stale-session threshold, and cast storage in one place.".to_string());
+    translations.insert(
+        "execution.ops.overview.total_sessions".to_string(),
+        "Total terminal sessions".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.active_clients".to_string(),
+        "Active clients".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.pending_active".to_string(),
+        "Pending / active".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.stale_threshold".to_string(),
+        "Stale threshold".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.cast_storage_dir".to_string(),
+        "Cast storage directory".to_string(),
+    );
+    translations.insert(
+        "execution.ops.actions.refresh".to_string(),
+        "Refresh ops data".to_string(),
+    );
+    translations.insert(
+        "execution.ops.actions.force_close".to_string(),
+        "Force close".to_string(),
+    );
+    translations.insert(
+        "execution.ops.cleanup.retention_days".to_string(),
+        "Retention days".to_string(),
+    );
+    translations.insert(
+        "execution.ops.cleanup.run".to_string(),
+        "Run cast cleanup".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_governance.title".to_string(),
+        "Terminal session governance".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_governance.empty".to_string(),
+        "No terminal sessions currently exist".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_governance.ended".to_string(),
+        "Ended".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_state.pending".to_string(),
+        "Pending".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_state.active".to_string(),
+        "Active".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_state.closed".to_string(),
+        "Closed".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_state.failed".to_string(),
+        "Failed".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_mode.read_only".to_string(),
+        "Read-only".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_mode.read_write".to_string(),
+        "Read-write".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_mode.restricted".to_string(),
+        "Restricted terminal".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_mode.standard".to_string(),
+        "Standard terminal".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.session".to_string(),
+        "Session".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.client".to_string(),
+        "Client".to_string(),
+    );
+    translations.insert("execution.ops.table.user".to_string(), "User".to_string());
+    translations.insert("execution.ops.table.mode".to_string(), "Mode".to_string());
+    translations.insert("execution.ops.table.state".to_string(), "State".to_string());
+    translations.insert(
+        "execution.ops.table.last_activity".to_string(),
+        "Last activity".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.last_heartbeat".to_string(),
+        "Last heartbeat".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.close_reason".to_string(),
+        "Close reason".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.operations".to_string(),
+        "Actions".to_string(),
+    );
+    translations.insert(
+        "execution.ops.messages.cast_cleanup_prefix".to_string(),
+        "Cast cleanup finished. Deleted".to_string(),
+    );
+    translations.insert(
+        "execution.ops.messages.cast_cleanup_suffix".to_string(),
+        "history files".to_string(),
+    );
+    translations.insert(
+        "execution.ops.messages.session_closed_prefix".to_string(),
+        "Terminal session".to_string(),
+    );
+    translations.insert(
+        "execution.ops.messages.session_closed_suffix".to_string(),
+        "has been closed".to_string(),
+    );
+    translations.insert("execution.ops.none".to_string(), "None".to_string());
+    translations.insert(
+        "execution.history.output_title".to_string(),
+        "Execution output".to_string(),
+    );
+    translations.insert(
+        "execution.history.output_pending".to_string(),
+        "Execution is still running. Logs will appear here as they arrive.".to_string(),
+    );
+    translations.insert(
+        "execution.history.output_empty".to_string(),
+        "No execution output is available.".to_string(),
+    );
+    translations.insert("execution.history.output_replay_hint".to_string(), "This terminal session wrote its output to a replay file. Use Replay to inspect the full terminal transcript.".to_string());
+    translations.insert(
+        "permissions.manage.title".to_string(),
+        "Permission Rules and Groups".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.tab.rules".to_string(),
+        "Rules".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.tab.groups".to_string(),
+        "Groups".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.loading".to_string(),
+        "Loading permission configuration...".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.empty_rules".to_string(),
+        "No permission rules yet".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.empty_groups".to_string(),
+        "No permission groups yet".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.overview.rules".to_string(),
+        "Rules".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.overview.groups".to_string(),
+        "Groups".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.overview.exec_policies".to_string(),
+        "Execution policies".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.overview.web_terminal_policies".to_string(),
+        "Terminal policies".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rules.title".to_string(),
+        "Permission Rules".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rules.description".to_string(),
+        "Maintain subjects, resources, and action scopes in one place.".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.groups.title".to_string(),
+        "Permission Groups".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.groups.description".to_string(),
+        "Manage user groups for finer-grained authorization and future policy matching."
+            .to_string(),
+    );
+    translations.insert(
+        "permissions.manage.subject.role".to_string(),
+        "Role".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.subject.user".to_string(),
+        "User".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.subject.group".to_string(),
+        "Group".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.client".to_string(),
+        "Client".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.component".to_string(),
+        "Component".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.rack".to_string(),
+        "Rack".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.person".to_string(),
+        "Person".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.project".to_string(),
+        "Project".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.dictionary".to_string(),
+        "Dictionary".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.command".to_string(),
+        "Command Execution".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.user".to_string(),
+        "User Management".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.action.view".to_string(),
+        "View".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.action.create".to_string(),
+        "Create".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.action.update".to_string(),
+        "Update".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.action.delete".to_string(),
+        "Delete".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.unset".to_string(),
+        "Unset".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.all".to_string(),
+        "All resources".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.owned".to_string(),
+        "Owned resources only".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.project_scope".to_string(),
+        "Specific projects".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.project_list".to_string(),
+        "Projects".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.tag_scope".to_string(),
+        "Specific tags".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.tag_list".to_string(),
+        "Tags".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.none".to_string(),
+        "No access scope".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.id".to_string(),
+        "Rule ID".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.subject_type".to_string(),
+        "Subject type".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.subject_id".to_string(),
+        "Subject ID".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.resource_type".to_string(),
+        "Resource type".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.actions".to_string(),
+        "Actions".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.actions_help".to_string(),
+        "Select the actions this rule allows. Multiple choices are supported.".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.constraint".to_string(),
+        "Scope".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.constraint_values_placeholder".to_string(),
+        "Separate multiple values with commas, e.g. project-a, project-b".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.constraint_help".to_string(),
+        "Choose the resource scope. For specific projects or tags, enter the values below."
+            .to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.priority".to_string(),
+        "Priority".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.constraint_invalid".to_string(),
+        "Constraint JSON could not be parsed".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.group.id".to_string(),
+        "Group ID".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.group.name".to_string(),
+        "Group name".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.group.members".to_string(),
+        "Member IDs".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.group.members_help".to_string(),
+        "Use commas or new lines to separate multiple member IDs.".to_string(),
+    );
+    translations.insert("permissions.manage.table.id".to_string(), "ID".to_string());
+    translations.insert(
+        "permissions.manage.table.subject".to_string(),
+        "Subject".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.resource".to_string(),
+        "Resource".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.actions".to_string(),
+        "Actions".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.constraint".to_string(),
+        "Constraint".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.priority".to_string(),
+        "Priority".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.operations".to_string(),
+        "Actions".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.name".to_string(),
+        "Name".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.member_count".to_string(),
+        "Members".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.members".to_string(),
+        "Member list".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.cancel".to_string(),
+        "Cancel".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.new_rule".to_string(),
+        "New rule".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.save_rule".to_string(),
+        "Save rule".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.update_rule".to_string(),
+        "Update rule".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.new_group".to_string(),
+        "New group".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.save_group".to_string(),
+        "Save group".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.update_group".to_string(),
+        "Update group".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.edit".to_string(),
+        "Edit".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.delete".to_string(),
+        "Delete".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.rule_saved".to_string(),
+        "Permission rule saved".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.rule_deleted".to_string(),
+        "Permission rule deleted".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.group_saved".to_string(),
+        "Permission group saved".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.group_deleted".to_string(),
+        "Permission group deleted".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.default_protected".to_string(),
+        "Default rules or groups cannot be deleted directly.".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.labels.default".to_string(),
+        "Default".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.title".to_string(),
+        "Approvals".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.tab.pending".to_string(),
+        "Pending".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.tab.mine".to_string(),
+        "Mine".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.loading".to_string(),
+        "Loading...".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.empty".to_string(),
+        "No approvals".to_string(),
+    );
+    translations.insert("permissions.approvals.none".to_string(), "None".to_string());
+    translations.insert(
+        "permissions.approvals.summary.total".to_string(),
+        "Total".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.pending".to_string(),
+        "Pending".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.approved".to_string(),
+        "Approved".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.rejected".to_string(),
+        "Rejected".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.expired".to_string(),
+        "Expired".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.executed".to_string(),
+        "Executed".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.status.pending".to_string(),
+        "Pending".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.status.approved".to_string(),
+        "Approved".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.status.rejected".to_string(),
+        "Rejected".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.status.expired".to_string(),
+        "Expired".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.policy_type.command".to_string(),
+        "Command execution".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.id".to_string(),
+        "ID".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.type".to_string(),
+        "Type".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.requester".to_string(),
+        "Requester".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.client".to_string(),
+        "Client".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.command".to_string(),
+        "Command".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.task".to_string(),
+        "Task".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.status".to_string(),
+        "Status".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.created_at".to_string(),
+        "Created at".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.operations".to_string(),
+        "Actions".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.actions.go_history".to_string(),
+        "Go to execution history".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.actions.approve".to_string(),
+        "Approve".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.actions.reject".to_string(),
+        "Reject".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.approved_created_task".to_string(),
+        "Approved and created task".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.approved_updated".to_string(),
+        "Approved and updated approval".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.approved".to_string(),
+        "Approved".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.rejected".to_string(),
+        "Rejected".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.task_created".to_string(),
+        "Created task".to_string(),
+    );
 
     // IPMI
     translations.insert(
@@ -697,7 +2034,77 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("menu.setup_guide".to_string(), "Setup Guide".to_string());
     translations.insert("menu.base_data".to_string(), "Base Data".to_string());
     translations.insert("menu.accounts".to_string(), "Accounts".to_string());
+    translations.insert("menu.permissions".to_string(), "Permissions".to_string());
+    translations.insert(
+        "menu.exec_policies".to_string(),
+        "Exec Policies".to_string(),
+    );
+    translations.insert(
+        "menu.web_terminal_policies".to_string(),
+        "Web Terminal".to_string(),
+    );
+    translations.insert("menu.approvals".to_string(), "Approvals".to_string());
     translations.insert("menu.source_code".to_string(), "Source Code".to_string());
+    translations.insert("menu.terminal".to_string(), "Terminal".to_string());
+    translations.insert("menu.execution".to_string(), "Execution".to_string());
+    translations.insert("menu.batch_execution".to_string(), "Batch Exec".to_string());
+    translations.insert("menu.execution_history".to_string(), "History".to_string());
+    translations.insert(
+        "menu.remote_exec_settings".to_string(),
+        "Remote Exec Settings".to_string(),
+    );
+    translations.insert("client_detail.terminal".to_string(), "Terminal".to_string());
+
+    // Terminal / Remote Command Execution
+    translations.insert("terminal.title".to_string(), "Remote Terminal".to_string());
+    translations.insert("terminal.execute".to_string(), "Execute".to_string());
+    translations.insert("terminal.history".to_string(), "History".to_string());
+    translations.insert(
+        "terminal.history_title".to_string(),
+        "Command History".to_string(),
+    );
+    translations.insert(
+        "terminal.remote_exec".to_string(),
+        "Remote Exec".to_string(),
+    );
+    translations.insert("terminal.enabled".to_string(), "Enabled".to_string());
+    translations.insert("terminal.disabled".to_string(), "Disabled".to_string());
+    translations.insert(
+        "terminal.disabled_msg".to_string(),
+        "Remote command execution is disabled. Enable it from the toggle above (Admin only)."
+            .to_string(),
+    );
+    translations.insert(
+        "terminal.select_client".to_string(),
+        "Select a client...".to_string(),
+    );
+    translations.insert("terminal.client".to_string(), "Target Client".to_string());
+    translations.insert("terminal.command".to_string(), "Command".to_string());
+    translations.insert(
+        "terminal.command_placeholder".to_string(),
+        "e.g. df -h".to_string(),
+    );
+    translations.insert(
+        "terminal.timeout_secs".to_string(),
+        "Timeout (seconds)".to_string(),
+    );
+    translations.insert("terminal.run".to_string(), "Run Command".to_string());
+    translations.insert(
+        "terminal.submitting".to_string(),
+        "Submitting...".to_string(),
+    );
+    translations.insert("terminal.col_client".to_string(), "Client".to_string());
+    translations.insert("terminal.col_command".to_string(), "Command".to_string());
+    translations.insert("terminal.col_status".to_string(), "Status".to_string());
+    translations.insert("terminal.col_danger".to_string(), "Danger".to_string());
+    translations.insert(
+        "terminal.col_submitted_by".to_string(),
+        "Submitted By".to_string(),
+    );
+    translations.insert(
+        "terminal.col_created_at".to_string(),
+        "Created At".to_string(),
+    );
 
     // Header
     translations.insert(
@@ -1482,6 +2889,34 @@ pub fn get_translations() -> HashMap<String, String> {
         "client_setup.quick_install_desc".to_string(),
         "This command will automatically download, install and start the client service"
             .to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_title".to_string(),
+        "Agent Upgrade".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_desc".to_string(),
+        "The upgrade script replaces only the client binary and does not overwrite the existing configuration or credentials.".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_preserve".to_string(),
+        "The script preserves client.toml, the client ID and the agent token. A running service is restarted after the upgrade, and the previous binary is restored if startup fails.".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_command_label".to_string(),
+        "Quick upgrade command (run it on the target Linux host):".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_command_desc".to_string(),
+        "You can also save the script below as upgrade.sh and run it. Verify the server URL and download source before execution.".to_string(),
+    );
+    translations.insert(
+        "client_setup.ansible_title".to_string(),
+        "Ansible Install/Upgrade Example".to_string(),
+    );
+    translations.insert(
+        "client_setup.ansible_desc".to_string(),
+        "For Linux hosts. The first run creates a default configuration; later runs preserve the existing configuration. For production, set rs_cmdb_agent_checksum to a trusted SHA-256 value.".to_string(),
     );
     translations.insert(
         "client_setup.step3_manual_install".to_string(),

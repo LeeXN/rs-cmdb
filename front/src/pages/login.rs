@@ -58,6 +58,7 @@ pub fn login() -> Html {
                         // We use "auth_store" as the key because api.rs checks it first
                         let store = AuthStore {
                             token: Some(response.token.clone()),
+                            refresh_token: Some(response.refresh_token.clone()),
                             user: Some(response.user.clone()),
                             is_authenticated: true,
                         };
@@ -65,7 +66,12 @@ pub fn login() -> Html {
                             error!("Failed to save auth token to LocalStorage: {}", e);
                         }
 
-                        AuthStore::login(dispatch, response.token, response.user);
+                        AuthStore::login(
+                            dispatch,
+                            response.token,
+                            response.refresh_token,
+                            response.user,
+                        );
                         navigator.push(&Route::Home);
                     }
                     Err(err) => {

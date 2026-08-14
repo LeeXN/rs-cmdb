@@ -255,6 +255,7 @@ pub fn components() -> Html {
                 client_id: None,
                 client_hostname: None,
                 missing_since: None,
+                created_by: None,
                 created_at: "".to_string(),
                 updated_at: "".to_string(),
             }));

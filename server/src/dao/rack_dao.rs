@@ -33,18 +33,21 @@ impl RackDao {
 
     /// Get all racks
     #[instrument(skip(self))]
+    #[allow(dead_code)]
     pub async fn list_all(&self) -> CmdbResult<Vec<common::models::Rack>> {
         self.rack_repo.list_all().await
     }
 
     /// Save a rack
     #[instrument(skip(self, rack))]
+    #[allow(dead_code)]
     pub async fn save(&self, rack: &common::models::Rack) -> CmdbResult<()> {
         self.rack_repo.save(rack).await
     }
 
     /// Delete a rack
     #[instrument(skip(self))]
+    #[allow(dead_code)]
     pub async fn delete(&self, id: &str) -> CmdbResult<()> {
         self.rack_repo.delete(id).await
     }
@@ -113,6 +116,7 @@ impl RackDao {
 
     /// Get available positions in a rack
     #[instrument(skip(self))]
+    #[allow(dead_code)]
     pub async fn get_available_positions(&self, rack_id: &str) -> CmdbResult<Vec<(u32, u32)>> {
         let Some(rack) = self.get(rack_id).await? else {
             return Err(CmdbError::NotFound(format!("Rack {} not found", rack_id)));
@@ -162,6 +166,7 @@ impl RackDao {
 
     /// Get rack utilization statistics
     #[instrument(skip(self))]
+    #[allow(dead_code)]
     pub async fn get_utilization(&self, rack_id: &str) -> CmdbResult<RackUtilization> {
         let Some(rack) = self.get(rack_id).await? else {
             return Err(CmdbError::NotFound(format!("Rack {} not found", rack_id)));
@@ -197,6 +202,7 @@ impl RackDao {
 
 /// Rack utilization statistics
 #[derive(Debug, serde::Serialize)]
+#[allow(dead_code)]
 pub struct RackUtilization {
     pub rack_id: String,
     pub rack_name: String,
@@ -205,4 +211,169 @@ pub struct RackUtilization {
     pub available_units: u32,
     pub client_count: usize,
     pub utilization_percent: f64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cache::CacheConfigs;
+    use crate::db::Database;
+    use crate::repository::client_repository::ClientRepository;
+    use crate::tests::fixtures::setup_test_db;
+    use common::models::Rack;
+
+    #[tokio::test]
+    async fn test_get_and_save_rack() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+
+        let client_inner = Arc::new(ClientRepository::new(db.clone()));
+        let configs = CacheConfigs::default();
+        let client_repo = Arc::new(CachedClientRepository::new(client_inner, &configs));
+        let rack_repo = Arc::new(RackRepository::new(db));
+        let dao = RackDao::new(rack_repo, client_repo);
+
+        let rack = Rack {
+            name: "Rack-A".into(),
+            height_u: 42,
+            ..Default::default()
+        };
+        dao.save(&rack).await.unwrap();
+
+        let retrieved = dao.get(&rack.id).await.unwrap().unwrap();
+        assert_eq!(retrieved.name, "Rack-A");
+    }
+
+    #[tokio::test]
+    async fn test_validate_position_valid() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+
+        let client_inner = Arc::new(ClientRepository::new(db.clone()));
+        let configs = CacheConfigs::default();
+        let client_repo = Arc::new(CachedClientRepository::new(client_inner, &configs));
+        let rack_repo = Arc::new(RackRepository::new(db));
+        let dao = RackDao::new(rack_repo, client_repo);
+
+        let rack = Rack {
+            name: "Rack-B".into(),
+            height_u: 42,
+            ..Default::default()
+        };
+        dao.save(&rack).await.unwrap();
+
+        let result = dao.validate_position(&rack.id, 1, 1, None).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_validate_position_out_of_bounds() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+
+        let client_inner = Arc::new(ClientRepository::new(db.clone()));
+        let configs = CacheConfigs::default();
+        let client_repo = Arc::new(CachedClientRepository::new(client_inner, &configs));
+        let rack_repo = Arc::new(RackRepository::new(db));
+        let dao = RackDao::new(rack_repo, client_repo);
+
+        let rack = Rack {
+            name: "Rack-C".into(),
+            height_u: 42,
+            ..Default::default()
+        };
+        dao.save(&rack).await.unwrap();
+
+        let result = dao.validate_position(&rack.id, 50, 1, None).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_validate_position_overlap() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+
+        let client_inner = Arc::new(ClientRepository::new(db.clone()));
+        let configs = CacheConfigs::default();
+        let client_repo = Arc::new(CachedClientRepository::new(client_inner, &configs));
+        let rack_repo = Arc::new(RackRepository::new(db));
+        let dao = RackDao::new(rack_repo, client_repo.clone());
+
+        let rack = Rack {
+            name: "Rack-D".into(),
+            height_u: 42,
+            ..Default::default()
+        };
+        dao.save(&rack).await.unwrap();
+
+        let mut client = Client::new("overlap-host".into(), "10.0.0.1".into());
+        client.rack = Some(rack.id.clone());
+        client.unit_position = Some("1".into());
+        client.u_height = Some(2);
+        client_repo.save(&client).await.unwrap();
+
+        let result = dao.validate_position(&rack.id, 1, 1, None).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_utilization() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+
+        let client_inner = Arc::new(ClientRepository::new(db.clone()));
+        let configs = CacheConfigs::default();
+        let client_repo = Arc::new(CachedClientRepository::new(client_inner, &configs));
+        let rack_repo = Arc::new(RackRepository::new(db));
+        let dao = RackDao::new(rack_repo, client_repo.clone());
+
+        let rack = Rack {
+            name: "Rack-E".into(),
+            height_u: 42,
+            ..Default::default()
+        };
+        dao.save(&rack).await.unwrap();
+
+        let mut client = Client::new("util-host".into(), "10.0.0.1".into());
+        client.rack = Some(rack.id.clone());
+        client.unit_position = Some("1".into());
+        client.u_height = Some(2);
+        client_repo.save(&client).await.unwrap();
+
+        let utilization = dao.get_utilization(&rack.id).await.unwrap();
+        assert_eq!(utilization.total_units, 42);
+        assert_eq!(utilization.used_units, 2);
+        assert_eq!(utilization.available_units, 40);
+        assert_eq!(utilization.client_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_clients() {
+        let db = setup_test_db().unwrap();
+        let db: Arc<dyn Database> = Arc::new(db);
+
+        let client_inner = Arc::new(ClientRepository::new(db.clone()));
+        let configs = CacheConfigs::default();
+        let client_repo = Arc::new(CachedClientRepository::new(client_inner, &configs));
+        let rack_repo = Arc::new(RackRepository::new(db));
+        let dao = RackDao::new(rack_repo, client_repo.clone());
+
+        let rack = Rack {
+            name: "Rack-F".into(),
+            height_u: 42,
+            ..Default::default()
+        };
+        dao.save(&rack).await.unwrap();
+
+        let mut c1 = Client::new("rack-f-host1".into(), "10.0.0.1".into());
+        c1.rack = Some(rack.id.clone());
+        client_repo.save(&c1).await.unwrap();
+
+        let mut c2 = Client::new("rack-f-host2".into(), "10.0.0.2".into());
+        c2.rack = Some(rack.id.clone());
+        client_repo.save(&c2).await.unwrap();
+
+        let clients = dao.get_clients(&rack.id).await.unwrap();
+        assert_eq!(clients.len(), 2);
+    }
 }

@@ -542,7 +542,7 @@ mod tests {
     async fn test_hardware_equals_keeps_nic_ip_changes() {
         let db = setup_test_db().unwrap();
         let repo = HardwareRepository::new(std::sync::Arc::new(db));
-        let mut hardware1 = create_test_hardware_with_components();
+        let hardware1 = create_test_hardware_with_components();
         let mut hardware2 = create_test_hardware_with_components();
 
         hardware2.nics[0].ipv4_address = "192.168.1.101".to_string();
@@ -554,7 +554,7 @@ mod tests {
     async fn test_hardware_equals_keeps_ipmi_ip_changes() {
         let db = setup_test_db().unwrap();
         let repo = HardwareRepository::new(std::sync::Arc::new(db));
-        let mut hardware1 = create_test_hardware_with_components();
+        let hardware1 = create_test_hardware_with_components();
         let mut hardware2 = create_test_hardware_with_components();
 
         hardware2.ipmi.as_mut().unwrap().ip_address = Some("10.0.0.11".to_string());

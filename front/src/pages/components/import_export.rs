@@ -175,6 +175,7 @@ pub fn handle_file_import(
                     client_id: None, // Not updating associations via Excel for now
                     client_hostname: None,
                     missing_since: None,
+                    created_by: None,
                     created_at: "".to_string(), // Will be ignored on update
                     updated_at: "".to_string(),
                 };

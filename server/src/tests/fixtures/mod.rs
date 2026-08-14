@@ -6,7 +6,10 @@
 //! - Test data helpers
 
 use crate::db::{Database, redb_store::RedbStore};
-use crate::service::auth_service::AuthService;
+use crate::repository::terminal_session_repository::TerminalSessionRepository;
+use crate::service::auth_service::{AuthService, init_master_client_key};
+use crate::service::terminal_session_service::TerminalSessionService;
+use crate::service::web_terminal_service::WebTerminalService;
 use chrono::Utc;
 use common::entity::hardware::{CPU, Disk, GPU, Hardware, IpmiInfo, NIC, OS, RAM, SystemInfo};
 use common::entity::user::{Role, User};
@@ -43,6 +46,7 @@ pub fn test_admin() -> TestUser {
 /// let user = test_user();
 /// assert_eq!(user.username, "test_user");
 /// ```
+#[allow(dead_code)]
 pub fn test_user() -> TestUser {
     TestUser {
         username: "test_user",
@@ -53,6 +57,7 @@ pub fn test_user() -> TestUser {
 }
 
 /// Returns a test viewer user
+#[allow(dead_code)]
 pub fn test_viewer() -> TestUser {
     TestUser {
         username: "test_viewer",
@@ -93,6 +98,9 @@ pub fn setup_test_db() -> Result<RedbStore, Box<dyn std::error::Error>> {
     let random: u64 = rand::random();
     let db_path = std::env::temp_dir().join(format!("test_rs_cmdb_{}_{}.redb", timestamp, random));
     let db = RedbStore::new(&db_path)?;
+
+    // Initialize master client key for HMAC token generation (OnceLock-safe)
+    init_master_client_key("test-master-client-key-for-deterministic-tokens".to_string());
 
     // Note: The temp file will remain on disk but in the temp directory
     // which gets cleaned up by the OS periodically
@@ -221,9 +229,12 @@ pub fn create_test_client(id: &str) -> Client {
         status: None,
         environment: None,
         asset_tag: None,
+        tags: Vec::new(),
         warranty_expiration: None,
         supplier: None,
         power_consumption: None,
+        agent_token: None,
+        created_by: None,
     }
 }
 
@@ -458,6 +469,7 @@ pub fn create_test_rack(id: &str) -> Rack {
         height_u: 42,
         power_limit: None,
         description: None,
+        created_by: None,
         created_at: Utc::now().to_rfc3339(),
         updated_at: Utc::now().to_rfc3339(),
     }
@@ -471,6 +483,7 @@ pub fn create_test_project(id: &str) -> Project {
         department: None,
         cost_center: None,
         manager_id: Some(format!("manager-{}", id)),
+        created_by: None,
         created_at: Utc::now().to_rfc3339(),
         updated_at: Utc::now().to_rfc3339(),
     }
@@ -488,8 +501,283 @@ pub fn create_test_person(id: &str) -> Person {
         department: Some("IT".to_string()),
         title: Some("Engineer".to_string()),
         cost_center: None,
+        created_by: None,
         created_at: Utc::now().to_rfc3339(),
         updated_at: Utc::now().to_rfc3339(),
+    }
+}
+
+// ── TestApp Builder ──────────────────────────────────────────────────────────
+
+use axum::Router;
+use std::sync::Arc;
+use uuid::Uuid;
+
+use crate::api::create_router;
+use crate::cache::{CacheConfigs, CachedClientRepository};
+use crate::config::{DatabaseConfig, QueueConfig, ServerConfig};
+use crate::dao::{ClientDao, RackDao};
+use crate::queue::message_queue::MessageQueueFactory;
+use crate::repository::{
+    approval_repository::ApprovalRepository, client_repository::ClientRepository,
+    command_repository::CommandRepository, component_repository::ComponentRepository,
+    dictionary_repository::DictionaryRepository, exec_policy_repository::ExecPolicyRepository,
+    execution_session_repository::ExecutionSessionRepository,
+    hardware_repository::HardwareRepository, permission_repository::PermissionRepository,
+    person_repository::PersonRepository, project_repository::ProjectRepository,
+    rack_repository::RackRepository, user_repository::UserRepository,
+    web_terminal_policy_repository::WebTerminalPolicyRepository,
+};
+use crate::service::{
+    approval_service::ApprovalService, client_filter_service::ClientFilterService,
+    client_service::ClientService, command_service::CommandService,
+    component_service::ComponentService, danger_detection::DangerDetectionService,
+    execution_session_service::ExecutionSessionService, export_service::ExportService,
+    hardware_service::HardwareService, permission_service::PermissionService, sse_hub::SseHub,
+    stats_service::StatsService, validation_service::ValidationService,
+};
+
+/// Test application state
+pub struct TestApp {
+    pub db: Arc<RedbStore>,
+    pub router: Router,
+    pub auth_token: String,
+    pub admin_token: String,
+    pub test_user: User,
+    #[allow(dead_code)]
+    pub test_admin: User,
+}
+
+/// Builder for test application instances with override support
+pub struct TestAppBuilder {
+    db: Option<Arc<RedbStore>>,
+    auth_service: Option<Arc<AuthService>>,
+    jwt_secret: String,
+}
+
+impl Default for TestAppBuilder {
+    fn default() -> Self {
+        Self {
+            db: None,
+            auth_service: None,
+            jwt_secret: "test_secret_key_for_integration_tests_min_32_chars".to_string(),
+        }
+    }
+}
+
+impl TestAppBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[allow(dead_code)]
+    pub fn with_db(mut self, db: Arc<RedbStore>) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_auth_service(mut self, svc: Arc<AuthService>) -> Self {
+        self.auth_service = Some(svc);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_jwt_secret(mut self, secret: &str) -> Self {
+        self.jwt_secret = secret.to_string();
+        self
+    }
+
+    pub async fn build(self) -> TestApp {
+        // Initialize master client key for HMAC token generation (OnceLock-safe)
+        init_master_client_key("test-master-client-key-for-deterministic-tokens".to_string());
+
+        let db = self.db.unwrap_or_else(|| {
+            Arc::new(RedbStore::new("file:///tmp/test_db_").unwrap_or_else(|_| {
+                let db_path = format!("/tmp/cmdb_test_{}.db", Uuid::new_v4());
+                RedbStore::new(&db_path).expect("Failed to create test database")
+            }))
+        });
+
+        let client_repo_inner = Arc::new(ClientRepository::new(db.clone()));
+        let cache_configs = CacheConfigs::default();
+        let client_repo = Arc::new(CachedClientRepository::new(
+            client_repo_inner.clone(),
+            &cache_configs,
+        ));
+        let hardware_repo = Arc::new(HardwareRepository::new(db.clone()));
+        let user_repo = Arc::new(UserRepository::new(db.clone()));
+        let person_repo = Arc::new(PersonRepository::new(db.clone()));
+        let project_repo = Arc::new(ProjectRepository::new(db.clone()));
+        let component_repo = Arc::new(ComponentRepository::new(db.clone()));
+        let dictionary_repo = Arc::new(DictionaryRepository::new(db.clone()));
+        let rack_repo = Arc::new(RackRepository::new(db.clone()));
+
+        let auth_service = self
+            .auth_service
+            .unwrap_or_else(|| Arc::new(AuthService::new(self.jwt_secret.clone())));
+
+        let _client_dao = Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone()));
+        let _rack_dao = Arc::new(RackDao::new(rack_repo.clone(), client_repo.clone()));
+        let client_service = Arc::new(ClientService::from_repositories(
+            client_repo.clone(),
+            hardware_repo.clone(),
+            rack_repo.clone(),
+        ));
+
+        let component_service = Arc::new(ComponentService::new(component_repo.clone()));
+        let _hardware_service = Arc::new(HardwareService::new(
+            client_repo.clone(),
+            hardware_repo.clone(),
+            component_service.clone(),
+            MessageQueueFactory::create_flume_queue(),
+            None,
+        ));
+
+        let validation_service = Arc::new(ValidationService::new(
+            client_repo_inner.clone(),
+            project_repo.clone(),
+            rack_repo.clone(),
+            person_repo.clone(),
+        ));
+
+        let stats_service = Arc::new(StatsService::new(
+            client_repo_inner.clone(),
+            hardware_repo.clone(),
+        ));
+
+        let client_filter_service = Arc::new(ClientFilterService::new(
+            client_repo_inner.clone(),
+            hardware_repo.clone(),
+        ));
+
+        let export_service = Arc::new(ExportService::new(
+            client_repo_inner.clone(),
+            hardware_repo.clone(),
+        ));
+
+        let message_queue = MessageQueueFactory::create_flume_queue();
+
+        let test_admin = User {
+            id: Uuid::new_v4().to_string(),
+            username: "test_admin".to_string(),
+            password_hash: auth_service.hash_password("admin123").unwrap(),
+            role: Role::Admin,
+            created_at: Utc::now().to_rfc3339(),
+            last_login: None,
+            is_active: true,
+        };
+
+        let test_user = User {
+            id: Uuid::new_v4().to_string(),
+            username: "test_user".to_string(),
+            password_hash: auth_service.hash_password("user123").unwrap(),
+            role: Role::User,
+            created_at: Utc::now().to_rfc3339(),
+            last_login: None,
+            is_active: true,
+        };
+
+        user_repo.save(&test_admin).await.unwrap();
+        user_repo.save(&test_user).await.unwrap();
+
+        let admin_token = auth_service.generate_token(&test_admin).unwrap();
+        let user_token = auth_service.generate_token(&test_user).unwrap();
+
+        let config = Arc::new(ServerConfig {
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            log_level: "info".to_string(),
+            database: DatabaseConfig {
+                db_type: "redb".to_string(),
+                path: format!("/tmp/test_cmdb_{}.db", Uuid::new_v4()),
+            },
+            jwt_secret: self.jwt_secret,
+            poll_interval: 300,
+            ssh_known_hosts_file: None,
+            queue: QueueConfig {
+                queue_type: "flume".to_string(),
+                capacity: 1000,
+            },
+            client_timeout: 3600,
+            enable_tls: false,
+            tls_cert: None,
+            tls_key: None,
+            component_missing_grace_period_hours: 24,
+            primary_ip: None,
+            cors_allowed_origins: vec!["http://localhost:8080".to_string()],
+            max_batch_size: 1000,
+            expose_version: true,
+        });
+
+        let command_repo = Arc::new(CommandRepository::new(db.clone()));
+        let danger_svc = Arc::new(DangerDetectionService::new());
+        let sse_hub = SseHub::new();
+        let command_service = Arc::new(
+            CommandService::new(command_repo.clone(), danger_svc, sse_hub.clone())
+                .await
+                .expect("Failed to create command service"),
+        );
+
+        let approval_repo = Arc::new(ApprovalRepository::new(db.clone()));
+        let approval_svc = Arc::new(ApprovalService::new(approval_repo.clone(), command_repo));
+
+        let perm_repo = Arc::new(PermissionRepository::new(db.clone()));
+        let perm_svc = Arc::new(PermissionService::new(perm_repo.clone()));
+        let _ = perm_svc.ensure_default_rules().await;
+        let _ = perm_svc.refresh_cache().await;
+
+        let exec_policy_repo = Arc::new(ExecPolicyRepository::new(db.clone()));
+        let web_terminal_policy_repo = Arc::new(WebTerminalPolicyRepository::new(db.clone()));
+        let web_terminal_service =
+            Arc::new(WebTerminalService::new(web_terminal_policy_repo.clone()));
+
+        let execution_session_repo = Arc::new(ExecutionSessionRepository::new(db.clone()));
+        let terminal_session_repo = Arc::new(TerminalSessionRepository::new(db.clone()));
+        let session_svc = Arc::new(ExecutionSessionService::new(
+            execution_session_repo,
+            client_repo_inner.clone(),
+        ));
+        let terminal_svc = TerminalSessionService::new(terminal_session_repo, web_terminal_service);
+        terminal_svc.configure_history(session_svc.clone());
+
+        let router = create_router(
+            client_repo_inner,
+            hardware_repo,
+            user_repo,
+            person_repo,
+            project_repo,
+            component_repo,
+            dictionary_repo,
+            rack_repo,
+            message_queue,
+            client_service,
+            auth_service,
+            validation_service,
+            stats_service,
+            client_filter_service,
+            export_service,
+            config,
+            command_service,
+            sse_hub,
+            perm_svc,
+            perm_repo,
+            exec_policy_repo,
+            web_terminal_policy_repo,
+            approval_repo,
+            approval_svc,
+            session_svc,
+            terminal_svc,
+        );
+
+        TestApp {
+            db,
+            router,
+            auth_token: user_token,
+            admin_token,
+            test_user,
+            test_admin,
+        }
     }
 }
 

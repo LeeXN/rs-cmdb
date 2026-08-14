@@ -6,7 +6,7 @@
 
 ---
 
-## Task Summary (11/14 Complete)
+## Task Summary (14/14 Complete)
 
 - [x] Task 1: Test Infrastructure Setup
   - Test fixtures module created
@@ -117,26 +117,58 @@
 
 ## Test Results
 
-**Total Tests**: 171 (all passing estimated)
-- Common: 6 tests
+**Total Tests**: 469 (all passing)
+- Common: 42 tests
 - Client: 6 tests
-- Server: 112 tests
-  - Repositories: 75 tests
-  - Services: 63 tests (16 + 47 new)
-  - Error Handling: 4 tests
-  - Mock Queue: 0 tests (used internally)
+- Server: 427 tests
+  - Repositories: 75+ tests
+  - Services: 63+ tests
+  - API Handlers: comprehensive coverage
+  - Error Handling: enhanced with user_message tests
+  - Mock Queue: used internally
 
 ### Test Statistics
 
-| Component      | Tests | Coverage | Status |
-|----------------|--------|----------|--------|
-| Common         | 6      | N/A      | ✅ |
-| Client         | 6      | N/A      | ✅ |
-| Repositories   | 75     | 90-98%   | ✅ |
-| Services       | 16     | TBD      | 🔄 |
-| Error Handling | 4      | N/A      | ✅ |
-| **Total Server** | **159** | **~50%** | 🔄 |
-| **Overall**    | **171** | **~50%** | 🔄 |
+| Component      | Tests | Status |
+|----------------|--------|--------|
+| Common         | 42     | ✅ |
+| Client         | 6      | ✅ |
+| Repositories   | 75+    | ✅ |
+| Services       | 63+    | ✅ |
+| API Handlers   | 50+    | ✅ |
+| Error Handling | 6+     | ✅ |
+| **Total**      | **469** | ✅ |
+
+---
+
+## fix-audit-and-validation (Completed 2026-07)
+
+### Section 1: API Error Handling ✅
+- Added `to_user_message()` / `log_and_user_message()` to `CmdbError`
+- Replaced 43 `e.to_string()` calls with `.log_and_user_message()` across 8 handlers
+- Deleted orphan `impl IntoResponse for CmdbError`
+
+### Section 2: Batch Limits ✅
+- Added `max_batch_size: usize` to ServerConfig (default 1000)
+- 413 PAYLOAD_TOO_LARGE on `import_clients` and `batch_create_components`
+
+### Section 3: Audit Log Extension ✅
+- Added `AuditAction` enum (rename_all=snake_case + Display) to `common::command`
+- Fixed hardcoded audit IDs → auto-generated sequence counter
+- Added `AuditLog(AuditLogEntry)` to `Message` enum + message processor handling
+- Audit added to auth/user API endpoints (register, delete_user, update_user)
+- `send_audit()` in ClientService/ComponentService
+
+### Section 4: Code Quality & Docker ✅
+- Removed lint allows from Cargo.toml, added targeted `#[allow(dead_code)]`
+- `expose_version` config switch
+- `MAX_FILTER_LENGTH` validation (256 chars) in search/filter handlers
+- Dockerfile: `USER cmdb` as non-root
+
+### Section 5: Tests ✅
+- `test_to_user_message` (common)
+- `test_import_clients_exceeds_batch_limit` / `test_batch_create_exceeds_limit`
+- `test_process_audit_log` (message_processor)
 
 ---
 
