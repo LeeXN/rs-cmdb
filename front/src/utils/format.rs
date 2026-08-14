@@ -105,8 +105,13 @@ mod tests {
 
     #[test]
     fn test_format_datetime_valid() {
-        let result = format_datetime("2024-01-15T10:30:00+08:00");
-        assert_eq!(result, "2024-01-15 10:30:00");
+        let input = "2024-01-15T10:30:00+08:00";
+        let expected = DateTime::parse_from_rfc3339(input)
+            .unwrap()
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        assert_eq!(format_datetime(input), expected);
     }
 
     #[test]
