@@ -311,8 +311,11 @@ mod tests {
     use std::sync::Arc;
 
     fn setup_temp_store() -> RedbStore {
-        let path = std::env::temp_dir()
-            .join(format!("redb_test_{}_{}.db", std::process::id(), rand::random::<u64>()));
+        let path = std::env::temp_dir().join(format!(
+            "redb_test_{}_{}.db",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
         let _ = std::fs::remove_file(&path);
         RedbStore::new(&path).unwrap()
     }
@@ -398,11 +401,14 @@ mod tests {
         store.set("other:1", b"keep").await.unwrap();
 
         store
-            .update_all("upd:", Box::new(|_k, v| {
-                let mut new = b"prefix-".to_vec();
-                new.extend_from_slice(&v);
-                Some(new)
-            }))
+            .update_all(
+                "upd:",
+                Box::new(|_k, v| {
+                    let mut new = b"prefix-".to_vec();
+                    new.extend_from_slice(&v);
+                    Some(new)
+                }),
+            )
             .await
             .unwrap();
 

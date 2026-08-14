@@ -22,11 +22,20 @@ pub struct ComponentService {
 impl ComponentService {
     #[allow(dead_code)]
     pub fn new(repo: Arc<ComponentRepository>) -> Self {
-        Self { repo, message_queue: None }
+        Self {
+            repo,
+            message_queue: None,
+        }
     }
 
-    pub fn with_queue(repo: Arc<ComponentRepository>, message_queue: Arc<dyn MessageQueue>) -> Self {
-        Self { repo, message_queue: Some(message_queue) }
+    pub fn with_queue(
+        repo: Arc<ComponentRepository>,
+        message_queue: Arc<dyn MessageQueue>,
+    ) -> Self {
+        Self {
+            repo,
+            message_queue: Some(message_queue),
+        }
     }
 
     #[allow(dead_code)]
@@ -210,6 +219,7 @@ mod tests {
     use common::models::{Component, ComponentStatus, ComponentType};
     use uuid::Uuid;
 
+    #[allow(dead_code)]
     fn create_test_component(serial: &str, client_id: &str) -> Component {
         Component {
             id: Uuid::new_v4().to_string(),

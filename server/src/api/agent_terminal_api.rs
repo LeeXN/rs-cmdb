@@ -2,7 +2,10 @@ use crate::middleware::agent_auth::AuthenticatedAgent;
 use crate::service::terminal_session_service::TerminalSessionService;
 use axum::{
     Json,
-    extract::{Extension, Path, Query, WebSocketUpgrade, ws::{Message, WebSocket}},
+    extract::{
+        Extension, Path, Query, WebSocketUpgrade,
+        ws::{Message, WebSocket},
+    },
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -52,32 +55,54 @@ pub async fn stream_terminal(
 
 pub async fn poll_pending(
     Extension(terminal_svc): Extension<Arc<TerminalSessionService>>,
+    Extension(agent): Extension<AuthenticatedAgent>,
     axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let client_id = match params.get("client_id") {
-        Some(id) if !id.is_empty() => id.clone(),
-        _ => {
+    if let Some(requested_id) = params.get("client_id") {
+        if requested_id != &agent.client_id {
             return (
-                StatusCode::BAD_REQUEST,
+                StatusCode::FORBIDDEN,
                 Json(ApiResponse::<()> {
-                    status: 400,
-                    message: "client_id query param required".into(),
+                    status: 403,
+                    message: "client_id does not match authenticated agent".into(),
                     data: None,
                 }),
             )
                 .into_response();
         }
-    };
+    }
+    let client_id = agent.client_id.clone();
     let session_id = params.get("session_id").map(String::as_str);
-    let claim_id = params.get("claim_id").map(String::as_str);
+    let Some(claim_id) = params
+        .get("claim_id")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<()> {
+                status: 400,
+                message: "claim_id query param required".into(),
+                data: None,
+            }),
+        )
+            .into_response();
+    };
 
     let start = tokio::time::Instant::now();
     loop {
-        match terminal_svc.poll_for_agent(&client_id, session_id, claim_id).await {
+        match terminal_svc
+            .poll_for_agent(&client_id, session_id, Some(claim_id))
+            .await
+        {
             Ok(Some(session)) => {
                 return (
                     StatusCode::OK,
-                    Json(ApiResponse { status: 200, message: "OK".into(), data: Some(session) }),
+                    Json(ApiResponse {
+                        status: 200,
+                        message: "OK".into(),
+                        data: Some(session),
+                    }),
                 )
                     .into_response();
             }
@@ -104,18 +129,26 @@ pub async fn poll_pending(
 pub async fn push_output(
     Path(id): Path<String>,
     Extension(terminal_svc): Extension<Arc<TerminalSessionService>>,
+    Extension(agent): Extension<AuthenticatedAgent>,
     Json(req): Json<AgentTerminalOutputRequest>,
 ) -> impl IntoResponse {
-    match terminal_svc.report_output(&id, req).await {
+    match terminal_svc
+        .report_output_for_client(&id, &agent.client_id, req)
+        .await
+    {
         Ok(()) => (
             StatusCode::OK,
-            Json(ApiResponse::<()> { status: 200, message: "OK".into(), data: None }),
+            Json(ApiResponse::<()> {
+                status: 200,
+                message: "OK".into(),
+                data: None,
+            }),
         )
             .into_response(),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
             Json(ApiResponse::<()> {
-                status: 500,
+                status: e.status_code(),
                 message: e.log_and_user_message(),
                 data: None,
             }),
@@ -127,18 +160,26 @@ pub async fn push_output(
 pub async fn report_state(
     Path(id): Path<String>,
     Extension(terminal_svc): Extension<Arc<TerminalSessionService>>,
+    Extension(agent): Extension<AuthenticatedAgent>,
     Json(req): Json<AgentTerminalStateRequest>,
 ) -> impl IntoResponse {
-    match terminal_svc.report_state(&id, req).await {
+    match terminal_svc
+        .report_state_for_client(&id, &agent.client_id, req)
+        .await
+    {
         Ok(()) => (
             StatusCode::OK,
-            Json(ApiResponse::<()> { status: 200, message: "OK".into(), data: None }),
+            Json(ApiResponse::<()> {
+                status: 200,
+                message: "OK".into(),
+                data: None,
+            }),
         )
             .into_response(),
         Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
             Json(ApiResponse::<()> {
-                status: 500,
+                status: e.status_code(),
                 message: e.log_and_user_message(),
                 data: None,
             }),
@@ -172,7 +213,7 @@ async fn handle_terminal_stream(
                 };
                 match result {
                     Ok(Message::Text(text)) => {
-                        if handle_client_message(&terminal_svc, &text).await.is_err() {
+                        if handle_client_message(&terminal_svc, &client_id, &claim_id, &text).await.is_err() {
                             break;
                         }
                     }
@@ -226,7 +267,10 @@ async fn send_pending_work(
     client_id: &str,
     claim_id: &str,
 ) -> Result<(), ()> {
-    match terminal_svc.collect_agent_work(client_id, Some(claim_id)).await {
+    match terminal_svc
+        .collect_agent_work(client_id, Some(claim_id))
+        .await
+    {
         Ok(work_items) => {
             for work in work_items {
                 let payload = match to_string(&AgentTerminalStreamServerMessage::Sync { work }) {
@@ -251,6 +295,8 @@ async fn send_pending_work(
 
 async fn handle_client_message(
     terminal_svc: &TerminalSessionService,
+    client_id: &str,
+    stream_claim_id: &str,
     payload: &str,
 ) -> Result<(), ()> {
     let message = match serde_json::from_str::<AgentTerminalStreamClientMessage>(payload) {
@@ -262,11 +308,43 @@ async fn handle_client_message(
     };
 
     let result = match message {
-        AgentTerminalStreamClientMessage::Output { session_id, payload } => {
-            terminal_svc.report_output(&session_id, payload).await
+        AgentTerminalStreamClientMessage::Output {
+            session_id,
+            payload,
+        } => {
+            terminal_svc
+                .report_output_for_client(&session_id, client_id, payload)
+                .await
         }
-        AgentTerminalStreamClientMessage::State { session_id, payload } => {
-            terminal_svc.report_state(&session_id, payload).await
+        AgentTerminalStreamClientMessage::State {
+            session_id,
+            payload,
+        } => {
+            terminal_svc
+                .report_state_for_client(&session_id, client_id, payload)
+                .await
+        }
+        AgentTerminalStreamClientMessage::Heartbeat {
+            session_ids,
+            claim_id,
+        } => {
+            if claim_id != stream_claim_id {
+                warn!(
+                    client_id,
+                    "agent terminal heartbeat claim does not match stream claim"
+                );
+                return Err(());
+            }
+            for session_id in session_ids {
+                if let Err(err) = terminal_svc
+                    .heartbeat_for_client(&session_id, client_id, &claim_id)
+                    .await
+                {
+                    warn!(error = %err, "agent terminal heartbeat handling failed");
+                    return Err(());
+                }
+            }
+            return Ok(());
         }
     };
 

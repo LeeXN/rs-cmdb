@@ -1,129 +1,38 @@
-use gloo_net::http::Request;
-use gloo_storage::{LocalStorage, Storage};
-use log::{error, info};
+use log::error;
 use urlencoding;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::window;
 use yew::Callback;
 
-use crate::stores::auth_store::AuthStore;
+use crate::services::auth;
 use crate::types::{
     ApiResponse, ChangePasswordRequest, Client, CreateUserRequest, DetailedStats, Dictionary,
     FilterCriteria, FilterOptions, Hardware, HardwareHistoryEntry, LoginRequest, LoginResponse,
-    PaginatedResult, Person, Project, Rack, RemoteExecConfigResponse, UpdateRemoteExecConfigRequest,
-    UpdateUserRequest, User,
+    PaginatedResult, Person, Project, Rack, RemoteExecConfigResponse,
+    UpdateRemoteExecConfigRequest, UpdateUserRequest, User,
 };
 
 const API_BASE_URL: &str = "/api/v1";
 
-fn get_auth_header() -> Option<String> {
-    // Try to get AuthStore from LocalStorage. Yewdux usually uses the struct name.
-    // We try "auth_store" (snake_case) first as it is common convention, then "AuthStore".
-    if let Ok(store) = LocalStorage::get::<AuthStore>("auth_store") {
-        if let Some(token) = store.token {
-            return Some(format!("Bearer {}", token));
-        }
-    }
-    if let Ok(store) = LocalStorage::get::<AuthStore>("AuthStore") {
-        if let Some(token) = store.token {
-            return Some(format!("Bearer {}", token));
-        }
-    }
-
-    // Debug logging if token not found
-    info!("No auth token found in LocalStorage (checked 'auth_store' and 'AuthStore')");
-    None
-}
-
 async fn request_get(url: &str) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::get(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let response = req.send().await?;
-
-    if response.status() == 401 {
-        info!("Received 401 Unauthorized, redirecting to login (v2)...");
-        // Clear auth token
-        LocalStorage::delete("auth_store");
-        LocalStorage::delete("AuthStore");
-
-        // Redirect to login
-        if let Some(win) = window() {
-            let _ = win.location().set_href("/login");
-        }
-    }
-
-    Ok(response)
+    auth::get(url).await
 }
 
 async fn request_post<T: serde::Serialize>(
     url: &str,
     body: &T,
 ) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::post(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let response = req.json(body)?.send().await?;
-
-    // Don't redirect for login endpoint itself, as 401 there means invalid credentials
-    if response.status() == 401 && !url.ends_with("/auth/login") {
-        info!("Received 401 Unauthorized, redirecting to login (v2)...");
-        // Clear auth token
-        LocalStorage::delete("auth_store");
-        LocalStorage::delete("AuthStore");
-
-        // Redirect to login
-        if let Some(win) = window() {
-            let _ = win.location().set_href("/login");
-        }
-    }
-
-    Ok(response)
+    auth::post_json(url, body).await
 }
 
 async fn request_put<T: serde::Serialize>(
     url: &str,
     body: &T,
 ) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::put(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let response = req.json(body)?.send().await?;
-
-    if response.status() == 401 {
-        info!("Received 401 Unauthorized, redirecting to login (v2)...");
-        LocalStorage::delete("auth_store");
-        LocalStorage::delete("AuthStore");
-
-        if let Some(win) = window() {
-            let _ = win.location().set_href("/login");
-        }
-    }
-
-    Ok(response)
+    auth::put_json(url, body).await
 }
 
 async fn request_delete(url: &str) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::delete(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let response = req.send().await?;
-
-    if response.status() == 401 {
-        info!("Received 401 Unauthorized, redirecting to login (v2)...");
-        LocalStorage::delete("auth_store");
-        LocalStorage::delete("AuthStore");
-
-        if let Some(win) = window() {
-            let _ = win.location().set_href("/login");
-        }
-    }
-
-    Ok(response)
+    auth::delete(url).await
 }
 
 /// 通用 API 请求错误
@@ -927,7 +836,7 @@ pub fn get_filter_options_by_client_ids(
 pub async fn login(request: LoginRequest) -> Result<LoginResponse, ApiError> {
     let url = format!("{}/auth/login", API_BASE_URL);
 
-    match request_post(&url, &request).await {
+    match auth::post_public_json(&url, &request).await {
         Ok(response) => {
             if response.status() == 200 {
                 match response.json::<ApiResponse<LoginResponse>>().await {
@@ -1261,12 +1170,7 @@ pub async fn update_dictionary(id: &str, item: &Dictionary) -> Result<Dictionary
 pub async fn delete_dictionary(id: &str) -> Result<(), ApiError> {
     let url = format!("{}/dictionaries/{}", API_BASE_URL, id);
 
-    let mut req = Request::delete(&url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-
-    match req.send().await {
+    match request_delete(&url).await {
         Ok(response) => {
             if response.status() == 200 {
                 Ok(())
@@ -1446,12 +1350,7 @@ pub async fn update_rack(id: &str, rack: &Rack) -> Result<Rack, ApiError> {
 pub async fn delete_rack(id: &str) -> Result<(), ApiError> {
     let url = format!("{}/racks/{}", API_BASE_URL, id);
 
-    let mut req = Request::delete(&url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-
-    match req.send().await {
+    match request_delete(&url).await {
         Ok(response) => {
             if response.status() == 200 {
                 Ok(())
@@ -1574,11 +1473,7 @@ pub async fn update_user(id: &str, request: UpdateUserRequest) -> Result<User, A
 /// Delete user
 pub async fn delete_user(id: &str) -> Result<(), ApiError> {
     let url = format!("{}/accounts/{}", API_BASE_URL, id);
-    let mut req = Request::delete(&url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    match req.send().await {
+    match request_delete(&url).await {
         Ok(response) => {
             if response.status() == 200 {
                 Ok(())
@@ -1659,8 +1554,13 @@ pub async fn fetch_remote_exec_config() -> Result<RemoteExecConfigResponse, ApiE
     match request_get(&url).await {
         Ok(response) => {
             if response.status() == 200 {
-                match response.json::<ApiResponse<RemoteExecConfigResponse>>().await {
-                    Ok(data) => Ok(data.data.unwrap_or(RemoteExecConfigResponse { enabled: false })),
+                match response
+                    .json::<ApiResponse<RemoteExecConfigResponse>>()
+                    .await
+                {
+                    Ok(data) => Ok(data
+                        .data
+                        .unwrap_or(RemoteExecConfigResponse { enabled: false })),
                     Err(e) => Err(ApiError {
                         message: format!("Parse error: {}", e),
                     }),
@@ -1680,7 +1580,9 @@ pub async fn fetch_remote_exec_config() -> Result<RemoteExecConfigResponse, ApiE
 }
 
 /// Update remote exec config
-pub async fn update_remote_exec_config(req: &UpdateRemoteExecConfigRequest) -> Result<(), ApiError> {
+pub async fn update_remote_exec_config(
+    req: &UpdateRemoteExecConfigRequest,
+) -> Result<(), ApiError> {
     let url = format!("{}/remote-exec/config", API_BASE_URL);
     match request_put(&url, req).await {
         Ok(response) => {

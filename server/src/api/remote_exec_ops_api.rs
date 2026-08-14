@@ -4,12 +4,7 @@ use crate::repository::web_terminal_policy_repository::WebTerminalPolicyReposito
 use crate::service::cast_recorder::CastRecorderInner;
 use crate::service::command_service::CommandService;
 use crate::service::terminal_session_service::TerminalSessionService;
-use axum::{
-    Json,
-    extract::Extension,
-    http::StatusCode,
-    response::IntoResponse,
-};
+use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use axum_macros::debug_handler;
 use common::models::{
     ApiResponse, ApprovalSummaryResponse, CastCleanupRequest, CastCleanupResponse,
@@ -19,7 +14,13 @@ use std::sync::Arc;
 use tracing::{error, instrument};
 
 #[debug_handler]
-#[instrument(skip(command_svc, exec_policy_repo, web_terminal_policy_repo, approval_repo, terminal_svc))]
+#[instrument(skip(
+    command_svc,
+    exec_policy_repo,
+    web_terminal_policy_repo,
+    approval_repo,
+    terminal_svc
+))]
 pub async fn get_overview(
     Extension(command_svc): Extension<Arc<CommandService>>,
     Extension(exec_policy_repo): Extension<Arc<ExecPolicyRepository>>,
@@ -38,28 +39,40 @@ pub async fn get_overview(
         Ok(count) => count,
         Err(e) => {
             error!("Failed to count exec policies: {}", e);
-            return error_response::<RemoteExecOpsOverviewResponse>(e.status_code(), &e.log_and_user_message());
+            return error_response::<RemoteExecOpsOverviewResponse>(
+                e.status_code(),
+                &e.log_and_user_message(),
+            );
         }
     };
     let web_terminal_policies_count = match web_terminal_policy_repo.count().await {
         Ok(count) => count,
         Err(e) => {
             error!("Failed to count web terminal policies: {}", e);
-            return error_response::<RemoteExecOpsOverviewResponse>(e.status_code(), &e.log_and_user_message());
+            return error_response::<RemoteExecOpsOverviewResponse>(
+                e.status_code(),
+                &e.log_and_user_message(),
+            );
         }
     };
     let approval_summary = match approval_repo.list_all().await {
         Ok(approvals) => summarize_approvals(&approvals),
         Err(e) => {
             error!("Failed to summarize approvals: {}", e);
-            return error_response::<RemoteExecOpsOverviewResponse>(e.status_code(), &e.log_and_user_message());
+            return error_response::<RemoteExecOpsOverviewResponse>(
+                e.status_code(),
+                &e.log_and_user_message(),
+            );
         }
     };
     let terminal_summary = match terminal_svc.terminal_ops_summary().await {
         Ok(summary) => summary,
         Err(e) => {
             error!("Failed to summarize terminal sessions: {}", e);
-            return error_response::<RemoteExecOpsOverviewResponse>(e.status_code(), &e.log_and_user_message());
+            return error_response::<RemoteExecOpsOverviewResponse>(
+                e.status_code(),
+                &e.log_and_user_message(),
+            );
         }
     };
 
@@ -83,7 +96,11 @@ pub async fn get_terminal_summary(
     Extension(terminal_svc): Extension<Arc<TerminalSessionService>>,
 ) -> impl IntoResponse {
     match terminal_svc.terminal_ops_summary().await {
-        Ok(summary) => success_response(StatusCode::OK, "Terminal summary retrieved successfully", summary),
+        Ok(summary) => success_response(
+            StatusCode::OK,
+            "Terminal summary retrieved successfully",
+            summary,
+        ),
         Err(e) => {
             error!("Failed to load terminal summary: {}", e);
             error_response::<TerminalOpsSummaryResponse>(e.status_code(), &e.log_and_user_message())
@@ -97,19 +114,24 @@ pub async fn list_terminal_sessions(
     Extension(terminal_svc): Extension<Arc<TerminalSessionService>>,
 ) -> impl IntoResponse {
     match terminal_svc.list_all_sessions().await {
-        Ok(sessions) => success_response(StatusCode::OK, "Terminal sessions retrieved successfully", sessions),
+        Ok(sessions) => success_response(
+            StatusCode::OK,
+            "Terminal sessions retrieved successfully",
+            sessions,
+        ),
         Err(e) => {
             error!("Failed to list terminal sessions: {}", e);
-            error_response::<Vec<TerminalSessionSummary>>(e.status_code(), &e.log_and_user_message())
+            error_response::<Vec<TerminalSessionSummary>>(
+                e.status_code(),
+                &e.log_and_user_message(),
+            )
         }
     }
 }
 
 #[debug_handler]
 #[instrument]
-pub async fn cleanup_casts(
-    Json(req): Json<CastCleanupRequest>,
-) -> impl IntoResponse {
+pub async fn cleanup_casts(Json(req): Json<CastCleanupRequest>) -> impl IntoResponse {
     if req.retention_days == 0 {
         return error_response::<CastCleanupResponse>(400, "retention_days must be greater than 0");
     }
@@ -131,7 +153,9 @@ pub async fn cleanup_casts(
     }
 }
 
-fn summarize_approvals(approvals: &[common::entity::permission::PendingApproval]) -> ApprovalSummaryResponse {
+fn summarize_approvals(
+    approvals: &[common::entity::permission::PendingApproval],
+) -> ApprovalSummaryResponse {
     let mut summary = ApprovalSummaryResponse::default();
     for approval in approvals {
         summary.record_status(&approval.status, approval.executed_task_id.as_ref());
@@ -139,7 +163,11 @@ fn summarize_approvals(approvals: &[common::entity::permission::PendingApproval]
     summary
 }
 
-fn success_response<T: PartialEq>(status: StatusCode, message: &str, data: T) -> (StatusCode, Json<ApiResponse<T>>) {
+fn success_response<T: PartialEq>(
+    status: StatusCode,
+    message: &str,
+    data: T,
+) -> (StatusCode, Json<ApiResponse<T>>) {
     (
         status,
         Json(ApiResponse {

@@ -1,15 +1,13 @@
 use axum::{
+    Json,
     body::Body,
     extract::{ConnectInfo, State},
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    Json,
 };
 use governor::{
-    Quota, RateLimiter,
-    clock::DefaultClock,
-    middleware::NoOpMiddleware,
+    Quota, RateLimiter, clock::DefaultClock, middleware::NoOpMiddleware,
     state::keyed::DefaultKeyedStateStore,
 };
 use serde_json::json;
@@ -17,12 +15,8 @@ use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-pub type KeyedRateLimiter = RateLimiter<
-    IpAddr,
-    DefaultKeyedStateStore<IpAddr>,
-    DefaultClock,
-    NoOpMiddleware,
->;
+pub type KeyedRateLimiter =
+    RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock, NoOpMiddleware>;
 
 pub mod strategies {
     use super::*;
@@ -86,10 +80,7 @@ mod tests {
     use super::*;
 
     fn dummy_request() -> Request<Body> {
-        Request::builder()
-            .uri("/test")
-            .body(Body::empty())
-            .unwrap()
+        Request::builder().uri("/test").body(Body::empty()).unwrap()
     }
 
     fn dummy_request_with_ip(ip: &str) -> Request<Body> {
@@ -170,7 +161,8 @@ mod tests {
             StatusCode::TOO_MANY_REQUESTS,
             [("Retry-After", "60")],
             Json(json!({"status": 429, "message": "Rate limit exceeded."})),
-        ).into_response();
+        )
+            .into_response();
         assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(
             resp.headers()

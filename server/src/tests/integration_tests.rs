@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use common::entity::execution::{ExecutionSession, ExecutionType, SessionStatus};
+use common::entity::execution::{ExecutionType, SessionStatus};
 use common::entity::user::{Role, User};
 // use common::entity::dictionary::Dictionary; // Removed unused import
 
@@ -30,22 +30,20 @@ use crate::repository::{
     command_repository::CommandRepository, component_repository::ComponentRepository,
     dictionary_repository::DictionaryRepository, exec_policy_repository::ExecPolicyRepository,
     execution_session_repository::ExecutionSessionRepository,
-    terminal_session_repository::TerminalSessionRepository,
     hardware_repository::HardwareRepository, permission_repository::PermissionRepository,
     person_repository::PersonRepository, project_repository::ProjectRepository,
-    rack_repository::RackRepository, user_repository::UserRepository,
-    web_terminal_policy_repository::WebTerminalPolicyRepository,
+    rack_repository::RackRepository, terminal_session_repository::TerminalSessionRepository,
+    user_repository::UserRepository, web_terminal_policy_repository::WebTerminalPolicyRepository,
 };
 use crate::service::{
     approval_service::ApprovalService, auth_service::AuthService,
     client_filter_service::ClientFilterService, client_service::ClientService,
     command_service::CommandService, component_service::ComponentService,
-    danger_detection::DangerDetectionService,
-    execution_session_service::ExecutionSessionService,
+    danger_detection::DangerDetectionService, execution_session_service::ExecutionSessionService,
     export_service::ExportService, hardware_service::HardwareService,
-    permission_service::PermissionService, sse_hub::SseHub,
-    stats_service::StatsService, validation_service::ValidationService,
-    terminal_session_service::TerminalSessionService, web_terminal_service::WebTerminalService,
+    permission_service::PermissionService, sse_hub::SseHub, stats_service::StatsService,
+    terminal_session_service::TerminalSessionService, validation_service::ValidationService,
+    web_terminal_service::WebTerminalService,
 };
 use chrono::Utc;
 
@@ -56,6 +54,7 @@ pub struct TestApp {
     pub auth_token: String,
     pub admin_token: String,
     pub test_user: User,
+    #[allow(dead_code)]
     pub test_admin: User,
 }
 
@@ -177,10 +176,10 @@ async fn setup_test_app() -> TestApp {
         tls_key: None,
         component_missing_grace_period_hours: 24,
         primary_ip: None,
-            cors_allowed_origins: vec!["http://localhost:8080".to_string()],
-            max_batch_size: 1000,
-            expose_version: true,
-        });
+        cors_allowed_origins: vec!["http://localhost:8080".to_string()],
+        max_batch_size: 1000,
+        expose_version: true,
+    });
 
     // Create router
     let command_repo = Arc::new(CommandRepository::new(db.clone()));
@@ -637,7 +636,10 @@ async fn test_update_hardware_for_client() {
     .await;
 
     let client_id = create_response["data"]["client"]["id"].as_str().unwrap();
-    let agent_token = create_response["data"]["agent_token"].as_str().unwrap().to_string();
+    let agent_token = create_response["data"]["agent_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let agent_auth = format!("{}:{}", client_id, agent_token);
 
     // Update hardware
@@ -692,7 +694,10 @@ async fn test_get_hardware_for_client() {
     .await;
 
     let client_id = create_response["data"]["client"]["id"].as_str().unwrap();
-    let agent_token = create_response["data"]["agent_token"].as_str().unwrap().to_string();
+    let agent_token = create_response["data"]["agent_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let agent_auth = format!("{}:{}", client_id, agent_token);
 
     // Add hardware
@@ -1292,7 +1297,8 @@ async fn test_user_can_update_own_person() {
             "name": "User Owned",
             "email": "owned@test.com"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let person_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1306,7 +1312,8 @@ async fn test_user_can_update_own_person() {
             "name": "Updated By Owner",
             "email": "owned@test.com"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(update_status, StatusCode::OK);
 }
 
@@ -1324,7 +1331,8 @@ async fn test_admin_can_update_any_person() {
             "name": "Admin Edit Target",
             "email": "admin_edit@test.com"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let person_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1338,7 +1346,8 @@ async fn test_admin_can_update_any_person() {
             "name": "Updated By Admin",
             "email": "admin_edit@test.com"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(update_status, StatusCode::OK);
 }
 
@@ -1358,7 +1367,8 @@ async fn test_user_cannot_update_another_users_person() {
     };
     let user_repo = UserRepository::new(app.db.clone());
     user_repo.save(&second_user).await.unwrap();
-    let auth_service = AuthService::new("test_secret_key_for_integration_tests_min_32_chars".to_string());
+    let auth_service =
+        AuthService::new("test_secret_key_for_integration_tests_min_32_chars".to_string());
     let second_token = auth_service.generate_token(&second_user).unwrap();
 
     // Create a person as User A (the test_user from TestApp)
@@ -1371,7 +1381,8 @@ async fn test_user_cannot_update_another_users_person() {
             "name": "Protected Person",
             "email": "protected@test.com"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let person_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1385,8 +1396,14 @@ async fn test_user_cannot_update_another_users_person() {
             "name": "Hacker Attempt",
             "email": "hacker@test.com"
         })),
-    ).await;
-    assert_eq!(update_status, StatusCode::FORBIDDEN, "body: {:?}", update_body);
+    )
+    .await;
+    assert_eq!(
+        update_status,
+        StatusCode::FORBIDDEN,
+        "body: {:?}",
+        update_body
+    );
 }
 
 #[tokio::test]
@@ -1405,7 +1422,8 @@ async fn test_user_cannot_delete_another_users_person() {
     };
     let user_repo = UserRepository::new(app.db.clone());
     user_repo.save(&second_user).await.unwrap();
-    let auth_service = AuthService::new("test_secret_key_for_integration_tests_min_32_chars".to_string());
+    let auth_service =
+        AuthService::new("test_secret_key_for_integration_tests_min_32_chars".to_string());
     let second_token = auth_service.generate_token(&second_user).unwrap();
 
     // Create a person as User A
@@ -1418,7 +1436,8 @@ async fn test_user_cannot_delete_another_users_person() {
             "name": "Protected Deletion",
             "email": "protect_del@test.com"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let person_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1429,8 +1448,14 @@ async fn test_user_cannot_delete_another_users_person() {
         &format!("/api/v1/users/{}", person_id),
         Some(&second_token),
         None,
-    ).await;
-    assert_eq!(delete_status, StatusCode::FORBIDDEN, "body: {:?}", delete_body);
+    )
+    .await;
+    assert_eq!(
+        delete_status,
+        StatusCode::FORBIDDEN,
+        "body: {:?}",
+        delete_body
+    );
 }
 
 #[tokio::test]
@@ -1447,7 +1472,8 @@ async fn test_user_ownership_project_crud() {
             "name": "User Project",
             "code": "UP-001"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let project_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1461,7 +1487,8 @@ async fn test_user_ownership_project_crud() {
             "name": "Updated User Project",
             "code": "UP-001"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(update_status, StatusCode::OK);
 
     // Same user deletes
@@ -1471,7 +1498,8 @@ async fn test_user_ownership_project_crud() {
         &format!("/api/v1/projects/{}", project_id),
         Some(&app.auth_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(delete_status, StatusCode::OK);
 }
 
@@ -1489,7 +1517,8 @@ async fn test_admin_ownership_bypass_project() {
             "name": "Admin Bypass Project",
             "code": "ABP-001"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let project_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1500,7 +1529,8 @@ async fn test_admin_ownership_bypass_project() {
         &format!("/api/v1/projects/{}", project_id),
         Some(&app.admin_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(delete_status, StatusCode::OK);
 }
 
@@ -1525,8 +1555,13 @@ async fn register_second_user_and_login(
             "password": password,
             "role": role,
         })),
-    ).await;
-    assert_eq!(reg_status, StatusCode::CREATED, "register user {username} failed");
+    )
+    .await;
+    assert_eq!(
+        reg_status,
+        StatusCode::CREATED,
+        "register user {username} failed"
+    );
 
     // Login to get token
     let (login_status, login_body) = make_request(
@@ -1538,7 +1573,8 @@ async fn register_second_user_and_login(
             "username": username,
             "password": password,
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(login_status, StatusCode::OK, "login user {username} failed");
     login_body["data"]["token"].as_str().unwrap().to_string()
 }
@@ -1564,7 +1600,8 @@ async fn test_8_1_client_import_sets_created_by() {
         "/api/v1/clients/import",
         Some(&app.auth_token),
         Some(import_data),
-    ).await;
+    )
+    .await;
     assert_eq!(import_status, StatusCode::OK);
 
     // List clients as admin — should see the client
@@ -1574,13 +1611,20 @@ async fn test_8_1_client_import_sets_created_by() {
         "/api/v1/clients",
         Some(&app.admin_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(list_status, StatusCode::OK);
     let items = list_body["data"]["items"].as_array().unwrap();
-    assert!(!items.is_empty(), "imported client should be visible to admin");
+    assert!(
+        !items.is_empty(),
+        "imported client should be visible to admin"
+    );
 
     // created_by should be set to the user who imported
-    let imported = items.iter().find(|c| c["hostname"] == "import-host-1").unwrap();
+    let imported = items
+        .iter()
+        .find(|c| c["hostname"] == "import-host-1")
+        .unwrap();
     assert!(
         imported["created_by"].is_string(),
         "created_by should be set after import"
@@ -1597,9 +1641,8 @@ async fn test_8_1_client_update_by_non_owner_returns_403() {
     let app = setup_test_app().await;
 
     // Register a second user
-    let second_token = register_second_user_and_login(
-        &app, "second_user_upd", "Password123!", "User"
-    ).await;
+    let second_token =
+        register_second_user_and_login(&app, "second_user_upd", "Password123!", "User").await;
 
     // Import a client as user A (app.auth_token)
     let client_id = Uuid::new_v4().to_string();
@@ -1614,7 +1657,8 @@ async fn test_8_1_client_update_by_non_owner_returns_403() {
         "/api/v1/clients/import",
         Some(&app.auth_token),
         Some(import_data),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // User B tries to update the client
@@ -1628,10 +1672,13 @@ async fn test_8_1_client_update_by_non_owner_returns_403() {
             "hostname": "hacked-client",
             "ip_address": "10.2.2.2",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(
-        update_status, StatusCode::FORBIDDEN,
-        "non-owner update should be 403, body: {:?}", update_body
+        update_status,
+        StatusCode::FORBIDDEN,
+        "non-owner update should be 403, body: {:?}",
+        update_body
     );
 }
 
@@ -1640,9 +1687,8 @@ async fn test_8_1_client_delete_by_non_owner_returns_403() {
     let app = setup_test_app().await;
 
     // Register a second user
-    let second_token = register_second_user_and_login(
-        &app, "second_user_del2", "Password123!", "User"
-    ).await;
+    let second_token =
+        register_second_user_and_login(&app, "second_user_del2", "Password123!", "User").await;
 
     // Import a client as user A
     let client_id = Uuid::new_v4().to_string();
@@ -1657,7 +1703,8 @@ async fn test_8_1_client_delete_by_non_owner_returns_403() {
         "/api/v1/clients/import",
         Some(&app.auth_token),
         Some(import_data),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // User B tries to delete the client
@@ -1667,10 +1714,13 @@ async fn test_8_1_client_delete_by_non_owner_returns_403() {
         &format!("/api/v1/clients/{}", client_id),
         Some(&second_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        delete_status, StatusCode::FORBIDDEN,
-        "non-owner delete should be 403, body: {:?}", delete_body
+        delete_status,
+        StatusCode::FORBIDDEN,
+        "non-owner delete should be 403, body: {:?}",
+        delete_body
     );
 }
 
@@ -1679,9 +1729,8 @@ async fn test_8_1_component_batch_update_by_non_owner_returns_207() {
     let app = setup_test_app().await;
 
     // Register a second user
-    let second_token = register_second_user_and_login(
-        &app, "second_user_comp", "Password123!", "User"
-    ).await;
+    let second_token =
+        register_second_user_and_login(&app, "second_user_comp", "Password123!", "User").await;
 
     // Create a component as user A (app.auth_token)
     let (create_status, create_body) = make_request(
@@ -1695,7 +1744,8 @@ async fn test_8_1_component_batch_update_by_non_owner_returns_207() {
             "model": "RTX 4090",
             "status": "InStock",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let comp_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1709,10 +1759,12 @@ async fn test_8_1_component_batch_update_by_non_owner_returns_207() {
             "ids": [comp_id],
             "status": "InUse",
         })),
-    ).await;
+    )
+    .await;
     // 207 Multi-Status when some ownership checks fail
     assert_eq!(
-        batch_status, StatusCode::MULTI_STATUS,
+        batch_status,
+        StatusCode::MULTI_STATUS,
         "batch update of non-owned component should return 207"
     );
 }
@@ -1732,7 +1784,8 @@ async fn test_8_1_dictionary_create_sets_created_by() {
             "key": "test_key_ownership",
             "value": "test_val",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
 
     let created_by = create_body["data"]["created_by"].as_str();
@@ -1752,9 +1805,8 @@ async fn test_8_1_dictionary_update_by_non_owner_returns_403() {
     let app = setup_test_app().await;
 
     // Register second user
-    let second_token = register_second_user_and_login(
-        &app, "second_user_dict_upd", "Password123!", "User"
-    ).await;
+    let second_token =
+        register_second_user_and_login(&app, "second_user_dict_upd", "Password123!", "User").await;
 
     // Create dictionary as user A
     let (create_status, create_body) = make_request(
@@ -1767,7 +1819,8 @@ async fn test_8_1_dictionary_update_by_non_owner_returns_403() {
             "key": "dict_owner_key",
             "value": "original",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let dict_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1782,10 +1835,13 @@ async fn test_8_1_dictionary_update_by_non_owner_returns_403() {
             "key": "dict_owner_key",
             "value": "hacked",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(
-        update_status, StatusCode::FORBIDDEN,
-        "non-owner dict update should be 403, body: {:?}", update_body
+        update_status,
+        StatusCode::FORBIDDEN,
+        "non-owner dict update should be 403, body: {:?}",
+        update_body
     );
 }
 
@@ -1794,9 +1850,8 @@ async fn test_8_1_dictionary_delete_by_non_owner_returns_403() {
     let app = setup_test_app().await;
 
     // Register second user
-    let second_token = register_second_user_and_login(
-        &app, "second_user_dict_del", "Password123!", "User"
-    ).await;
+    let second_token =
+        register_second_user_and_login(&app, "second_user_dict_del", "Password123!", "User").await;
 
     // Create dictionary as user A
     let (create_status, create_body) = make_request(
@@ -1809,7 +1864,8 @@ async fn test_8_1_dictionary_delete_by_non_owner_returns_403() {
             "key": "dict_del_key",
             "value": "to_delete",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let dict_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
@@ -1820,10 +1876,13 @@ async fn test_8_1_dictionary_delete_by_non_owner_returns_403() {
         &format!("/api/v1/dictionaries/{}", dict_id),
         Some(&second_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        delete_status, StatusCode::FORBIDDEN,
-        "non-owner dict delete should be 403, body: {:?}", delete_body
+        delete_status,
+        StatusCode::FORBIDDEN,
+        "non-owner dict delete should be 403, body: {:?}",
+        delete_body
     );
 }
 
@@ -1841,8 +1900,14 @@ async fn test_8_2_admin_can_list_exec_policies() {
         "/api/v1/permissions/exec-policies",
         Some(&app.admin_token),
         None,
-    ).await;
-    assert_eq!(status, StatusCode::OK, "admin should list exec policies, body: {:?}", body);
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "admin should list exec policies, body: {:?}",
+        body
+    );
     assert!(body["data"].is_array(), "data should be an array");
 }
 
@@ -1857,9 +1922,11 @@ async fn test_8_2_user_cannot_manage_exec_policies() {
         "/api/v1/permissions/exec-policies",
         Some(&app.auth_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        get_status, StatusCode::FORBIDDEN,
+        get_status,
+        StatusCode::FORBIDDEN,
         "User should not access exec-policies list"
     );
 
@@ -1880,9 +1947,11 @@ async fn test_8_2_user_cannot_manage_exec_policies() {
             "require_approval": false,
             "priority": 100
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(
-        post_status, StatusCode::FORBIDDEN,
+        post_status,
+        StatusCode::FORBIDDEN,
         "User should not create exec-policies"
     );
 }
@@ -1913,10 +1982,13 @@ async fn test_8_2_admin_can_create_and_delete_exec_policy() {
             "require_approval": false,
             "priority": 100
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(
-        create_status, StatusCode::CREATED,
-        "admin should create exec policy, body: {:?}", create_body
+        create_status,
+        StatusCode::CREATED,
+        "admin should create exec policy, body: {:?}",
+        create_body
     );
 
     // List — should contain our new policy
@@ -1926,7 +1998,8 @@ async fn test_8_2_admin_can_create_and_delete_exec_policy() {
         "/api/v1/permissions/exec-policies",
         Some(&app.admin_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(list_status, StatusCode::OK);
     let policies = list_body["data"].as_array().unwrap();
     assert!(
@@ -1941,8 +2014,13 @@ async fn test_8_2_admin_can_create_and_delete_exec_policy() {
         &format!("/api/v1/permissions/exec-policies/{}", policy_id),
         Some(&app.admin_token),
         None,
-    ).await;
-    assert_eq!(delete_status, StatusCode::OK, "admin should delete exec policy");
+    )
+    .await;
+    assert_eq!(
+        delete_status,
+        StatusCode::OK,
+        "admin should delete exec policy"
+    );
 }
 
 // ============================================================================
@@ -1964,7 +2042,8 @@ async fn test_8_3_admin_gets_all_scope_for_clients() {
             "hostname": "perm-client-1",
             "ip_address": "10.10.10.1",
         }])),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // Admin can see all clients (AllScope)
@@ -1974,7 +2053,8 @@ async fn test_8_3_admin_gets_all_scope_for_clients() {
         "/api/v1/clients",
         Some(&app.admin_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(list_status, StatusCode::OK);
     let items = list_body["data"]["items"].as_array().unwrap();
     assert!(
@@ -1988,9 +2068,8 @@ async fn test_8_3_user_gets_owned_scope_for_clients() {
     let app = setup_test_app().await;
 
     // Register second user
-    let second_token = register_second_user_and_login(
-        &app, "scope_user_b", "Password123!", "User"
-    ).await;
+    let second_token =
+        register_second_user_and_login(&app, "scope_user_b", "Password123!", "User").await;
 
     // User A imports a client
     let (imp_status, _) = make_request(
@@ -2003,7 +2082,8 @@ async fn test_8_3_user_gets_owned_scope_for_clients() {
             "hostname": "scope-client-a",
             "ip_address": "10.20.20.1",
         }])),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // User B lists clients — should NOT see user A's client (OwnedScope)
@@ -2013,7 +2093,8 @@ async fn test_8_3_user_gets_owned_scope_for_clients() {
         "/api/v1/clients",
         Some(&second_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(list_status, StatusCode::OK);
     let items = list_body["data"]["items"].as_array().unwrap();
     assert!(
@@ -2027,9 +2108,8 @@ async fn test_8_3_viewer_cannot_write() {
     let app = setup_test_app().await;
 
     // Create viewer
-    let viewer_token = register_second_user_and_login(
-        &app, "viewer_perm_3", "Password123!", "Viewer"
-    ).await;
+    let viewer_token =
+        register_second_user_and_login(&app, "viewer_perm_3", "Password123!", "Viewer").await;
 
     // Viewer cannot create a dictionary (write operation)
     let (create_status, _) = make_request(
@@ -2042,11 +2122,13 @@ async fn test_8_3_viewer_cannot_write() {
             "key": "viewer_write_attempt",
             "value": "nope",
         })),
-    ).await;
+    )
+    .await;
     // Viewer has no Create permission (only View), so the rbac middleware should deny
     // with 403 Forbidden
     assert_eq!(
-        create_status, StatusCode::FORBIDDEN,
+        create_status,
+        StatusCode::FORBIDDEN,
         "viewer should not be able to create dictionaries"
     );
 }
@@ -2060,9 +2142,8 @@ async fn test_8_4_admin_sees_all_resources() {
     let app = setup_test_app().await;
 
     // Register two users and have each import a client
-    let user_b_token = register_second_user_and_login(
-        &app, "filter_user_b", "Password123!", "User"
-    ).await;
+    let user_b_token =
+        register_second_user_and_login(&app, "filter_user_b", "Password123!", "User").await;
 
     let (imp_a, _) = make_request(
         &app.router, Method::POST, "/api/v1/clients/import",
@@ -2080,9 +2161,13 @@ async fn test_8_4_admin_sees_all_resources() {
 
     // Admin should see both
     let (list_status, list_body) = make_request(
-        &app.router, Method::GET, "/api/v1/clients",
-        Some(&app.admin_token), None,
-    ).await;
+        &app.router,
+        Method::GET,
+        "/api/v1/clients",
+        Some(&app.admin_token),
+        None,
+    )
+    .await;
     assert_eq!(list_status, StatusCode::OK);
     let items = list_body["data"]["items"].as_array().unwrap();
     assert!(
@@ -2100,31 +2185,40 @@ async fn test_8_4_user_sees_only_own_resources() {
     let app = setup_test_app().await;
 
     // Register second user
-    let user_b_token = register_second_user_and_login(
-        &app, "filter_user_b2", "Password123!", "User"
-    ).await;
+    let user_b_token =
+        register_second_user_and_login(&app, "filter_user_b2", "Password123!", "User").await;
 
     // User A creates a dictionary
     let (ca_status, _) = make_request(
-        &app.router, Method::POST, "/api/v1/dictionaries",
+        &app.router,
+        Method::POST,
+        "/api/v1/dictionaries",
         Some(&app.auth_token),
         Some(json!({ "category": "OwnedTest", "key": "user_a_dict", "value": "a_val" })),
-    ).await;
+    )
+    .await;
     assert_eq!(ca_status, StatusCode::CREATED);
 
     // User B creates a dictionary
     let (cb_status, _) = make_request(
-        &app.router, Method::POST, "/api/v1/dictionaries",
+        &app.router,
+        Method::POST,
+        "/api/v1/dictionaries",
         Some(&user_b_token),
         Some(json!({ "category": "OwnedTest", "key": "user_b_dict", "value": "b_val" })),
-    ).await;
+    )
+    .await;
     assert_eq!(cb_status, StatusCode::CREATED);
 
     // User A lists dictionaries — should only see own (key = user_a_dict)
     let (list_status, list_body) = make_request(
-        &app.router, Method::GET, "/api/v1/dictionaries",
-        Some(&app.auth_token), None,
-    ).await;
+        &app.router,
+        Method::GET,
+        "/api/v1/dictionaries",
+        Some(&app.auth_token),
+        None,
+    )
+    .await;
     assert_eq!(list_status, StatusCode::OK);
     let items = list_body["data"].as_array().unwrap();
     assert!(
@@ -2142,24 +2236,30 @@ async fn test_8_4_viewer_sees_only_own_resources() {
     let app = setup_test_app().await;
 
     // Create a viewer
-    let viewer_token = register_second_user_and_login(
-        &app, "filter_viewer_4", "Password123!", "Viewer"
-    ).await;
+    let viewer_token =
+        register_second_user_and_login(&app, "filter_viewer_4", "Password123!", "Viewer").await;
 
     // Admin creates a dictionary (admin-owned)
     let (ca_status, _) = make_request(
-        &app.router, Method::POST, "/api/v1/dictionaries",
+        &app.router,
+        Method::POST,
+        "/api/v1/dictionaries",
         Some(&app.admin_token),
         Some(json!({ "category": "ViewerTest", "key": "admin_dict_v", "value": "admin_val" })),
-    ).await;
+    )
+    .await;
     assert_eq!(ca_status, StatusCode::CREATED);
 
     // Viewer lists dictionaries — default viewer rule is OwnedScope,
     // so viewer sees only dicts they created (none in this test)
     let (list_status, list_body) = make_request(
-        &app.router, Method::GET, "/api/v1/dictionaries",
-        Some(&viewer_token), None,
-    ).await;
+        &app.router,
+        Method::GET,
+        "/api/v1/dictionaries",
+        Some(&viewer_token),
+        None,
+    )
+    .await;
     assert_eq!(list_status, StatusCode::OK);
     let items = list_body["data"].as_array().unwrap();
     assert!(
@@ -2197,7 +2297,8 @@ async fn test_8_5_admin_can_create_exec_policy() {
             "require_approval": false,
             "priority": 100
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(status, StatusCode::CREATED, "body: {:?}", body);
     assert_eq!(body["data"]["id"], policy_id);
 }
@@ -2222,7 +2323,8 @@ async fn test_8_5_no_exec_policy_command_creation_denied() {
             "hostname": "exec-target-import",
             "ip_address": "10.50.50.2",
         }])),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // Remote exec is disabled by default — command creation should fail
@@ -2236,11 +2338,13 @@ async fn test_8_5_no_exec_policy_command_creation_denied() {
             "command": "echo hello",
             "force": false,
         })),
-    ).await;
+    )
+    .await;
     // Remote exec disabled → 403 Forbidden
     assert!(
         cmd_status.as_u16() >= 400,
-        "command creation with remote exec disabled should be denied, got: {}", cmd_status
+        "command creation with remote exec disabled should be denied, got: {}",
+        cmd_status
     );
 }
 
@@ -2258,8 +2362,14 @@ async fn test_8_6_admin_can_list_pending_approvals() {
         "/api/v1/permissions/pending-approvals",
         Some(&app.admin_token),
         None,
-    ).await;
-    assert_eq!(status, StatusCode::OK, "admin can list pending approvals, body: {:?}", body);
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "admin can list pending approvals, body: {:?}",
+        body
+    );
     assert!(body["data"].is_array(), "data should be an array");
 }
 
@@ -2274,10 +2384,13 @@ async fn test_8_6_user_can_see_own_approvals() {
         "/api/v1/permissions/my-approvals",
         Some(&app.auth_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        status, StatusCode::OK,
-        "user should be able to see own approvals, body: {:?}", body
+        status,
+        StatusCode::OK,
+        "user should be able to see own approvals, body: {:?}",
+        body
     );
     assert!(body["data"].is_array(), "data should be an array");
 }
@@ -2293,9 +2406,11 @@ async fn test_8_6_non_admin_cannot_manage_pending_approvals() {
         "/api/v1/permissions/pending-approvals",
         Some(&app.auth_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        status, StatusCode::FORBIDDEN,
+        status,
+        StatusCode::FORBIDDEN,
         "non-admin should not access pending-approvals"
     );
 }
@@ -2305,9 +2420,8 @@ async fn test_8_6_viewer_can_see_own_approvals() {
     let app = setup_test_app().await;
 
     // Create viewer
-    let viewer_token = register_second_user_and_login(
-        &app, "viewer_approval_6", "Password123!", "Viewer"
-    ).await;
+    let viewer_token =
+        register_second_user_and_login(&app, "viewer_approval_6", "Password123!", "Viewer").await;
 
     // Viewer (any authenticated user) can see their own approvals
     let (status, body) = make_request(
@@ -2316,10 +2430,13 @@ async fn test_8_6_viewer_can_see_own_approvals() {
         "/api/v1/permissions/my-approvals",
         Some(&viewer_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        status, StatusCode::OK,
-        "viewer should be able to see own approvals, body: {:?}", body
+        status,
+        StatusCode::OK,
+        "viewer should be able to see own approvals, body: {:?}",
+        body
     );
 }
 
@@ -2332,9 +2449,8 @@ async fn test_8_7_viewer_cannot_create_resource() {
     let app = setup_test_app().await;
 
     // Create viewer
-    let viewer_token = register_second_user_and_login(
-        &app, "viewer_iso_7a", "Password123!", "Viewer"
-    ).await;
+    let viewer_token =
+        register_second_user_and_login(&app, "viewer_iso_7a", "Password123!", "Viewer").await;
 
     // Viewer cannot create a project (write)
     let (create_status, _) = make_request(
@@ -2346,9 +2462,11 @@ async fn test_8_7_viewer_cannot_create_resource() {
             "name": "Viewer Project Attempt",
             "code": "VP-001"
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(
-        create_status, StatusCode::FORBIDDEN,
+        create_status,
+        StatusCode::FORBIDDEN,
         "viewer should not be able to create projects"
     );
 }
@@ -2367,14 +2485,14 @@ async fn test_8_7_viewer_cannot_delete_resource() {
             "name": "Admin Project For Viewer Delete Test",
             "code": "VP-DEL",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(create_status, StatusCode::CREATED);
     let project_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
     // Create viewer
-    let viewer_token = register_second_user_and_login(
-        &app, "viewer_iso_7b", "Password123!", "Viewer"
-    ).await;
+    let viewer_token =
+        register_second_user_and_login(&app, "viewer_iso_7b", "Password123!", "Viewer").await;
 
     // Viewer cannot delete
     let (delete_status, _) = make_request(
@@ -2383,9 +2501,11 @@ async fn test_8_7_viewer_cannot_delete_resource() {
         &format!("/api/v1/projects/{}", project_id),
         Some(&viewer_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        delete_status, StatusCode::FORBIDDEN,
+        delete_status,
+        StatusCode::FORBIDDEN,
         "viewer should not be able to delete projects"
     );
 }
@@ -2406,7 +2526,8 @@ async fn test_8_7_admin_can_bypass_ownership_and_update_any_client() {
             "hostname": "bypass-client",
             "ip_address": "10.60.60.1",
         }])),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // Admin updates the client (not their resource — AllScope bypasses ownership)
@@ -2420,10 +2541,13 @@ async fn test_8_7_admin_can_bypass_ownership_and_update_any_client() {
             "hostname": "admin-updated-client",
             "ip_address": "10.60.60.2",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(
-        update_status, StatusCode::OK,
-        "admin should bypass ownership and update any client, body: {:?}", update_body
+        update_status,
+        StatusCode::OK,
+        "admin should bypass ownership and update any client, body: {:?}",
+        update_body
     );
     assert_eq!(update_body["data"]["hostname"], "admin-updated-client");
 }
@@ -2444,7 +2568,8 @@ async fn test_8_7_admin_can_bypass_ownership_and_delete_any_client() {
             "hostname": "bypass-delete-client",
             "ip_address": "10.70.70.1",
         }])),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // Admin deletes the client
@@ -2454,10 +2579,13 @@ async fn test_8_7_admin_can_bypass_ownership_and_delete_any_client() {
         &format!("/api/v1/clients/{}", client_id),
         Some(&app.admin_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        delete_status, StatusCode::OK,
-        "admin should bypass ownership and delete any client, body: {:?}", delete_body
+        delete_status,
+        StatusCode::OK,
+        "admin should bypass ownership and delete any client, body: {:?}",
+        delete_body
     );
 }
 
@@ -2477,7 +2605,8 @@ async fn test_8_7_user_can_update_own_client() {
             "hostname": "user-own-client",
             "ip_address": "10.80.80.1",
         }])),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // Same user updates their own client
@@ -2491,9 +2620,11 @@ async fn test_8_7_user_can_update_own_client() {
             "hostname": "user-updated-own-client",
             "ip_address": "10.80.80.2",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(
-        update_status, StatusCode::OK,
+        update_status,
+        StatusCode::OK,
         "user should be able to update their own client"
     );
 }
@@ -2503,9 +2634,8 @@ async fn test_8_7_user_cannot_update_other_users_client() {
     let app = setup_test_app().await;
 
     // Register second user
-    let second_token = register_second_user_and_login(
-        &app, "isolation_user_b", "Password123!", "User"
-    ).await;
+    let second_token =
+        register_second_user_and_login(&app, "isolation_user_b", "Password123!", "User").await;
 
     // User A imports a client
     let client_id = Uuid::new_v4().to_string();
@@ -2519,7 +2649,8 @@ async fn test_8_7_user_cannot_update_other_users_client() {
             "hostname": "isolation-client-a",
             "ip_address": "10.90.90.1",
         }])),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // User B cannot update user A's client
@@ -2533,10 +2664,13 @@ async fn test_8_7_user_cannot_update_other_users_client() {
             "hostname": "isolation-hacked",
             "ip_address": "10.90.90.99",
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(
-        update_status, StatusCode::FORBIDDEN,
-        "user B should not update user A's client, body: {:?}", update_body
+        update_status,
+        StatusCode::FORBIDDEN,
+        "user B should not update user A's client, body: {:?}",
+        update_body
     );
 }
 
@@ -2545,9 +2679,8 @@ async fn test_8_7_user_cannot_delete_other_users_client() {
     let app = setup_test_app().await;
 
     // Register second user
-    let second_token = register_second_user_and_login(
-        &app, "isolation_user_c", "Password123!", "User"
-    ).await;
+    let second_token =
+        register_second_user_and_login(&app, "isolation_user_c", "Password123!", "User").await;
 
     // User A imports a client
     let client_id = Uuid::new_v4().to_string();
@@ -2561,7 +2694,8 @@ async fn test_8_7_user_cannot_delete_other_users_client() {
             "hostname": "isolation-delete-a",
             "ip_address": "10.91.91.1",
         }])),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK);
 
     // User B cannot delete user A's client
@@ -2571,10 +2705,13 @@ async fn test_8_7_user_cannot_delete_other_users_client() {
         &format!("/api/v1/clients/{}", client_id),
         Some(&second_token),
         None,
-    ).await;
+    )
+    .await;
     assert_eq!(
-        delete_status, StatusCode::FORBIDDEN,
-        "user B should not delete user A's client, body: {:?}", delete_body
+        delete_status,
+        StatusCode::FORBIDDEN,
+        "user B should not delete user A's client, body: {:?}",
+        delete_body
     );
 }
 
@@ -2652,7 +2789,10 @@ async fn test_11_2_cast_recorder_create_write_finalize() {
 
     let contents = CastRecorderInner::read_cast_file(&session_id).expect("read_cast_file");
     let text = String::from_utf8_lossy(&contents);
-    assert!(text.contains("\"version\":2"), "should have asciinema header");
+    assert!(
+        text.contains("\"version\":2"),
+        "should have asciinema header"
+    );
     assert!(text.contains("hello"), "should contain first frame data");
     assert!(text.contains("world"), "should contain second frame data");
 
@@ -2670,7 +2810,10 @@ async fn test_11_3_session_api_endpoints() {
     // Admin can list sessions (empty list as admin)
     let (status, body) = make_get(&app.router, "/api/v1/sessions", Some(&app.admin_token)).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body["data"]["items"].is_array(), "sessions list should be paginated");
+    assert!(
+        body["data"]["items"].is_array(),
+        "sessions list should be paginated"
+    );
 }
 
 #[tokio::test]
@@ -2678,8 +2821,18 @@ async fn test_11_4_remote_exec_config() {
     let app = setup_test_app().await;
 
     // GET returns current config
-    let (status, body) = make_get(&app.router, "/api/v1/remote-exec/config", Some(&app.admin_token)).await;
-    assert_eq!(status, StatusCode::OK, "GET config should succeed, body: {:?}", body);
+    let (status, body) = make_get(
+        &app.router,
+        "/api/v1/remote-exec/config",
+        Some(&app.admin_token),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "GET config should succeed, body: {:?}",
+        body
+    );
 
     // PUT update config as Admin
     let (status, _) = make_put(
@@ -2687,11 +2840,21 @@ async fn test_11_4_remote_exec_config() {
         "/api/v1/remote-exec/config",
         Some(&app.admin_token),
         json!({ "enabled": false }),
-    ).await;
-    assert_eq!(status, StatusCode::OK, "PUT config should succeed for Admin");
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "PUT config should succeed for Admin"
+    );
 
     // Verify the change
-    let (status, body) = make_get(&app.router, "/api/v1/remote-exec/config", Some(&app.admin_token)).await;
+    let (status, body) = make_get(
+        &app.router,
+        "/api/v1/remote-exec/config",
+        Some(&app.admin_token),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["enabled"], false);
 }
@@ -2715,7 +2878,8 @@ async fn test_11_5_batch_execution_integration() {
             "hostname": "batch-exec-host",
             "ip_address": "10.100.1.1",
         }]),
-    ).await;
+    )
+    .await;
     assert_eq!(imp_status, StatusCode::OK, "import client should succeed");
 
     // Enable remote exec
@@ -2724,8 +2888,13 @@ async fn test_11_5_batch_execution_integration() {
         "/api/v1/remote-exec/config",
         Some(&app.admin_token),
         json!({ "enabled": true }),
-    ).await;
-    assert_eq!(cfg_status, StatusCode::OK, "enable remote exec should succeed");
+    )
+    .await;
+    assert_eq!(
+        cfg_status,
+        StatusCode::OK,
+        "enable remote exec should succeed"
+    );
 
     // Create a command
     let (cmd_status, cmd_body) = make_post(
@@ -2737,9 +2906,18 @@ async fn test_11_5_batch_execution_integration() {
             "command": "echo hello",
             "force": false,
         }),
-    ).await;
-    assert_eq!(cmd_status, StatusCode::OK, "create command should succeed, body: {:?}", cmd_body);
-    assert!(cmd_body["data"]["task_id"].is_string(), "should return task_id");
+    )
+    .await;
+    assert_eq!(
+        cmd_status,
+        StatusCode::OK,
+        "create command should succeed, body: {:?}",
+        cmd_body
+    );
+    assert!(
+        cmd_body["data"]["task_id"].is_string(),
+        "should return task_id"
+    );
 }
 
 #[tokio::test]
@@ -2756,7 +2934,11 @@ async fn test_11_6_cast_cleanup() {
 
     // Delete old casts with retention 0 (deletes everything)
     let deleted = CastRecorderInner::delete_old_casts(0).expect("delete_old_casts");
-    assert!(deleted >= 1, "should have deleted at least 1 cast file, got {}", deleted);
+    assert!(
+        deleted >= 1,
+        "should have deleted at least 1 cast file, got {}",
+        deleted
+    );
     assert!(
         !CastRecorderInner::cast_file_exists(&session_id),
         "cast file should no longer exist"

@@ -5,10 +5,10 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use common::entity::permission::{PermissionAction, ResourceType, ScopeConstraint};
 use chrono::Utc;
 use common::entity::dictionary::Dictionary;
-use common::entity::user::{Role, User};
+use common::entity::permission::{PermissionAction, ResourceType, ScopeConstraint};
+use common::entity::user::User;
 use common::models::ApiResponse;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -36,12 +36,9 @@ pub async fn list_dictionaries(
             let scope = perm_ctx
                 .evaluate(&ResourceType::Dictionary, &PermissionAction::View)
                 .unwrap_or(ScopeConstraint::None);
-            let items = PermissionContext::filter_by_scope(
-                items,
-                &scope,
-                &perm_ctx.user_id,
-                |d| d.created_by.as_deref(),
-            );
+            let items = PermissionContext::filter_by_scope(items, &scope, &perm_ctx.user_id, |d| {
+                d.created_by.as_deref()
+            });
             let response = ApiResponse {
                 status: 200,
                 message: "Success".to_string(),
@@ -64,9 +61,25 @@ pub async fn list_dictionaries(
 pub async fn get_dictionary(
     Path(id): Path<String>,
     Extension(repo): Extension<Arc<DictionaryRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
     match repo.get(&id).await {
         Ok(Some(item)) => {
+            if !perm_ctx.allows_resource(
+                &ResourceType::Dictionary,
+                &PermissionAction::View,
+                item.created_by.as_deref(),
+            ) {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(ApiResponse::<Dictionary> {
+                        status: 403,
+                        message: "Forbidden".into(),
+                        data: None,
+                    }),
+                )
+                    .into_response();
+            }
             let response = ApiResponse {
                 status: 200,
                 message: "Success".to_string(),
@@ -96,9 +109,19 @@ pub async fn get_dictionary(
 /// Create a new dictionary item
 pub async fn create_dictionary(
     Extension(repo): Extension<Arc<DictionaryRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
     Extension(user): Extension<User>,
     Json(mut item): Json<Dictionary>,
 ) -> impl IntoResponse {
+    if !perm_ctx.allows_action(&ResourceType::Dictionary, &PermissionAction::Create) {
+        let response = ApiResponse::<Dictionary> {
+            status: 403,
+            message: "Forbidden: insufficient permission to create dictionary items".to_string(),
+            data: None,
+        };
+        return (StatusCode::FORBIDDEN, Json(response)).into_response();
+    }
+
     // Ensure ID is set
     if item.id.is_empty() {
         item.id = Uuid::new_v4().to_string();
@@ -134,19 +157,21 @@ pub async fn create_dictionary(
 pub async fn update_dictionary(
     Path(id): Path<String>,
     Extension(repo): Extension<Arc<DictionaryRepository>>,
-    Extension(user): Extension<User>,
+    Extension(perm_ctx): Extension<PermissionContext>,
     Json(mut item): Json<Dictionary>,
 ) -> impl IntoResponse {
     // Check if exists
     match repo.get(&id).await {
         Ok(Some(existing_item)) => {
-            // Ownership check
-            if user.role != Role::Admin
-                && existing_item.created_by.as_deref() != Some(&user.id)
-            {
+            if !perm_ctx.allows_resource(
+                &ResourceType::Dictionary,
+                &PermissionAction::Update,
+                existing_item.created_by.as_deref(),
+            ) {
                 let response = ApiResponse::<Dictionary> {
                     status: 403,
-                    message: "Forbidden: you can only update resources you created".to_string(),
+                    message: "Forbidden: insufficient permission to update this dictionary item"
+                        .to_string(),
                     data: None,
                 };
                 return (StatusCode::FORBIDDEN, Json(response)).into_response();
@@ -201,17 +226,19 @@ pub async fn update_dictionary(
 pub async fn delete_dictionary(
     Path(id): Path<String>,
     Extension(repo): Extension<Arc<DictionaryRepository>>,
-    Extension(user): Extension<User>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
-    // Ownership check
     match repo.get(&id).await {
         Ok(Some(item)) => {
-            if user.role != Role::Admin
-                && item.created_by.as_deref() != Some(&user.id)
-            {
+            if !perm_ctx.allows_resource(
+                &ResourceType::Dictionary,
+                &PermissionAction::Delete,
+                item.created_by.as_deref(),
+            ) {
                 let response = ApiResponse::<()> {
                     status: 403,
-                    message: "Forbidden: you can only delete resources you created".to_string(),
+                    message: "Forbidden: insufficient permission to delete this dictionary item"
+                        .to_string(),
                     data: None,
                 };
                 return (StatusCode::FORBIDDEN, Json(response)).into_response();
@@ -266,7 +293,12 @@ mod tests {
     use serde_json::json;
     use tower::ServiceExt;
 
-    async fn make_post(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+    async fn make_post(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder()
             .method(Method::POST)
             .uri(path)
@@ -275,19 +307,26 @@ mod tests {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
         }
-        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let req = req
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
-        let mut req = Request::builder()
-            .method(Method::GET)
-            .uri(path);
+    async fn make_get(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::GET).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
@@ -296,12 +335,20 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_put(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+    async fn make_put(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder()
             .method(Method::PUT)
             .uri(path)
@@ -310,19 +357,26 @@ mod tests {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
         }
-        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let req = req
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_delete(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
-        let mut req = Request::builder()
-            .method(Method::DELETE)
-            .uri(path);
+    async fn make_delete(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::DELETE).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
@@ -331,19 +385,28 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
     #[tokio::test]
     async fn test_create_dictionary() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) = make_post(&app.router, "/api/v1/dictionaries", Some(&app.admin_token), json!({
-            "key": "Linux",
-            "category": "OS",
-            "value": "linux"
-        })).await;
+        let (status, body) = make_post(
+            &app.router,
+            "/api/v1/dictionaries",
+            Some(&app.admin_token),
+            json!({
+                "key": "Linux",
+                "category": "OS",
+                "value": "linux"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::CREATED);
         assert_eq!(body["status"], 201);
         assert_eq!(body["data"]["key"], "Linux");
@@ -352,12 +415,19 @@ mod tests {
     #[tokio::test]
     async fn test_list_dictionaries() {
         let app = TestAppBuilder::new().build().await;
-        let _ = make_post(&app.router, "/api/v1/dictionaries", Some(&app.admin_token), json!({
-            "key": "Linux",
-            "category": "OS",
-            "value": "linux"
-        })).await;
-        let (status, body) = make_get(&app.router, "/api/v1/dictionaries", Some(&app.admin_token)).await;
+        let _ = make_post(
+            &app.router,
+            "/api/v1/dictionaries",
+            Some(&app.admin_token),
+            json!({
+                "key": "Linux",
+                "category": "OS",
+                "value": "linux"
+            }),
+        )
+        .await;
+        let (status, body) =
+            make_get(&app.router, "/api/v1/dictionaries", Some(&app.admin_token)).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], 200);
     }
@@ -365,7 +435,12 @@ mod tests {
     #[tokio::test]
     async fn test_get_dictionary_not_found() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) = make_get(&app.router, "/api/v1/dictionaries/nonexistent", Some(&app.admin_token)).await;
+        let (status, body) = make_get(
+            &app.router,
+            "/api/v1/dictionaries/nonexistent",
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["status"], 404);
     }
@@ -373,14 +448,25 @@ mod tests {
     #[tokio::test]
     async fn test_get_dictionary() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, create_body) = make_post(&app.router, "/api/v1/dictionaries", Some(&app.admin_token), json!({
-            "key": "Linux",
-            "category": "OS",
-            "value": "linux"
-        })).await;
+        let (create_status, create_body) = make_post(
+            &app.router,
+            "/api/v1/dictionaries",
+            Some(&app.admin_token),
+            json!({
+                "key": "Linux",
+                "category": "OS",
+                "value": "linux"
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
         let id = create_body["data"]["id"].as_str().unwrap();
-        let (status, body) = make_get(&app.router, &format!("/api/v1/dictionaries/{}", id), Some(&app.admin_token)).await;
+        let (status, body) = make_get(
+            &app.router,
+            &format!("/api/v1/dictionaries/{}", id),
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], 200);
         assert_eq!(body["data"]["key"], "Linux");
@@ -389,18 +475,30 @@ mod tests {
     #[tokio::test]
     async fn test_update_dictionary() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, create_body) = make_post(&app.router, "/api/v1/dictionaries", Some(&app.admin_token), json!({
-            "key": "Linux",
-            "category": "OS",
-            "value": "linux"
-        })).await;
+        let (create_status, create_body) = make_post(
+            &app.router,
+            "/api/v1/dictionaries",
+            Some(&app.admin_token),
+            json!({
+                "key": "Linux",
+                "category": "OS",
+                "value": "linux"
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
         let id = create_body["data"]["id"].as_str().unwrap();
-        let (status, body) = make_put(&app.router, &format!("/api/v1/dictionaries/{}", id), Some(&app.admin_token), json!({
-            "key": "Updated",
-            "category": "OS",
-            "value": "updated"
-        })).await;
+        let (status, body) = make_put(
+            &app.router,
+            &format!("/api/v1/dictionaries/{}", id),
+            Some(&app.admin_token),
+            json!({
+                "key": "Updated",
+                "category": "OS",
+                "value": "updated"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], 200);
     }
@@ -408,14 +506,25 @@ mod tests {
     #[tokio::test]
     async fn test_delete_dictionary() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, create_body) = make_post(&app.router, "/api/v1/dictionaries", Some(&app.admin_token), json!({
-            "key": "Linux",
-            "category": "OS",
-            "value": "linux"
-        })).await;
+        let (create_status, create_body) = make_post(
+            &app.router,
+            "/api/v1/dictionaries",
+            Some(&app.admin_token),
+            json!({
+                "key": "Linux",
+                "category": "OS",
+                "value": "linux"
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
         let id = create_body["data"]["id"].as_str().unwrap();
-        let (status, body) = make_delete(&app.router, &format!("/api/v1/dictionaries/{}", id), Some(&app.admin_token)).await;
+        let (status, body) = make_delete(
+            &app.router,
+            &format!("/api/v1/dictionaries/{}", id),
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], 200);
     }

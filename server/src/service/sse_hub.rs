@@ -92,21 +92,15 @@ mod tests {
         let hub = SseHub::new();
         let mut rx = hub.subscribe("task-1").await;
 
-        let lines = vec![
-            CommandLogLine {
-                seq: 1,
-                line: "hello".to_string(),
-                stream: LogStream::Stdout,
-                timestamp: chrono::Utc::now().to_rfc3339(),
-            },
-        ];
+        let lines = vec![CommandLogLine {
+            seq: 1,
+            line: "hello".to_string(),
+            stream: LogStream::Stdout,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }];
         hub.publish("task-1", &lines).await;
 
-        let received = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            rx.recv(),
-        )
-        .await;
+        let received = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
         assert!(received.is_ok(), "Should receive message within timeout");
         let line = received.unwrap().unwrap();
         assert_eq!(line.seq, 1);
@@ -120,14 +114,12 @@ mod tests {
 
         hub.close_task("task-2").await;
 
-        let lines = vec![
-            CommandLogLine {
-                seq: 1,
-                line: "after close".to_string(),
-                stream: LogStream::Stdout,
-                timestamp: chrono::Utc::now().to_rfc3339(),
-            },
-        ];
+        let lines = vec![CommandLogLine {
+            seq: 1,
+            line: "after close".to_string(),
+            stream: LogStream::Stdout,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }];
         // Should not panic even though channel was removed
         hub.publish("task-2", &lines).await;
     }

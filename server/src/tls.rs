@@ -1,8 +1,8 @@
 use anyhow::Result;
 use axum::serve::Listener;
-use rcgen::{CertificateParams, KeyPair, DistinguishedName};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+use rcgen::{CertificateParams, DistinguishedName, KeyPair};
 use rustls::ServerConfig;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::fs;
 use std::io;
 use std::net::SocketAddr;
@@ -29,15 +29,12 @@ pub fn generate_self_signed_cert() -> Result<(String, String)> {
     let cert_dir = default_cert_dir();
     fs::create_dir_all(&cert_dir)?;
 
-    let mut params = CertificateParams::new(vec![
-        "localhost".to_string(),
-        "127.0.0.1".to_string(),
-    ])?;
+    let mut params =
+        CertificateParams::new(vec!["localhost".to_string(), "127.0.0.1".to_string()])?;
     params.distinguished_name = DistinguishedName::new();
-    params.distinguished_name.push(
-        rcgen::DnType::CommonName,
-        "rs-cmdb Self-Signed",
-    );
+    params
+        .distinguished_name
+        .push(rcgen::DnType::CommonName, "rs-cmdb Self-Signed");
 
     let key_pair = KeyPair::generate()?;
     let cert = params.self_signed(&key_pair)?;
@@ -74,12 +71,20 @@ pub fn load_or_generate_tls_config(
         }
         _ => {
             warn!("No TLS certificate configured. Generating self-signed certificate.");
-            warn!("Self-signed certificates are not trusted by browsers. Configure proper TLS for production.");
+            warn!(
+                "Self-signed certificates are not trusted by browsers. Configure proper TLS for production."
+            );
             let cert_path = default_cert_path();
             let key_path = default_key_path();
             if cert_path.exists() && key_path.exists() {
-                info!("Using existing self-signed certificate from {:?}", cert_path);
-                (fs::read_to_string(&cert_path)?, fs::read_to_string(&key_path)?)
+                info!(
+                    "Using existing self-signed certificate from {:?}",
+                    cert_path
+                );
+                (
+                    fs::read_to_string(&cert_path)?,
+                    fs::read_to_string(&key_path)?,
+                )
             } else {
                 generate_self_signed_cert()?
             }
@@ -87,16 +92,13 @@ pub fn load_or_generate_tls_config(
     };
 
     let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cert_pem.as_bytes())
-        .collect::<std::result::Result<Vec<_>, _>>()?
-        .into_iter()
-        .map(CertificateDer::from)
-        .collect();
+        .collect::<std::result::Result<Vec<_>, _>>()?;
 
     let key_der = rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_bytes())
         .next()
         .transpose()?
         .ok_or_else(|| anyhow::anyhow!("No private key found in TLS key file"))?;
-    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_der));
+    let key = PrivateKeyDer::Pkcs8(key_der);
 
     let config = ServerConfig::builder()
         .with_no_client_auth()
@@ -130,15 +132,13 @@ impl Listener for TlsListener {
         async move {
             loop {
                 match tcp.accept().await {
-                    Ok((stream, addr)) => {
-                        match acceptor.accept(stream).await {
-                            Ok(tls_stream) => return (tls_stream, addr),
-                            Err(e) => {
-                                warn!("TLS handshake error: {}", e);
-                                continue;
-                            }
+                    Ok((stream, addr)) => match acceptor.accept(stream).await {
+                        Ok(tls_stream) => return (tls_stream, addr),
+                        Err(e) => {
+                            warn!("TLS handshake error: {}", e);
+                            continue;
                         }
-                    }
+                    },
                     Err(e) => {
                         warn!("TCP accept error: {}", e);
                         continue;

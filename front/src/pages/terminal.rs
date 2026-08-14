@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use js_sys::{Array, Function, Object, Reflect};
 use serde_json::json;
-use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::window;
 use web_sys::{CloseEvent, Event, HtmlElement, MessageEvent, WebSocket};
@@ -21,7 +21,10 @@ use crate::icons::{History, LoaderCircle, RefreshCw, Server, Terminal};
 use crate::routes::Route;
 use crate::services::api;
 use crate::services::command;
-use crate::types::{Client, CreateTerminalSessionRequest, ResizeTerminalRequest, TerminalSessionState, TerminalSessionSummary};
+use crate::types::{
+    Client, CreateTerminalSessionRequest, ResizeTerminalRequest, TerminalSessionState,
+    TerminalSessionSummary,
+};
 use crate::utils::format::format_datetime_with_ago;
 use common::entity::permission::TerminalMode;
 
@@ -65,7 +68,10 @@ fn terminal_state_badge(state: &TerminalSessionState, t: &I18n) -> Html {
     let (variant, label) = match state {
         TerminalSessionState::Pending => (BadgeVariant::Warning, t.t("execution.status.pending")),
         TerminalSessionState::Active => (BadgeVariant::Info, t.t("execution.status.running")),
-        TerminalSessionState::Closed => (BadgeVariant::Secondary, t.t("execution.terminal.state_closed")),
+        TerminalSessionState::Closed => (
+            BadgeVariant::Secondary,
+            t.t("execution.terminal.state_closed"),
+        ),
         TerminalSessionState::Failed => (BadgeVariant::Destructive, t.t("execution.status.failed")),
     };
     html! { <Badge variant={variant}>{label}</Badge> }
@@ -112,7 +118,11 @@ fn js_call1(target: &JsValue, name: &str, arg: &JsValue) -> Result<JsValue, Stri
         .map_err(|err| js_error(err, "js call failed"))
 }
 
-fn create_terminal_runtime(host: &HtmlElement, cols: u16, rows: u16) -> Result<(JsValue, Option<JsValue>), String> {
+fn create_terminal_runtime(
+    host: &HtmlElement,
+    cols: u16,
+    rows: u16,
+) -> Result<(JsValue, Option<JsValue>), String> {
     let global = js_sys::global();
     let terminal_ctor = Reflect::get(&global, &JsValue::from_str("Terminal"))
         .map_err(|err| js_error(err, "xterm.js not loaded"))?
@@ -124,15 +134,33 @@ fn create_terminal_runtime(host: &HtmlElement, cols: u16, rows: u16) -> Result<(
         .map_err(|err| js_error(err, "failed to set terminal option"))?;
     Reflect::set(&options, &JsValue::from_str("convertEol"), &JsValue::TRUE)
         .map_err(|err| js_error(err, "failed to set terminal option"))?;
-    Reflect::set(&options, &JsValue::from_str("cols"), &JsValue::from_f64(cols as f64))
-        .map_err(|err| js_error(err, "failed to set terminal option"))?;
-    Reflect::set(&options, &JsValue::from_str("rows"), &JsValue::from_f64(rows as f64))
-        .map_err(|err| js_error(err, "failed to set terminal option"))?;
-    Reflect::set(&options, &JsValue::from_str("fontFamily"), &JsValue::from_str("JetBrains Mono, monospace"))
-        .map_err(|err| js_error(err, "failed to set terminal option"))?;
+    Reflect::set(
+        &options,
+        &JsValue::from_str("cols"),
+        &JsValue::from_f64(cols as f64),
+    )
+    .map_err(|err| js_error(err, "failed to set terminal option"))?;
+    Reflect::set(
+        &options,
+        &JsValue::from_str("rows"),
+        &JsValue::from_f64(rows as f64),
+    )
+    .map_err(|err| js_error(err, "failed to set terminal option"))?;
+    Reflect::set(
+        &options,
+        &JsValue::from_str("fontFamily"),
+        &JsValue::from_str("JetBrains Mono, monospace"),
+    )
+    .map_err(|err| js_error(err, "failed to set terminal option"))?;
     let theme = js_sys::Object::from_entries(&Array::of2(
-        &Array::of2(&JsValue::from_str("background"), &JsValue::from_str("#020617")),
-        &Array::of2(&JsValue::from_str("foreground"), &JsValue::from_str("#86efac")),
+        &Array::of2(
+            &JsValue::from_str("background"),
+            &JsValue::from_str("#020617"),
+        ),
+        &Array::of2(
+            &JsValue::from_str("foreground"),
+            &JsValue::from_str("#86efac"),
+        ),
     ))
     .map_err(|err| js_error(err, "failed to set terminal theme"))?;
     Reflect::set(&options, &JsValue::from_str("theme"), &JsValue::from(theme))
@@ -173,8 +201,12 @@ fn fit_terminal(terminal: &JsValue, fit_addon: Option<&JsValue>) -> Option<(u16,
     if let Some(addon) = fit_addon {
         let _ = js_call0(addon, "fit");
     }
-    let cols = Reflect::get(terminal, &JsValue::from_str("cols")).ok()?.as_f64()? as u16;
-    let rows = Reflect::get(terminal, &JsValue::from_str("rows")).ok()?.as_f64()? as u16;
+    let cols = Reflect::get(terminal, &JsValue::from_str("cols"))
+        .ok()?
+        .as_f64()? as u16;
+    let rows = Reflect::get(terminal, &JsValue::from_str("rows"))
+        .ok()?
+        .as_f64()? as u16;
     Some((cols, rows))
 }
 
@@ -296,7 +328,9 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
                 (*config_loading),
                 (*opening_session),
                 (*terminal_bootstrapped),
-                (*current_session).as_ref().map(|session| session.session_id.clone()),
+                (*current_session)
+                    .as_ref()
+                    .map(|session| session.session_id.clone()),
             ),
             move |_| -> Box<dyn FnOnce()> {
                 if *config_loading || *opening_session || *terminal_bootstrapped {
@@ -357,7 +391,9 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
         let rows_value = *rows;
         use_effect_with(
             (
-                (*current_session).as_ref().map(|session| session.session_id.clone()),
+                (*current_session)
+                    .as_ref()
+                    .map(|session| session.session_id.clone()),
                 cols_value,
                 rows_value,
             ),
@@ -383,7 +419,9 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
                                     notification.set(Some((NotificationType::Error, err.message)));
                                     return;
                                 }
-                                if let Ok(updated) = command::fetch_terminal_session(&session_id).await {
+                                if let Ok(updated) =
+                                    command::fetch_terminal_session(&session_id).await
+                                {
                                     current_session.set(Some(updated));
                                 }
                             });
@@ -396,7 +434,9 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
     }
 
     {
-        let session_key = (*current_session).as_ref().map(|session| session.session_id.clone());
+        let session_key = (*current_session)
+            .as_ref()
+            .map(|session| session.session_id.clone());
         use_effect_with(session_key, move |session_key| {
             let Some(session_id) = session_key.clone() else {
                 return Box::new(|| ()) as Box<dyn FnOnce()>;
@@ -411,7 +451,9 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
     }
 
     {
-        let session_key = (*current_session).as_ref().map(|session| session.session_id.clone());
+        let session_key = (*current_session)
+            .as_ref()
+            .map(|session| session.session_id.clone());
         let terminal_nonce = *terminal_nonce;
         let terminal_host = terminal_host.clone();
         let terminal_ref = terminal_ref.clone();
@@ -457,14 +499,15 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
             let initial_cols = *cols;
             let initial_rows = *rows;
 
-            let (terminal, fit_addon) = match create_terminal_runtime(&host, initial_cols, initial_rows) {
-                Ok(runtime) => runtime,
-                Err(message) => {
-                    notification.set(Some((NotificationType::Error, message)));
-                    terminal_status.set(TERMINAL_STATUS_DISCONNECTED.to_string());
-                    return Box::new(|| ()) as Box<dyn FnOnce()>;
-                }
-            };
+            let (terminal, fit_addon) =
+                match create_terminal_runtime(&host, initial_cols, initial_rows) {
+                    Ok(runtime) => runtime,
+                    Err(message) => {
+                        notification.set(Some((NotificationType::Error, message)));
+                        terminal_status.set(TERMINAL_STATUS_DISCONNECTED.to_string());
+                        return Box::new(|| ()) as Box<dyn FnOnce()>;
+                    }
+                };
             clear_terminal(&terminal);
 
             let ws_url = match command::terminal_ws_url(&session_id) {
@@ -479,7 +522,10 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
             let websocket = match WebSocket::new(&ws_url) {
                 Ok(ws) => ws,
                 Err(err) => {
-                    notification.set(Some((NotificationType::Error, js_error(err, "failed to open websocket"))));
+                    notification.set(Some((
+                        NotificationType::Error,
+                        js_error(err, "failed to open websocket"),
+                    )));
                     terminal_status.set(TERMINAL_STATUS_DISCONNECTED.to_string());
                     return Box::new(|| ()) as Box<dyn FnOnce()>;
                 }
@@ -491,7 +537,8 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
             let flush_timeout_for_input = flush_timeout_ref.clone();
             let on_data = Closure::<dyn FnMut(String)>::wrap(Box::new(move |data: String| {
                 pending_input_for_input.borrow_mut().push_str(&data);
-                let flush_immediately = data.contains('\n') || data.contains('\r') || data.contains('\t');
+                let flush_immediately =
+                    data.contains('\n') || data.contains('\r') || data.contains('\t');
 
                 let do_flush = {
                     let pending_input_for_input = pending_input_for_input.clone();
@@ -516,10 +563,12 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
                 } else if flush_timeout_for_input.borrow().is_none() {
                     let callback = Closure::<dyn FnMut()>::once(do_flush);
                     if let Some(win) = window() {
-                        if let Ok(timeout_id) = win.set_timeout_with_callback_and_timeout_and_arguments_0(
-                            callback.as_ref().unchecked_ref(),
-                            INPUT_FLUSH_DELAY_MS,
-                        ) {
+                        if let Ok(timeout_id) = win
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                callback.as_ref().unchecked_ref(),
+                                INPUT_FLUSH_DELAY_MS,
+                            )
+                        {
                             *flush_timeout_for_input.borrow_mut() = Some(timeout_id);
                             callback.forget();
                         }
@@ -530,11 +579,12 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
             let _ = js_call1(&terminal, "onData", on_data.as_ref().unchecked_ref());
 
             let terminal_for_message = terminal.clone();
-            let on_message = Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(move |event: MessageEvent| {
-                if let Some(text) = event.data().as_string() {
-                    write_terminal(&terminal_for_message, &text);
-                }
-            }));
+            let on_message =
+                Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(move |event: MessageEvent| {
+                    if let Some(text) = event.data().as_string() {
+                        write_terminal(&terminal_for_message, &text);
+                    }
+                }));
             websocket.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
 
             let fit_for_open = fit_addon.clone();
@@ -548,7 +598,9 @@ pub fn terminal_page(props: &TerminalPageProps) -> Html {
             let websocket_for_open = websocket.clone();
             let on_open = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_| {
                 terminal_status_for_open.set(TERMINAL_STATUS_CONNECTED.to_string());
-                if let Some((actual_cols, actual_rows)) = fit_terminal(&terminal_for_open, fit_for_open.as_ref()) {
+                if let Some((actual_cols, actual_rows)) =
+                    fit_terminal(&terminal_for_open, fit_for_open.as_ref())
+                {
                     cols_for_open.set(actual_cols);
                     rows_for_open.set(actual_rows);
                     let notification = notification_for_open.clone();

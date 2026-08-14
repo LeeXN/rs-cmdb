@@ -114,10 +114,14 @@ mod tests {
         client.id = "agent-001".to_string();
         client.serial_number = Some("SN-AGENT-001".to_string());
         // Store hashed token as real code does
-        client.agent_token = Some(crate::service::auth_service::hash_token("my-secret-token").unwrap());
+        client.agent_token =
+            Some(crate::service::auth_service::hash_token("my-secret-token").unwrap());
         repo.save(&client).await.unwrap();
 
-        let ok = repo.verify_agent_token("agent-001", "my-secret-token").await.unwrap();
+        let ok = repo
+            .verify_agent_token("agent-001", "my-secret-token")
+            .await
+            .unwrap();
         assert!(ok);
     }
 
@@ -129,10 +133,14 @@ mod tests {
         let mut client = Client::new("test-agent".to_string(), "10.0.0.1".to_string());
         client.id = "agent-002".to_string();
         client.serial_number = Some("SN-AGENT-002".to_string());
-        client.agent_token = Some(crate::service::auth_service::hash_token("correct-token").unwrap());
+        client.agent_token =
+            Some(crate::service::auth_service::hash_token("correct-token").unwrap());
         repo.save(&client).await.unwrap();
 
-        let ok = repo.verify_agent_token("agent-002", "wrong-token").await.unwrap();
+        let ok = repo
+            .verify_agent_token("agent-002", "wrong-token")
+            .await
+            .unwrap();
         assert!(!ok);
     }
 
@@ -141,7 +149,10 @@ mod tests {
         let db = Arc::new(setup_test_db().unwrap());
         let repo = Arc::new(ClientRepository::new(db));
 
-        let ok = repo.verify_agent_token("nonexistent", "any-token").await.unwrap();
+        let ok = repo
+            .verify_agent_token("nonexistent", "any-token")
+            .await
+            .unwrap();
         assert!(!ok);
     }
 
@@ -155,7 +166,10 @@ mod tests {
         client.serial_number = Some("SN-AGENT-003".to_string());
         repo.save(&client).await.unwrap();
 
-        let ok = repo.verify_agent_token("agent-003", "any-token").await.unwrap();
+        let ok = repo
+            .verify_agent_token("agent-003", "any-token")
+            .await
+            .unwrap();
         assert!(!ok);
     }
 

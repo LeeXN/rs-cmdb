@@ -9,26 +9,37 @@ use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, Table
 use crate::hooks::use_trans::use_trans;
 use crate::i18n::I18n;
 use crate::services::{api, command};
-use crate::types::{RemoteExecOpsOverviewResponse, TerminalSessionSummary, TerminalSessionState};
 use crate::types::UpdateRemoteExecConfigRequest;
-use crate::utils::i18n_helper::translate_api_message;
+use crate::types::{RemoteExecOpsOverviewResponse, TerminalSessionState, TerminalSessionSummary};
 use crate::utils::format::format_datetime_with_ago;
+use crate::utils::i18n_helper::translate_api_message;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 fn terminal_state_label(state: &TerminalSessionState, t: &I18n) -> (String, &'static str) {
     match state {
-        TerminalSessionState::Pending => (t.t("execution.ops.terminal_state.pending"), "text-warning"),
-        TerminalSessionState::Active => (t.t("execution.ops.terminal_state.active"), "text-primary"),
-        TerminalSessionState::Closed => (t.t("execution.ops.terminal_state.closed"), "text-muted-foreground"),
+        TerminalSessionState::Pending => {
+            (t.t("execution.ops.terminal_state.pending"), "text-warning")
+        }
+        TerminalSessionState::Active => {
+            (t.t("execution.ops.terminal_state.active"), "text-primary")
+        }
+        TerminalSessionState::Closed => (
+            t.t("execution.ops.terminal_state.closed"),
+            "text-muted-foreground",
+        ),
         TerminalSessionState::Failed => (t.t("execution.ops.terminal_state.failed"), "text-error"),
     }
 }
 
 fn terminal_mode_label(mode: &common::entity::permission::TerminalMode, t: &I18n) -> String {
     match mode {
-        common::entity::permission::TerminalMode::ReadOnly => t.t("execution.ops.terminal_mode.restricted"),
-        common::entity::permission::TerminalMode::ReadWrite => t.t("execution.ops.terminal_mode.standard"),
+        common::entity::permission::TerminalMode::ReadOnly => {
+            t.t("execution.ops.terminal_mode.restricted")
+        }
+        common::entity::permission::TerminalMode::ReadWrite => {
+            t.t("execution.ops.terminal_mode.standard")
+        }
     }
 }
 
@@ -186,7 +197,12 @@ pub fn remote_exec() -> Html {
                 let days = retention_days.parse::<u64>().unwrap_or_default();
                 match command::cleanup_cast_history(days).await {
                     Ok(result) => {
-                        success_message.set(Some(format!("{} {} {}", t.t("execution.ops.messages.cast_cleanup_prefix"), result.deleted_files, t.t("execution.ops.messages.cast_cleanup_suffix"))));
+                        success_message.set(Some(format!(
+                            "{} {} {}",
+                            t.t("execution.ops.messages.cast_cleanup_prefix"),
+                            result.deleted_files,
+                            t.t("execution.ops.messages.cast_cleanup_suffix")
+                        )));
                         refresh_ops.emit(());
                     }
                     Err(err) => error_message.set(Some(translate_api_message(&err.message))),
@@ -208,7 +224,12 @@ pub fn remote_exec() -> Html {
             spawn_local(async move {
                 match command::close_terminal_session(&session_id).await {
                     Ok(_) => {
-                        success_message.set(Some(format!("{} {} {}", t.t("execution.ops.messages.session_closed_prefix"), session_id, t.t("execution.ops.messages.session_closed_suffix"))));
+                        success_message.set(Some(format!(
+                            "{} {} {}",
+                            t.t("execution.ops.messages.session_closed_prefix"),
+                            session_id,
+                            t.t("execution.ops.messages.session_closed_suffix")
+                        )));
                         refresh_ops.emit(());
                     }
                     Err(err) => error_message.set(Some(translate_api_message(&err.message))),

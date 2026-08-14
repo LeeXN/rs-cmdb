@@ -1,6 +1,7 @@
 use crate::entity::execution::ExecutionType;
-use crate::entity::permission::{ApprovalStatus, TerminalMode};
 use crate::entity::hardware::{Disk, Hardware, GPU, NIC};
+use crate::entity::permission::{ApprovalStatus, TerminalMode};
+use crate::entity::user::Role;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -97,7 +98,7 @@ pub struct PermissionOverviewResponse {
 }
 
 /// 审批运营统计响应
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ApprovalSummaryResponse {
     pub total: usize,
     pub pending: usize,
@@ -105,19 +106,6 @@ pub struct ApprovalSummaryResponse {
     pub rejected: usize,
     pub expired: usize,
     pub executed: usize,
-}
-
-impl Default for ApprovalSummaryResponse {
-    fn default() -> Self {
-        Self {
-            total: 0,
-            pending: 0,
-            approved: 0,
-            rejected: 0,
-            expired: 0,
-            executed: 0,
-        }
-    }
 }
 
 impl ApprovalSummaryResponse {
@@ -212,6 +200,12 @@ pub struct TerminalSessionSummary {
     pub client_id: String,
     pub user_id: String,
     pub username: String,
+    #[serde(default)]
+    pub role: Role,
+    /// Groups used when the terminal policy was evaluated. Persisting this
+    /// snapshot keeps group-scoped policies effective for the whole session.
+    #[serde(default)]
+    pub group_ids: Vec<String>,
     pub mode: TerminalMode,
     pub state: TerminalSessionState,
     pub shell: String,
@@ -286,6 +280,10 @@ pub enum AgentTerminalStreamClientMessage {
     State {
         session_id: String,
         payload: AgentTerminalStateRequest,
+    },
+    Heartbeat {
+        session_ids: Vec<String>,
+        claim_id: String,
     },
 }
 
@@ -426,6 +424,9 @@ pub struct Client {
 
     /// Asset Tag (Fixed Asset Number)
     pub asset_tag: Option<String>,
+    /// Additional free-form tags used by scoped permissions and policies.
+    #[serde(default)]
+    pub tags: Vec<String>,
     /// Warranty Expiration Date
     pub warranty_expiration: Option<String>,
     /// Supplier / Vendor
@@ -552,6 +553,7 @@ impl Default for Client {
             status: None,
             environment: None,
             asset_tag: None,
+            tags: Vec::new(),
             warranty_expiration: None,
             supplier: None,
             power_consumption: None,
@@ -586,6 +588,7 @@ impl Client {
             status: None,
             environment: None,
             asset_tag: None,
+            tags: Vec::new(),
             warranty_expiration: None,
             supplier: None,
             power_consumption: None,

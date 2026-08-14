@@ -3,15 +3,13 @@ pub mod mock_queue;
 
 use common::command::AuditLogEntry;
 use common::error::CmdbResult;
-use common::models::{Client, ClientHardwareInfo, PullRequest, PullResponse};
+use common::models::{ClientHardwareInfo, PullRequest, PullResponse};
 use std::time::Duration;
 
 /// Message types for the message queue
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum Message {
-    /// Client registration message
-    ClientRegistration(Client),
     /// Client hardware info message
     ClientHardwareInfo(ClientHardwareInfo),
     /// Pull request to a client

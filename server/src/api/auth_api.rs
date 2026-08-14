@@ -9,7 +9,8 @@ use axum::{
 use chrono::Utc;
 use common::command::{AuditAction, AuditLogEntry};
 use common::entity::user::{
-    ChangePasswordRequest, CreateUserRequest, LoginRequest, LoginResponse, RefreshRequest, Role, User, UserResponse,
+    ChangePasswordRequest, CreateUserRequest, LoginRequest, LoginResponse, RefreshRequest, Role,
+    User, UserResponse,
 };
 use common::models::ApiResponse;
 use std::sync::Arc;
@@ -254,7 +255,11 @@ pub async fn register(
 
     match user_repo.save(&user).await {
         Ok(_) => {
-            let audit = AuditLogEntry::new(AuditAction::UserCreated, &operator.username, &format!("Created user {}", user.username));
+            let audit = AuditLogEntry::new(
+                AuditAction::UserCreated,
+                &operator.username,
+                &format!("Created user {}", user.username),
+            );
             let _ = message_queue.send_message(Message::AuditLog(audit));
             (
                 StatusCode::CREATED,
@@ -363,20 +368,18 @@ pub async fn refresh(
     }
 
     match auth_service.generate_access_refresh_pair(&user) {
-        Ok((token, refresh_token, _access_exp, _refresh_exp)) => {
-            (
-                StatusCode::OK,
-                Json(ApiResponse {
-                    status: 200,
-                    message: "Token refreshed successfully".to_string(),
-                    data: Some(LoginResponse {
-                        token,
-                        refresh_token,
-                        user: user.into(),
-                    }),
+        Ok((token, refresh_token, _access_exp, _refresh_exp)) => (
+            StatusCode::OK,
+            Json(ApiResponse {
+                status: 200,
+                message: "Token refreshed successfully".to_string(),
+                data: Some(LoginResponse {
+                    token,
+                    refresh_token,
+                    user: user.into(),
                 }),
-            )
-        }
+            }),
+        ),
         Err(e) => {
             error!("Token generation error during refresh: {}", e);
             (
@@ -402,7 +405,12 @@ mod tests {
     use serde_json::json;
     use tower::ServiceExt;
 
-    async fn make_post(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+    async fn make_post(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder()
             .method(Method::POST)
             .uri(path)
@@ -411,19 +419,26 @@ mod tests {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
         }
-        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let req = req
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
-        let mut req = Request::builder()
-            .method(Method::GET)
-            .uri(path);
+    async fn make_get(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::GET).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
@@ -432,18 +447,27 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
     #[tokio::test]
     async fn test_login_valid_credentials() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) = make_post(&app.router, "/api/v1/auth/login", None, json!({
-            "username": "test_admin",
-            "password": "admin123"
-        })).await;
+        let (status, body) = make_post(
+            &app.router,
+            "/api/v1/auth/login",
+            None,
+            json!({
+                "username": "test_admin",
+                "password": "admin123"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], 200);
         assert!(body["data"]["token"].as_str().is_some());
@@ -452,10 +476,16 @@ mod tests {
     #[tokio::test]
     async fn test_login_invalid_credentials() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) = make_post(&app.router, "/api/v1/auth/login", None, json!({
-            "username": "test_admin",
-            "password": "wrong_password"
-        })).await;
+        let (status, body) = make_post(
+            &app.router,
+            "/api/v1/auth/login",
+            None,
+            json!({
+                "username": "test_admin",
+                "password": "wrong_password"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(body["status"], 401);
     }
@@ -463,10 +493,11 @@ mod tests {
     #[tokio::test]
     async fn test_me_without_token_returns_401() {
         let app = TestAppBuilder::new().build().await;
-        let mut req = Request::builder()
+        let req = Request::builder()
             .method(Method::GET)
             .uri("/api/v1/auth/me")
-            .body(Body::empty()).unwrap();
+            .body(Body::empty())
+            .unwrap();
         let resp = app.router.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
@@ -482,10 +513,16 @@ mod tests {
     #[tokio::test]
     async fn test_register_valid_user() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) = make_post(&app.router, "/api/v1/auth/register", Some(&app.admin_token), json!({
-            "username": "new_user",
-            "password": "ValidPass123!"
-        })).await;
+        let (status, body) = make_post(
+            &app.router,
+            "/api/v1/auth/register",
+            Some(&app.admin_token),
+            json!({
+                "username": "new_user",
+                "password": "ValidPass123!"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::CREATED, "body: {:?}", body);
         assert_eq!(body["data"]["username"], "new_user");
     }
@@ -499,10 +536,15 @@ mod tests {
             .header(header::CONTENT_TYPE, "application/json");
         let (k, v) = auth_headers(&app.auth_token);
         req = req.header(k, v);
-        let req = req.body(Body::from(serde_json::to_vec(&json!({
-            "username": "hacker",
-            "password": "ValidPass123!"
-        })).unwrap())).unwrap();
+        let req = req
+            .body(Body::from(
+                serde_json::to_vec(&json!({
+                    "username": "hacker",
+                    "password": "ValidPass123!"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
         let resp = app.router.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
@@ -510,20 +552,32 @@ mod tests {
     #[tokio::test]
     async fn test_register_duplicate_username() {
         let app = TestAppBuilder::new().build().await;
-        let (status, _) = make_post(&app.router, "/api/v1/auth/register", Some(&app.admin_token), json!({
-            "username": "test_admin",
-            "password": "ValidPass123!"
-        })).await;
+        let (status, _) = make_post(
+            &app.router,
+            "/api/v1/auth/register",
+            Some(&app.admin_token),
+            json!({
+                "username": "test_admin",
+                "password": "ValidPass123!"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
     async fn test_register_weak_password() {
         let app = TestAppBuilder::new().build().await;
-        let (status, _) = make_post(&app.router, "/api/v1/auth/register", Some(&app.admin_token), json!({
-            "username": "another_user",
-            "password": "weak"
-        })).await;
+        let (status, _) = make_post(
+            &app.router,
+            "/api/v1/auth/register",
+            Some(&app.admin_token),
+            json!({
+                "username": "another_user",
+                "password": "weak"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 }

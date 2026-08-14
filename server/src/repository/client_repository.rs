@@ -165,9 +165,8 @@ impl ClientRepository {
     pub async fn verify_agent_token(&self, client_id: &str, token: &str) -> CmdbResult<bool> {
         // Check cache first
         if let Some(hashed) = self.token_cache.get(client_id).await {
-            return verify_token(token, &hashed).map_err(|_| {
-                CmdbError::Internal("Failed to verify token hash".to_string())
-            });
+            return verify_token(token, &hashed)
+                .map_err(|_| CmdbError::Internal("Failed to verify token hash".to_string()));
         }
 
         // Fetch from DB
@@ -180,11 +179,12 @@ impl ClientRepository {
         };
 
         // Cache the hash
-        self.token_cache.insert(client_id.to_string(), hashed.clone()).await;
+        self.token_cache
+            .insert(client_id.to_string(), hashed.clone())
+            .await;
 
-        verify_token(token, &hashed).map_err(|_| {
-            CmdbError::Internal("Failed to verify token hash".to_string())
-        })
+        verify_token(token, &hashed)
+            .map_err(|_| CmdbError::Internal("Failed to verify token hash".to_string()))
     }
 
     /// Find client by serial number
@@ -228,6 +228,7 @@ mod tests {
             status: Some(ClientStatus::Active),
             environment: Some(Environment::Prod),
             asset_tag: Some(format!("TAG-{}", id)),
+            tags: Vec::new(),
             warranty_expiration: Some("2025-12-31".to_string()),
             supplier: Some("Dell".to_string()),
             power_consumption: Some(500),

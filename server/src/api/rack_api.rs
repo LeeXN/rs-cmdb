@@ -1,13 +1,13 @@
-use crate::repository::client_repository::ClientRepository;
 use crate::middleware::permission::PermissionContext;
+use crate::repository::client_repository::ClientRepository;
 use crate::repository::rack_repository::RackRepository;
 use axum::{
     extract::{Extension, Json, Path, Query},
     http::StatusCode,
     response::IntoResponse,
 };
-use common::entity::permission::{PermissionAction, ResourceType, ScopeConstraint};
 use chrono::Utc;
+use common::entity::permission::{PermissionAction, ResourceType, ScopeConstraint};
 use common::entity::user::User;
 use common::models::{ApiResponse, PaginatedResult, Rack, RackQuery};
 use std::sync::Arc;
@@ -24,12 +24,9 @@ pub async fn list_racks(
             let scope = perm_ctx
                 .evaluate(&ResourceType::Rack, &PermissionAction::View)
                 .unwrap_or(ScopeConstraint::None);
-            racks = PermissionContext::filter_by_scope(
-                racks,
-                &scope,
-                &perm_ctx.user_id,
-                |r| r.created_by.as_deref(),
-            );
+            racks = PermissionContext::filter_by_scope(racks, &scope, &perm_ctx.user_id, |r| {
+                r.created_by.as_deref()
+            });
             // Filter by search term
             if let Some(ref search) = query.search {
                 let search_lower = search.to_lowercase();
@@ -99,9 +96,25 @@ pub async fn list_racks(
 pub async fn get_rack(
     Path(id): Path<String>,
     Extension(rack_repo): Extension<Arc<RackRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
     match rack_repo.get(&id).await {
         Ok(Some(rack)) => {
+            if !perm_ctx.allows_resource(
+                &ResourceType::Rack,
+                &PermissionAction::View,
+                rack.created_by.as_deref(),
+            ) {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(ApiResponse::<Rack> {
+                        status: 403,
+                        message: "Forbidden".into(),
+                        data: None,
+                    }),
+                )
+                    .into_response();
+            }
             let response = ApiResponse {
                 status: 200,
                 message: "Success".to_string(),
@@ -130,10 +143,20 @@ pub async fn get_rack(
 
 /// Create a new rack
 pub async fn create_rack(
+    Extension(perm_ctx): Extension<PermissionContext>,
     Extension(user): Extension<User>,
     Extension(rack_repo): Extension<Arc<RackRepository>>,
     Json(mut rack): Json<Rack>,
 ) -> impl IntoResponse {
+    if !perm_ctx.allows_action(&ResourceType::Rack, &PermissionAction::Create) {
+        let response = ApiResponse::<Rack> {
+            status: 403,
+            message: "Forbidden: insufficient permission to create racks".to_string(),
+            data: None,
+        };
+        return (StatusCode::FORBIDDEN, Json(response)).into_response();
+    }
+
     // Ensure ID is set
     if rack.id.is_empty() {
         rack.id = Uuid::new_v4().to_string();
@@ -168,20 +191,21 @@ pub async fn create_rack(
 /// Update a rack
 pub async fn update_rack(
     Path(id): Path<String>,
-    Extension(current_user): Extension<User>,
+    Extension(perm_ctx): Extension<PermissionContext>,
     Extension(rack_repo): Extension<Arc<RackRepository>>,
     Json(mut rack): Json<Rack>,
 ) -> impl IntoResponse {
     // Check if rack exists
     match rack_repo.get(&id).await {
         Ok(Some(existing)) => {
-            // Ownership check
-            if current_user.role != common::entity::user::Role::Admin
-                && existing.created_by.as_deref() != Some(&current_user.id)
-            {
+            if !perm_ctx.allows_resource(
+                &ResourceType::Rack,
+                &PermissionAction::Update,
+                existing.created_by.as_deref(),
+            ) {
                 let response = ApiResponse::<()> {
                     status: 403,
-                    message: "Forbidden: you can only update resources you created".to_string(),
+                    message: "Forbidden: insufficient permission to update this rack".to_string(),
                     data: None,
                 };
                 return (StatusCode::FORBIDDEN, Json(response)).into_response();
@@ -234,25 +258,23 @@ pub async fn update_rack(
 /// Delete a rack
 pub async fn delete_rack(
     Path(id): Path<String>,
-    Extension(current_user): Extension<User>,
+    Extension(perm_ctx): Extension<PermissionContext>,
     Extension(rack_repo): Extension<Arc<RackRepository>>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
 ) -> impl IntoResponse {
-    // Ownership check
-    match rack_repo.get(&id).await {
-        Ok(Some(existing)) => {
-            if current_user.role != common::entity::user::Role::Admin
-                && existing.created_by.as_deref() != Some(&current_user.id)
-            {
-                let response = ApiResponse::<()> {
-                    status: 403,
-                    message: "Forbidden: you can only delete resources you created".to_string(),
-                    data: None,
-                };
-                return (StatusCode::FORBIDDEN, Json(response)).into_response();
-            }
-        }
-        _ => {}
+    if let Ok(Some(existing)) = rack_repo.get(&id).await
+        && !perm_ctx.allows_resource(
+            &ResourceType::Rack,
+            &PermissionAction::Delete,
+            existing.created_by.as_deref(),
+        )
+    {
+        let response = ApiResponse::<()> {
+            status: 403,
+            message: "Forbidden: insufficient permission to delete this rack".to_string(),
+            data: None,
+        };
+        return (StatusCode::FORBIDDEN, Json(response)).into_response();
     }
 
     // Check if any clients are using this rack
@@ -329,7 +351,12 @@ mod tests {
     use serde_json::json;
     use tower::ServiceExt;
 
-    async fn make_post(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+    async fn make_post(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder()
             .method(Method::POST)
             .uri(path)
@@ -338,19 +365,26 @@ mod tests {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
         }
-        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let req = req
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
-        let mut req = Request::builder()
-            .method(Method::GET)
-            .uri(path);
+    async fn make_get(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::GET).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
@@ -359,15 +393,21 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_delete(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
-        let mut req = Request::builder()
-            .method(Method::DELETE)
-            .uri(path);
+    #[allow(dead_code)]
+    async fn make_delete(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::DELETE).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
@@ -376,19 +416,28 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
     #[tokio::test]
     async fn test_create_rack() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) = make_post(&app.router, "/api/v1/racks", Some(&app.admin_token), json!({
-            "name": "RACK-A1",
-            "location": "DC1",
-            "height_u": 42
-        })).await;
+        let (status, body) = make_post(
+            &app.router,
+            "/api/v1/racks",
+            Some(&app.admin_token),
+            json!({
+                "name": "RACK-A1",
+                "location": "DC1",
+                "height_u": 42
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::CREATED, "body: {:?}", body);
         assert_eq!(body["data"]["name"], "RACK-A1");
         assert_eq!(body["data"]["height_u"], 42);
@@ -397,10 +446,16 @@ mod tests {
     #[tokio::test]
     async fn test_list_racks() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, _) = make_post(&app.router, "/api/v1/racks", Some(&app.admin_token), json!({
-            "name": "RACK-LIST",
-            "height_u": 42
-        })).await;
+        let (create_status, _) = make_post(
+            &app.router,
+            "/api/v1/racks",
+            Some(&app.admin_token),
+            json!({
+                "name": "RACK-LIST",
+                "height_u": 42
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
 
         let (status, body) = make_get(&app.router, "/api/v1/racks", Some(&app.admin_token)).await;
@@ -411,14 +466,25 @@ mod tests {
     #[tokio::test]
     async fn test_get_rack() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, create_body) = make_post(&app.router, "/api/v1/racks", Some(&app.admin_token), json!({
-            "name": "RACK-GET",
-            "height_u": 42
-        })).await;
+        let (create_status, create_body) = make_post(
+            &app.router,
+            "/api/v1/racks",
+            Some(&app.admin_token),
+            json!({
+                "name": "RACK-GET",
+                "height_u": 42
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
         let rack_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
-        let (status, body) = make_get(&app.router, &format!("/api/v1/racks/{}", rack_id), Some(&app.admin_token)).await;
+        let (status, body) = make_get(
+            &app.router,
+            &format!("/api/v1/racks/{}", rack_id),
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "body: {:?}", body);
         assert_eq!(body["data"]["name"], "RACK-GET");
     }
@@ -426,20 +492,32 @@ mod tests {
     #[tokio::test]
     async fn test_create_rack_duplicate() {
         let app = TestAppBuilder::new().build().await;
-        let (status1, body1) = make_post(&app.router, "/api/v1/racks", Some(&app.admin_token), json!({
-            "name": "RACK-A1",
-            "location": "DC1",
-            "height_u": 42
-        })).await;
+        let (status1, body1) = make_post(
+            &app.router,
+            "/api/v1/racks",
+            Some(&app.admin_token),
+            json!({
+                "name": "RACK-A1",
+                "location": "DC1",
+                "height_u": 42
+            }),
+        )
+        .await;
         assert_eq!(status1, StatusCode::CREATED, "body: {:?}", body1);
 
         // The handler does not enforce unique names; a second rack with the same
         // name gets a new UUID and should also succeed.
-        let (status2, body2) = make_post(&app.router, "/api/v1/racks", Some(&app.admin_token), json!({
-            "name": "RACK-A1",
-            "location": "DC1",
-            "height_u": 42
-        })).await;
+        let (status2, body2) = make_post(
+            &app.router,
+            "/api/v1/racks",
+            Some(&app.admin_token),
+            json!({
+                "name": "RACK-A1",
+                "location": "DC1",
+                "height_u": 42
+            }),
+        )
+        .await;
         assert_eq!(status2, StatusCode::CREATED, "body: {:?}", body2);
     }
 }

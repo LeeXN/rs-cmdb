@@ -12,10 +12,10 @@ use crate::components::ui::badge::{Badge, BadgeVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardHeader, CardTitle};
 use crate::components::ui::input::Input;
-use crate::pages::execution::detail::{execution_type_badge, session_status_badge};
 use crate::components::ui::select::{Select, SelectOption};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::hooks::use_trans::use_trans;
+use crate::pages::execution::detail::{execution_type_badge, session_status_badge};
 use crate::routes::Route;
 use crate::services::{api, command};
 use crate::types::{Client, User};
@@ -38,7 +38,9 @@ fn format_date_end(value: &str) -> Option<String> {
     }
 }
 
-fn prefill_history_filters(query: &HashMap<String, String>) -> (Option<String>, Option<String>, Option<String>) {
+fn prefill_history_filters(
+    query: &HashMap<String, String>,
+) -> (Option<String>, Option<String>, Option<String>) {
     (
         query.get("client_id").cloned(),
         query.get("execution_type").cloned(),
@@ -85,14 +87,20 @@ fn client_display_label(client: &Client) -> String {
     format!(
         "{} ({})",
         client.hostname,
-        client.primary_ip.clone().unwrap_or(client.ip_address.clone())
+        client
+            .primary_ip
+            .clone()
+            .unwrap_or(client.ip_address.clone())
     )
 }
 
 fn client_display_parts(client: &Client) -> (String, String) {
     (
         client.hostname.clone(),
-        client.primary_ip.clone().unwrap_or(client.ip_address.clone()),
+        client
+            .primary_ip
+            .clone()
+            .unwrap_or(client.ip_address.clone()),
     )
 }
 
@@ -135,7 +143,11 @@ mod tests {
     use common::entity::execution::{ExecutionSession, ExecutionType, SessionStatus};
     use std::collections::HashMap;
 
-    fn session(execution_type: ExecutionType, client_ids: Vec<&str>, command: &str) -> ExecutionSession {
+    fn session(
+        execution_type: ExecutionType,
+        client_ids: Vec<&str>,
+        command: &str,
+    ) -> ExecutionSession {
         ExecutionSession {
             session_id: "session-1".to_string(),
             user_id: "user-1".to_string(),
@@ -194,12 +206,19 @@ mod tests {
 
     #[test]
     fn rerun_target_routes_batch_sessions_back_to_batch_workspace() {
-        let session = session(ExecutionType::Batch, vec!["client-1", "client-2"], "uname -a");
+        let session = session(
+            ExecutionType::Batch,
+            vec!["client-1", "client-2"],
+            "uname -a",
+        );
 
         let (route, query) = rerun_target(&session).expect("batch rerun target");
 
         assert_eq!(route, Route::ExecutionBatch);
-        assert_eq!(query.get("client_ids"), Some(&"client-1,client-2".to_string()));
+        assert_eq!(
+            query.get("client_ids"),
+            Some(&"client-1,client-2".to_string())
+        );
         assert_eq!(query.get("command"), Some(&"uname -a".to_string()));
     }
 
@@ -212,7 +231,10 @@ mod tests {
 
     #[test]
     fn command_preview_marks_multiline_commands() {
-        assert_eq!(command_preview("ls -l\ndf -h\nhostname -i"), "ls -l  [+more]");
+        assert_eq!(
+            command_preview("ls -l\ndf -h\nhostname -i"),
+            "ls -l  [+more]"
+        );
         assert_eq!(command_preview("uname -a"), "uname -a");
     }
 }
@@ -304,49 +326,77 @@ pub fn history_page() -> Html {
             (*from_filter).clone(),
             (*to_filter).clone(),
         );
-        use_effect_with(deps, move |(current_page, current_page_size, client_id, search, status, execution_type, from, to)| {
-            loading.set(true);
-            let current_page = *current_page;
-            let current_page_size = *current_page_size;
-            let client_id = client_id.clone();
-            let search = search.clone();
-            let status = status.clone();
-            let execution_type = execution_type.clone();
-            let from_owned = from.clone();
-            let to_owned = to.clone();
-            let from_value = format_date_start(&from_owned);
-            let to_value = format_date_end(&to_owned);
-            spawn_local(async move {
-                match command::fetch_sessions(
-                    if search.is_empty() { None } else { Some(search.as_str()) },
-                    if client_id.is_empty() { None } else { Some(client_id.as_str()) },
-                    None,
-                    if status == "all" { None } else { Some(status.as_str()) },
-                    if execution_type == "all" { None } else { Some(execution_type.as_str()) },
-                    from_value.as_deref(),
-                    to_value.as_deref(),
-                    current_page,
-                    current_page_size,
-                )
-                .await
-                {
-                    Ok(result) => {
-                        notification.set(None);
-                        total_items.set(result.total);
-                        total_pages.set(result.total_pages);
-                        sessions.set(result.items);
+        use_effect_with(
+            deps,
+            move |(
+                current_page,
+                current_page_size,
+                client_id,
+                search,
+                status,
+                execution_type,
+                from,
+                to,
+            )| {
+                loading.set(true);
+                let current_page = *current_page;
+                let current_page_size = *current_page_size;
+                let client_id = client_id.clone();
+                let search = search.clone();
+                let status = status.clone();
+                let execution_type = execution_type.clone();
+                let from_owned = from.clone();
+                let to_owned = to.clone();
+                let from_value = format_date_start(&from_owned);
+                let to_value = format_date_end(&to_owned);
+                spawn_local(async move {
+                    match command::fetch_sessions(
+                        if search.is_empty() {
+                            None
+                        } else {
+                            Some(search.as_str())
+                        },
+                        if client_id.is_empty() {
+                            None
+                        } else {
+                            Some(client_id.as_str())
+                        },
+                        None,
+                        if status == "all" {
+                            None
+                        } else {
+                            Some(status.as_str())
+                        },
+                        if execution_type == "all" {
+                            None
+                        } else {
+                            Some(execution_type.as_str())
+                        },
+                        from_value.as_deref(),
+                        to_value.as_deref(),
+                        current_page,
+                        current_page_size,
+                    )
+                    .await
+                    {
+                        Ok(result) => {
+                            notification.set(None);
+                            total_items.set(result.total);
+                            total_pages.set(result.total_pages);
+                            sessions.set(result.items);
+                        }
+                        Err(err) => {
+                            total_items.set(0);
+                            total_pages.set(0);
+                            sessions.set(Vec::new());
+                            notification.set(Some((NotificationType::Error, err.message)));
+                        }
                     }
-                    Err(err) => {
-                        total_items.set(0);
-                        total_pages.set(0);
-                        sessions.set(Vec::new());
-                        notification.set(Some((NotificationType::Error, err.message)));
-                    }
-                }
-                loading.set(false);
-            });
-            || ()
-        });
+                    loading.set(false);
+                });
+                || ()
+            },
+        );
     }
 
     let client_options = std::iter::once(SelectOption {
@@ -355,23 +405,57 @@ pub fn history_page() -> Html {
     })
     .chain(clients.iter().map(|client| SelectOption {
         value: client.id.clone(),
-        label: format!("{} ({})", client.hostname, client.primary_ip.clone().unwrap_or(client.ip_address.clone())),
+        label: format!(
+                "{} ({})",
+                client.hostname,
+                client
+                    .primary_ip
+                    .clone()
+                    .unwrap_or(client.ip_address.clone())
+            ),
     }))
     .collect::<Vec<_>>();
 
     let status_options = vec![
-        SelectOption { value: "all".into(), label: t.t("execution.history.all_statuses") },
-        SelectOption { value: "pending".into(), label: t.t("execution.status.pending") },
-        SelectOption { value: "running".into(), label: t.t("execution.status.running") },
-        SelectOption { value: "success".into(), label: t.t("execution.status.success") },
-        SelectOption { value: "failed".into(), label: t.t("execution.status.failed") },
-        SelectOption { value: "partial".into(), label: t.t("execution.status.partial") },
+        SelectOption {
+            value: "all".into(),
+            label: t.t("execution.history.all_statuses"),
+        },
+        SelectOption {
+            value: "pending".into(),
+            label: t.t("execution.status.pending"),
+        },
+        SelectOption {
+            value: "running".into(),
+            label: t.t("execution.status.running"),
+        },
+        SelectOption {
+            value: "success".into(),
+            label: t.t("execution.status.success"),
+        },
+        SelectOption {
+            value: "failed".into(),
+            label: t.t("execution.status.failed"),
+        },
+        SelectOption {
+            value: "partial".into(),
+            label: t.t("execution.status.partial"),
+        },
     ];
 
     let execution_type_options = vec![
-        SelectOption { value: "all".into(), label: t.t("execution.history.all_execution_types") },
-        SelectOption { value: "terminal".into(), label: t.t("execution.type.terminal") },
-        SelectOption { value: "batch".into(), label: t.t("execution.type.batch") },
+        SelectOption {
+            value: "all".into(),
+            label: t.t("execution.history.all_execution_types"),
+        },
+        SelectOption {
+            value: "terminal".into(),
+            label: t.t("execution.type.terminal"),
+        },
+        SelectOption {
+            value: "batch".into(),
+            label: t.t("execution.type.batch"),
+        },
     ];
 
     let close_notification = {

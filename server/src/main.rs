@@ -17,9 +17,9 @@ mod validation;
 use anyhow::Result;
 use clap::{Arg, Command, arg};
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use std::fs;
 use tokio::net::TcpListener;
 use tokio::signal;
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -36,15 +36,14 @@ use crate::repository::{
     command_repository::CommandRepository, component_repository::ComponentRepository,
     dictionary_repository::DictionaryRepository, exec_policy_repository::ExecPolicyRepository,
     execution_session_repository::ExecutionSessionRepository,
-    terminal_session_repository::TerminalSessionRepository,
     hardware_repository::HardwareRepository, permission_repository::PermissionRepository,
     person_repository::PersonRepository, project_repository::ProjectRepository,
-    rack_repository::RackRepository, user_repository::UserRepository,
-    web_terminal_policy_repository::WebTerminalPolicyRepository,
+    rack_repository::RackRepository, terminal_session_repository::TerminalSessionRepository,
+    user_repository::UserRepository, web_terminal_policy_repository::WebTerminalPolicyRepository,
 };
 use crate::service::{
     approval_service::ApprovalService,
-    auth_service::{AuthService, init_master_client_key, validate_password_complexity},
+    auth_service::{AuthService, init_master_client_key_from_db, validate_password_complexity},
     client_filter_service::ClientFilterService,
     client_service::ClientService,
     command_service::CommandService,
@@ -54,8 +53,8 @@ use crate::service::{
     execution_session_service::ExecutionSessionService,
     export_service::ExportService,
     hardware_service::HardwareService,
-    permission_service::PermissionService,
     message_processor::MessageProcessor,
+    permission_service::PermissionService,
     sse_hub::SseHub,
     stats_service::StatsService,
     terminal_session_service::TerminalSessionService,
@@ -459,16 +458,19 @@ async fn main() -> Result<()> {
     // Initialize token blacklist and auth service
     let token_blacklist = Arc::new(TokenBlacklist::new(db.clone()));
     let auth_service = Arc::new(
-        AuthService::new(config.jwt_secret.clone())
-            .with_blacklist(token_blacklist.clone()),
+        AuthService::new(config.jwt_secret.clone()).with_blacklist(token_blacklist.clone()),
     );
 
-    // Initialize master client key for HMAC-based agent token generation
-    let master_key = Uuid::new_v4().to_string()
-        + &Uuid::new_v4().to_string()
-        + &Uuid::new_v4().to_string()
-        + &Uuid::new_v4().to_string();
-    init_master_client_key(master_key);
+    // Initialize the durable master key used for HMAC-based agent token
+    // generation. It must survive server restarts so registered agents keep
+    // working without receiving a new token on every boot.
+    if let Err(e) = init_master_client_key_from_db(db.clone()).await {
+        error!("Failed to initialize master client key: {}", e);
+        return Err(anyhow::anyhow!(
+            "Failed to initialize master client key: {}",
+            e
+        ));
+    }
 
     // Ensure admin user exists with secure credentials
     if let Err(e) = ensure_admin_exists(&user_repo, &auth_service).await {
@@ -502,9 +504,10 @@ async fn main() -> Result<()> {
         )
         .with_queue(message_queue.clone()),
     );
-    let component_service = Arc::new(
-        ComponentService::with_queue(component_repo.clone(), message_queue.clone()),
-    );
+    let component_service = Arc::new(ComponentService::with_queue(
+        component_repo.clone(),
+        message_queue.clone(),
+    ));
     // Note: HardwareService constructor expects ClientRepository, but we have CachedClientRepository.
     // We need to check if HardwareService uses ClientRepository or CachedClientRepository.
     // It likely uses ClientRepository. CachedClientRepository does NOT impl Deref to ClientRepository or a common trait.
@@ -559,21 +562,26 @@ async fn main() -> Result<()> {
     ));
     let sse_hub = SseHub::new();
     let exec_policy_repo = Arc::new(ExecPolicyRepository::new(db.clone()));
-    let exec_policy_engine = Arc::new(ExecPolicyEngine::new(exec_policy_repo.clone()));
+    let exec_policy_engine = Arc::new(
+        ExecPolicyEngine::new(exec_policy_repo.clone()).with_client_repo(client_repo_inner.clone()),
+    );
     let web_terminal_policy_repo = Arc::new(WebTerminalPolicyRepository::new(db.clone()));
-    let web_terminal_service = Arc::new(WebTerminalService::new(web_terminal_policy_repo.clone()));
+    let web_terminal_service = Arc::new(
+        WebTerminalService::new(web_terminal_policy_repo.clone())
+            .with_client_repo(client_repo_inner.clone()),
+    );
     let approval_repo = Arc::new(ApprovalRepository::new(db.clone()));
-    let approval_svc = Arc::new(ApprovalService::new(approval_repo.clone(), command_repo.clone()));
+    let approval_svc = Arc::new(ApprovalService::new(
+        approval_repo.clone(),
+        command_repo.clone(),
+    ));
     let execution_session_repo = Arc::new(ExecutionSessionRepository::new(db.clone()));
     let terminal_session_repo = Arc::new(TerminalSessionRepository::new(db.clone()));
     let session_svc = Arc::new(ExecutionSessionService::new(
         execution_session_repo,
         client_repo_inner.clone(),
     ));
-    let terminal_svc = TerminalSessionService::new(
-        terminal_session_repo,
-        web_terminal_service,
-    );
+    let terminal_svc = TerminalSessionService::new(terminal_session_repo, web_terminal_service);
     terminal_svc.configure_history(session_svc.clone());
     let _ = service::cast_recorder::CastRecorderInner::ensure_cast_dir();
     let cast_recorder = std::sync::Arc::new(service::cast_recorder::CastRecorderInner);
@@ -627,9 +635,27 @@ async fn main() -> Result<()> {
                 Err(e) => error!("expire_pending_tasks: {}", e),
                 _ => {}
             }
+            match svc.expire_running_tasks().await {
+                Ok(n) if n > 0 => info!("Timed out {} running command tasks", n),
+                Err(e) => error!("expire_running_tasks: {}", e),
+                _ => {}
+            }
         })
     })?;
     scheduler.add(expire_job).await?;
+
+    // Close terminal sessions that were never claimed or have stopped
+    // heartbeating, releasing their in-memory concurrency slots.
+    let terminal_svc_cleanup = terminal_svc.clone();
+    let terminal_cleanup_job = Job::new_async("0 * * * * *", move |_, _| {
+        let svc = terminal_svc_cleanup.clone();
+        Box::pin(async move {
+            if let Err(e) = svc.list_all_sessions().await {
+                error!("terminal session cleanup: {}", e);
+            }
+        })
+    })?;
+    scheduler.add(terminal_cleanup_job).await?;
 
     // Scheduled job: clean up old command history (daily at 03:00)
     let cmd_svc_cleanup = command_service.clone();

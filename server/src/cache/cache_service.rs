@@ -317,7 +317,7 @@ mod tests {
             Some("value1".to_string())
         );
 
-        let stats = cache.stats();
+        let _stats = cache.stats();
         // entry_count may be 0 due to timing in Moka's internal state,
         // but the item is definitely retrievable (verified above)
         // entry_count is u64, always non-negative; assertion omitted intentionally

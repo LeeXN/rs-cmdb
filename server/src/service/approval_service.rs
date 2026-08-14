@@ -44,37 +44,58 @@ impl ApprovalService {
             reviewed_by: None,
             reviewed_at: None,
             executed_task_id: None,
+            execution_started_at: None,
+            execution_claim_id: None,
         };
         self.repo.save(&approval).await?;
 
         let audit = AuditLogEntry::new(
             AuditAction::CommandCreate,
             username,
-            &format!("Approval request created for command '{}' on client {}", command, target_client_id),
+            &format!(
+                "Approval request created for command '{}' on client {}",
+                command, target_client_id
+            ),
         );
         let _ = self.cmd_repo.append_audit(&audit).await;
 
         Ok(approval)
     }
 
-    pub async fn approve(
-        &self,
-        id: &str,
-        reviewer: &str,
-    ) -> CmdbResult<PendingApproval> {
-        let mut approval = self.repo.get(id).await?
-            .ok_or_else(|| CmdbError::NotFound(format!("Approval {} not found", id)))?;
-
-        if approval.status != ApprovalStatus::Pending {
-            return Err(CmdbError::Validation(format!(
-                "Approval {} is not in pending status", id
-            )));
-        }
-
-        approval.status = ApprovalStatus::Approved;
-        approval.reviewed_by = Some(reviewer.to_string());
-        approval.reviewed_at = Some(Utc::now().to_rfc3339());
-        self.repo.save(&approval).await?;
+    pub async fn approve(&self, id: &str, reviewer: &str) -> CmdbResult<PendingApproval> {
+        let now = Utc::now().to_rfc3339();
+        let approval = match self
+            .repo
+            .review_pending(id, reviewer, ApprovalStatus::Approved, &now)
+            .await?
+        {
+            Some(approval) if approval.status == ApprovalStatus::Approved => approval,
+            Some(_) => {
+                return Err(CmdbError::Validation(format!(
+                    "Approval {} has expired",
+                    id
+                )));
+            }
+            None => {
+                let existing = self
+                    .repo
+                    .get(id)
+                    .await?
+                    .ok_or_else(|| CmdbError::NotFound(format!("Approval {} not found", id)))?;
+                if existing.status == ApprovalStatus::Approved
+                    && existing.executed_task_id.is_none()
+                {
+                    // Approval is idempotent while task materialization is
+                    // pending. This allows a retry after a transient task or
+                    // attach failure without creating a second approval.
+                    return Ok(existing);
+                }
+                return Err(CmdbError::Validation(format!(
+                    "Approval {} is not in pending status",
+                    existing.id
+                )));
+            }
+        };
 
         let audit = AuditLogEntry::new(
             AuditAction::CommandCreate,
@@ -86,24 +107,32 @@ impl ApprovalService {
         Ok(approval)
     }
 
-    pub async fn reject(
-        &self,
-        id: &str,
-        reviewer: &str,
-    ) -> CmdbResult<PendingApproval> {
-        let mut approval = self.repo.get(id).await?
-            .ok_or_else(|| CmdbError::NotFound(format!("Approval {} not found", id)))?;
-
-        if approval.status != ApprovalStatus::Pending {
-            return Err(CmdbError::Validation(format!(
-                "Approval {} is not in pending status", id
-            )));
-        }
-
-        approval.status = ApprovalStatus::Rejected;
-        approval.reviewed_by = Some(reviewer.to_string());
-        approval.reviewed_at = Some(Utc::now().to_rfc3339());
-        self.repo.save(&approval).await?;
+    pub async fn reject(&self, id: &str, reviewer: &str) -> CmdbResult<PendingApproval> {
+        let now = Utc::now().to_rfc3339();
+        let approval = match self
+            .repo
+            .review_pending(id, reviewer, ApprovalStatus::Rejected, &now)
+            .await?
+        {
+            Some(approval) if approval.status == ApprovalStatus::Rejected => approval,
+            Some(_) => {
+                return Err(CmdbError::Validation(format!(
+                    "Approval {} has expired",
+                    id
+                )));
+            }
+            None => {
+                let existing = self
+                    .repo
+                    .get(id)
+                    .await?
+                    .ok_or_else(|| CmdbError::NotFound(format!("Approval {} not found", id)))?;
+                return Err(CmdbError::Validation(format!(
+                    "Approval {} is not in pending status",
+                    existing.id
+                )));
+            }
+        };
 
         let audit = AuditLogEntry::new(
             AuditAction::CommandCreate,
@@ -117,10 +146,13 @@ impl ApprovalService {
 
     pub async fn expire_old(&self) -> CmdbResult<usize> {
         let expired = self.repo.list_expired().await?;
-        let count = expired.len();
-        for mut a in expired {
-            a.status = ApprovalStatus::Expired;
-            self.repo.save(&a).await?;
+        let now = Utc::now().to_rfc3339();
+        let mut count = 0;
+        for candidate in expired {
+            let Some(a) = self.repo.expire_pending(&candidate.id, &now).await? else {
+                continue;
+            };
+            count += 1;
 
             let audit = AuditLogEntry::new(
                 AuditAction::CommandCreate,
@@ -153,14 +185,42 @@ impl ApprovalService {
         &self,
         id: &str,
         task_id: &str,
+        claim_id: &str,
     ) -> CmdbResult<PendingApproval> {
-        let mut approval = self
-            .repo
-            .get(id)
+        self.repo
+            .attach_executed_task(id, task_id, claim_id)
             .await?
-            .ok_or_else(|| CmdbError::NotFound(format!("Approval {} not found", id)))?;
-        approval.executed_task_id = Some(task_id.to_string());
-        self.repo.save(&approval).await?;
-        Ok(approval)
+            .ok_or_else(|| {
+                CmdbError::Validation(format!(
+                    "Approval {} is not approved or already has an executed task",
+                    id
+                ))
+            })
+    }
+
+    /// Atomically claim an approved request for task materialization. A
+    /// previous worker that crashed after claiming is allowed to retry after
+    /// the bounded claim TTL.
+    pub async fn begin_task_materialization(
+        &self,
+        id: &str,
+        now: &str,
+        claim_ttl_secs: i64,
+    ) -> CmdbResult<PendingApproval> {
+        self.repo
+            .begin_task_materialization(id, now, claim_ttl_secs)
+            .await?
+            .ok_or_else(|| {
+                CmdbError::Validation(format!(
+                    "Approval {} is not ready for task materialization",
+                    id
+                ))
+            })
+    }
+
+    /// Roll an approved materialization claim back when task creation fails.
+    /// This preserves the approval so an administrator can retry safely.
+    pub async fn rollback_task_materialization(&self, id: &str, claim_id: &str) -> CmdbResult<()> {
+        self.repo.rollback_task_materialization(id, claim_id).await
     }
 }

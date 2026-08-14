@@ -33,7 +33,7 @@ pub fn strip_ansi_and_controls(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
     let mut output = String::new();
     let mut index = 0;
-    let mut last_was_newline = false;
+    let mut previous_was_carriage_return = false;
 
     while index < chars.len() {
         let ch = chars[index];
@@ -81,22 +81,28 @@ pub fn strip_ansi_and_controls(input: &str) -> String {
         match ch {
             '\u{08}' => {
                 output.pop();
-                last_was_newline = output.ends_with('\n');
+                previous_was_carriage_return = false;
             }
-            '\r' | '\n' => {
-                if !last_was_newline {
+            '\r' => {
+                output.push('\n');
+                previous_was_carriage_return = true;
+            }
+            '\n' => {
+                if !previous_was_carriage_return {
                     output.push('\n');
-                    last_was_newline = true;
                 }
+                previous_was_carriage_return = false;
             }
             '\t' => {
                 output.push(ch);
-                last_was_newline = false;
+                previous_was_carriage_return = false;
             }
-            c if c.is_control() => {}
+            c if c.is_control() => {
+                previous_was_carriage_return = false;
+            }
             _ => {
                 output.push(ch);
-                last_was_newline = false;
+                previous_was_carriage_return = false;
             }
         }
 
@@ -107,32 +113,39 @@ pub fn strip_ansi_and_controls(input: &str) -> String {
 }
 
 pub fn parse_cast_output(bytes: &[u8]) -> String {
+    parse_cast_frames(bytes)
+        .into_iter()
+        .map(|frame| frame.output)
+        .collect()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CastFrame {
+    pub elapsed_secs: f64,
+    pub output: String,
+}
+
+/// Parse asciinema v2 output frames while retaining their original timing.
+/// Invalid or non-output events are ignored so a partially written cast can
+/// still be replayed safely.
+pub fn parse_cast_frames(bytes: &[u8]) -> Vec<CastFrame> {
     let text = String::from_utf8_lossy(bytes);
-    let mut output = String::new();
-
-    for (index, line) in text.lines().enumerate() {
-        if index == 0 {
-            continue;
-        }
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        let Some(items) = value.as_array() else {
-            continue;
-        };
-        if items.len() < 3 {
-            continue;
-        }
-        if items.get(1).and_then(|item| item.as_str()) != Some("o") {
-            continue;
-        }
-        if let Some(chunk) = items.get(2).and_then(|item| item.as_str()) {
-            let normalized = chunk.replace("\r\n", "\n");
-            output.push_str(&strip_ansi_and_controls(&normalized));
-        }
-    }
-
-    output
+    text.lines()
+        .skip(1)
+        .filter_map(|line| {
+            let value = serde_json::from_str::<serde_json::Value>(line).ok()?;
+            let items = value.as_array()?;
+            if items.len() < 3 || items.get(1).and_then(|item| item.as_str()) != Some("o") {
+                return None;
+            }
+            let elapsed_secs = items.first()?.as_f64()?.max(0.0);
+            let chunk = items.get(2)?.as_str()?;
+            Some(CastFrame {
+                elapsed_secs,
+                output: strip_ansi_and_controls(&chunk.replace("\r\n", "\n")),
+            })
+        })
+        .collect()
 }
 
 fn log_stream_badge(stream: &LogStream) -> Html {
@@ -293,7 +306,7 @@ pub fn execution_detail_view(props: &ExecutionDetailViewProps) -> Html {
 
 #[cfg(test)]
 mod tests {
-    use super::strip_ansi_and_controls;
+    use super::{parse_cast_frames, strip_ansi_and_controls, CastFrame};
 
     #[test]
     fn strip_ansi_and_controls_removes_escape_sequences() {
@@ -306,5 +319,35 @@ mod tests {
     #[test]
     fn strip_ansi_and_controls_applies_backspace() {
         assert_eq!(strip_ansi_and_controls("ab\u{08}c"), "ac");
+    }
+
+    #[test]
+    fn strip_ansi_and_controls_preserves_blank_lines() {
+        assert_eq!(
+            strip_ansi_and_controls("first\r\n\r\nthird\n\nfifth"),
+            "first\n\nthird\n\nfifth"
+        );
+    }
+
+    #[test]
+    fn parse_cast_frames_preserves_elapsed_time_and_output_order() {
+        let cast = br#"{"version": 2, "width": 80, "height": 24, "timestamp": 0, "env": {}}
+[0.25,"o","hello\u001b[31m!\u001b[0m"]
+[1.5,"o","\r\nworld"]
+[2.0,"i","ignored"]
+"#;
+        assert_eq!(
+            parse_cast_frames(cast),
+            vec![
+                CastFrame {
+                    elapsed_secs: 0.25,
+                    output: "hello!".into(),
+                },
+                CastFrame {
+                    elapsed_secs: 1.5,
+                    output: "\nworld".into(),
+                },
+            ]
+        );
     }
 }

@@ -2,7 +2,14 @@
 
 [English](README.md) | [中文](README_CN.md)
 
+[![CI/CD Pipeline](https://github.com/LeeXN/rs-cmdb/actions/workflows/ci.yml/badge.svg)](https://github.com/LeeXN/rs-cmdb/actions/workflows/ci.yml)
+[![最新版本](https://img.shields.io/github/v/release/LeeXN/rs-cmdb?label=release)](https://github.com/LeeXN/rs-cmdb/releases/latest)
+
 **rs-cmdb** 是一个完全使用 Rust 构建的轻量级配置管理数据库 (CMDB) 系统.
+
+## ✨ 0.1.0 版本亮点
+
+本版本完成了权限体系、安全远程命令执行、Web 终端策略与审批流程，并统一了执行历史和回放体验。批量执行支持汇总查看全部节点输出，登录令牌可自动续期，Agent Token 支持安全升级迁移和恢复，录制回放会保留原始换行与完整尾帧。
 
 ## 📌 主 IP 地址功能
 
@@ -89,33 +96,37 @@ mkdir -p /opt/rs-cmdb
 cd /opt/rs-cmdb
 
 # 2. 设置版本
-export RSCMDB_VERSION="0.0.1"
+export RSCMDB_VERSION="0.1.0"
 
 # 3. 准备客户端二进制目录 (可选，用于自动更新/从服务器下载)
-mkdir -p binaires/linux/{x86_64,aarch64}
+mkdir -p binaries/linux/{x86_64,aarch64}
 
 # 4. 下载客户端二进制文件
 # 您可以从 GitHub Release 页面下载，或自行构建。
 # https://github.com/LeeXN/rs-cmdb/releases
-curl -L -o ./binaires/linux/x86_64/rs-cmdb-client https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-x86_64-linux-musl
-curl -L -o ./binaires/linux/aarch64/rs-cmdb-client https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-aarch64-linux-musl
+curl -L -o ./binaries/linux/x86_64/rs-cmdb-client https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-x86_64-linux-musl
+curl -L -o ./binaries/linux/aarch64/rs-cmdb-client https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-aarch64-linux-musl
 
 # 5. 添加执行权限
-chmod +x ./binaires/linux/x86_64/rs-cmdb-client
-chmod +x ./binaires/linux/aarch64/rs-cmdb-client
+chmod +x ./binaries/linux/x86_64/rs-cmdb-client
+chmod +x ./binaries/linux/aarch64/rs-cmdb-client
 
 # 6. 使用 Docker 运行服务器
 docker run -itd \
   --name rs-cmdb \
   -p 8080:8080 \
   -v $(pwd)/data:/app/data \
-  -v $(pwd)/binaires:/app/binaires \
+  -v $(pwd)/binaries:/app/binaries \
   leex2019/rs-cmdb:${RSCMDB_VERSION}
 ```
 
 启动后，访问 UI: `http://localhost:8080`。
 
 **⚠️ 重要提示:** 服务器首次启动需要设置安全的环境变量。请参阅下方的[配置](#-配置)部分。
+
+### 发布流程
+
+提交到 `master` 的 PR 必须通过格式检查、workspace 编译检查、Clippy、测试和生产前端构建。合并后创建与所有 crate 版本一致的标签（本次为 `0.1.0`），CI 会构建两种 musl 架构、推送多架构 Docker 镜像，并创建包含服务端/客户端二进制、前端包和 SHA-256 校验文件的 GitHub Release。
 
 ## 🏗 架构
 
@@ -347,7 +358,7 @@ docker run -itd \
   --name rs-cmdb \
   -p 8080:8080 \
   -v $(pwd)/data:/app/data \
-  -v $(pwd)/binaires:/app/binaires \
+  -v $(pwd)/binaries:/app/binaries \
   -e CMDB_JWT_SECRET="$(openssl rand -base64 32)" \
   -e CMDB_ADMIN_PASSWORD="YourSecureP@ssword123" \
   leex2019/rs-cmdb:${RSCMDB_VERSION}

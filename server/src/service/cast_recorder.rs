@@ -12,8 +12,8 @@ pub type CastRecorder = Arc<CastRecorderInner>;
 
 impl CastRecorderInner {
     pub fn cast_dir() -> PathBuf {
-        let dir = std::env::var("CMDB_CAST_DIR")
-            .unwrap_or_else(|_| "/var/log/cmdb/casts/".to_string());
+        let dir =
+            std::env::var("CMDB_CAST_DIR").unwrap_or_else(|_| "/var/log/cmdb/casts/".to_string());
         PathBuf::from(&dir)
     }
 
@@ -48,7 +48,8 @@ impl CastRecorderInner {
         });
         writeln!(writer, "{}", header)
             .map_err(|e| CmdbError::Internal(format!("Failed to write cast header: {}", e)))?;
-        writer.flush()
+        writer
+            .flush()
             .map_err(|e| CmdbError::Internal(format!("Failed to flush cast file: {}", e)))?;
         Ok(())
     }
@@ -74,24 +75,21 @@ impl CastRecorderInner {
 
     pub fn read_cast_file(session_id: &str) -> CmdbResult<Vec<u8>> {
         let path = Self::cast_path(session_id);
-        fs::read(&path)
-            .map_err(|e| CmdbError::Internal(format!("Failed to read cast file: {}", e)))
+        fs::read(&path).map_err(|e| CmdbError::Internal(format!("Failed to read cast file: {}", e)))
     }
 
-    pub fn read_cast_file_range(
-        session_id: &str,
-        offset: u64,
-        length: u64,
-    ) -> CmdbResult<Vec<u8>> {
+    pub fn read_cast_file_range(session_id: &str, offset: u64, length: u64) -> CmdbResult<Vec<u8>> {
         let path = Self::cast_path(session_id);
         let file = fs::File::open(&path)
             .map_err(|e| CmdbError::Internal(format!("Failed to open cast file: {}", e)))?;
         use std::io::{Read, Seek, SeekFrom};
         let mut reader = std::io::BufReader::new(file);
-        reader.seek(SeekFrom::Start(offset))
+        reader
+            .seek(SeekFrom::Start(offset))
             .map_err(|e| CmdbError::Internal(format!("Failed to seek cast file: {}", e)))?;
         let mut buf = vec![0u8; length as usize];
-        let n = reader.read(&mut buf)
+        let n = reader
+            .read(&mut buf)
             .map_err(|e| CmdbError::Internal(format!("Failed to read cast file: {}", e)))?;
         buf.truncate(n);
         Ok(buf)
@@ -102,6 +100,17 @@ impl CastRecorderInner {
         fs::metadata(&path)
             .map(|m| m.len())
             .map_err(|e| CmdbError::Internal(format!("Failed to get cast file size: {}", e)))
+    }
+
+    pub fn delete_cast(session_id: &str) -> CmdbResult<()> {
+        match fs::remove_file(Self::cast_path(session_id)) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(CmdbError::Internal(format!(
+                "Failed to delete cast file: {}",
+                error
+            ))),
+        }
     }
 
     #[allow(dead_code)]

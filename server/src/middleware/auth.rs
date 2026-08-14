@@ -64,14 +64,13 @@ pub async fn auth_middleware(
 mod tests {
     use super::*;
     use crate::db::redb_store::RedbStore;
-    use axum::{body::Body, routing::get, Router};
+    use axum::{Router, body::Body, routing::get};
     use common::entity::user::{Role, User};
     use std::sync::Arc;
     use tower::ServiceExt;
 
     fn setup_test_env() -> (Arc<RedbStore>, Arc<AuthService>, Arc<UserRepository>) {
-        let path = std::env::temp_dir()
-            .join(format!("auth_test_{}.db", rand::random::<u64>()));
+        let path = std::env::temp_dir().join(format!("auth_test_{}.db", rand::random::<u64>()));
         let _ = std::fs::remove_file(&path);
         let db = Arc::new(RedbStore::new(&path).unwrap());
         let auth_service = Arc::new(AuthService::new("test_jwt_secret".to_string()));

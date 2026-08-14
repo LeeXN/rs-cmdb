@@ -1,76 +1,29 @@
-use gloo_net::http::Request;
-use gloo_storage::{LocalStorage, Storage};
-use log::info;
 use urlencoding;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::window;
 use yew::Callback;
 
-use crate::stores::auth_store::AuthStore;
+use crate::services::auth;
 use crate::types::ApiResponse;
 use common::models::{Component, ComponentStatus, PaginatedResult};
 
 const API_BASE_URL: &str = "/api/v1/components";
 
-fn get_auth_header() -> Option<String> {
-    if let Ok(store) = LocalStorage::get::<AuthStore>("auth_store") {
-        if let Some(token) = store.token {
-            return Some(format!("Bearer {}", token));
-        }
-    }
-    if let Ok(store) = LocalStorage::get::<AuthStore>("AuthStore") {
-        if let Some(token) = store.token {
-            return Some(format!("Bearer {}", token));
-        }
-    }
-    None
-}
-
 async fn request_get(url: &str) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::get(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let response = req.send().await?;
-    check_auth_error(&response);
-    Ok(response)
+    auth::get(url).await
 }
 
 async fn request_put<T: serde::Serialize>(
     url: &str,
     body: &T,
 ) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::put(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let response = req.json(body)?.send().await?;
-    check_auth_error(&response);
-    Ok(response)
+    auth::put_json(url, body).await
 }
 
 async fn request_post<T: serde::Serialize>(
     url: &str,
     body: &T,
 ) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::post(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let response = req.json(body)?.send().await?;
-    check_auth_error(&response);
-    Ok(response)
-}
-
-fn check_auth_error(response: &gloo_net::http::Response) {
-    if response.status() == 401 {
-        info!("Received 401 Unauthorized, redirecting to login...");
-        LocalStorage::delete("auth_store");
-        LocalStorage::delete("AuthStore");
-        if let Some(win) = window() {
-            let _ = win.location().set_href("/login");
-        }
-    }
+    auth::post_json(url, body).await
 }
 
 #[derive(Debug, Clone)]

@@ -161,9 +161,9 @@ impl ClientDao {
 mod tests {
     use super::*;
     use crate::cache::CacheConfigs;
-    use crate::repository::client_repository::ClientRepository;
-    use crate::tests::fixtures::{setup_test_db, create_test_hardware_info};
     use crate::db::Database;
+    use crate::repository::client_repository::ClientRepository;
+    use crate::tests::fixtures::{create_test_hardware_info, setup_test_db};
 
     #[tokio::test]
     async fn test_get_and_save_client() {
@@ -282,7 +282,10 @@ mod tests {
         dao.save(&client).await.unwrap();
 
         let hardware = create_test_hardware_info(&client.id);
-        hardware_repo.save_hardware(&client.id, &hardware, false).await.unwrap();
+        hardware_repo
+            .save_hardware(&client.id, &hardware, false)
+            .await
+            .unwrap();
 
         let retrieved = dao.get_hardware(&client.id).await.unwrap().unwrap();
         assert_eq!(

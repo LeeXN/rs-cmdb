@@ -22,8 +22,8 @@ impl ExecPolicyRepository {
 
     pub async fn save(&self, policy: &ExecPolicy) -> CmdbResult<()> {
         let key = format!("{}{}", PREFIX, policy.id);
-        let value = serde_json::to_vec(policy)
-            .map_err(|e| CmdbError::Serialization(e.to_string()))?;
+        let value =
+            serde_json::to_vec(policy).map_err(|e| CmdbError::Serialization(e.to_string()))?;
         self.db.set(&key, &value).await
     }
 

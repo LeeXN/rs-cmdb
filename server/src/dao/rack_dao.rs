@@ -217,10 +217,10 @@ pub struct RackUtilization {
 mod tests {
     use super::*;
     use crate::cache::CacheConfigs;
+    use crate::db::Database;
     use crate::repository::client_repository::ClientRepository;
     use crate::tests::fixtures::setup_test_db;
     use common::models::Rack;
-    use crate::db::Database;
 
     #[tokio::test]
     async fn test_get_and_save_rack() {
@@ -233,7 +233,11 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(db));
         let dao = RackDao::new(rack_repo, client_repo);
 
-        let rack = Rack { name: "Rack-A".into(), height_u: 42, ..Default::default() };
+        let rack = Rack {
+            name: "Rack-A".into(),
+            height_u: 42,
+            ..Default::default()
+        };
         dao.save(&rack).await.unwrap();
 
         let retrieved = dao.get(&rack.id).await.unwrap().unwrap();
@@ -251,7 +255,11 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(db));
         let dao = RackDao::new(rack_repo, client_repo);
 
-        let rack = Rack { name: "Rack-B".into(), height_u: 42, ..Default::default() };
+        let rack = Rack {
+            name: "Rack-B".into(),
+            height_u: 42,
+            ..Default::default()
+        };
         dao.save(&rack).await.unwrap();
 
         let result = dao.validate_position(&rack.id, 1, 1, None).await;
@@ -269,7 +277,11 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(db));
         let dao = RackDao::new(rack_repo, client_repo);
 
-        let rack = Rack { name: "Rack-C".into(), height_u: 42, ..Default::default() };
+        let rack = Rack {
+            name: "Rack-C".into(),
+            height_u: 42,
+            ..Default::default()
+        };
         dao.save(&rack).await.unwrap();
 
         let result = dao.validate_position(&rack.id, 50, 1, None).await;
@@ -287,7 +299,11 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(db));
         let dao = RackDao::new(rack_repo, client_repo.clone());
 
-        let rack = Rack { name: "Rack-D".into(), height_u: 42, ..Default::default() };
+        let rack = Rack {
+            name: "Rack-D".into(),
+            height_u: 42,
+            ..Default::default()
+        };
         dao.save(&rack).await.unwrap();
 
         let mut client = Client::new("overlap-host".into(), "10.0.0.1".into());
@@ -311,7 +327,11 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(db));
         let dao = RackDao::new(rack_repo, client_repo.clone());
 
-        let rack = Rack { name: "Rack-E".into(), height_u: 42, ..Default::default() };
+        let rack = Rack {
+            name: "Rack-E".into(),
+            height_u: 42,
+            ..Default::default()
+        };
         dao.save(&rack).await.unwrap();
 
         let mut client = Client::new("util-host".into(), "10.0.0.1".into());
@@ -338,7 +358,11 @@ mod tests {
         let rack_repo = Arc::new(RackRepository::new(db));
         let dao = RackDao::new(rack_repo, client_repo.clone());
 
-        let rack = Rack { name: "Rack-F".into(), height_u: 42, ..Default::default() };
+        let rack = Rack {
+            name: "Rack-F".into(),
+            height_u: 42,
+            ..Default::default()
+        };
         dao.save(&rack).await.unwrap();
 
         let mut c1 = Client::new("rack-f-host1".into(), "10.0.0.1".into());

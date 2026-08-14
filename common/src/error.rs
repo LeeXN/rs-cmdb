@@ -98,15 +98,33 @@ mod tests {
     #[test]
     fn test_display_all_variants() {
         let cases = vec![
-            (CmdbError::Database("db err".into()), "Database error: db err"),
+            (
+                CmdbError::Database("db err".into()),
+                "Database error: db err",
+            ),
             (CmdbError::Client("bad".into()), "Client error: bad"),
             (CmdbError::Server("fail".into()), "Server error: fail"),
-            (CmdbError::Serialization("json".into()), "Serialization error: json"),
-            (CmdbError::Network("timeout".into()), "Network error: timeout"),
+            (
+                CmdbError::Serialization("json".into()),
+                "Serialization error: json",
+            ),
+            (
+                CmdbError::Network("timeout".into()),
+                "Network error: timeout",
+            ),
             (CmdbError::NotFound("user".into()), "Not found: user"),
-            (CmdbError::Validation("invalid".into()), "Validation error: invalid"),
-            (CmdbError::Auth("bad token".into()), "Authentication error: bad token"),
-            (CmdbError::Forbidden("no access".into()), "Authorization error: no access"),
+            (
+                CmdbError::Validation("invalid".into()),
+                "Validation error: invalid",
+            ),
+            (
+                CmdbError::Auth("bad token".into()),
+                "Authentication error: bad token",
+            ),
+            (
+                CmdbError::Forbidden("no access".into()),
+                "Authorization error: no access",
+            ),
             (CmdbError::Internal("oops".into()), "Internal error: oops"),
             (CmdbError::Other("generic".into()), "generic"),
         ];

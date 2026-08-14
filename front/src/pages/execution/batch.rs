@@ -1,9 +1,11 @@
 use std::collections::{HashMap, HashSet};
+use std::ops::Deref;
+use std::rc::Rc;
 
 use gloo::timers::callback::Interval;
+use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 
 use crate::components::notification::{Notification, NotificationType};
 use crate::components::ui::badge::{Badge, BadgeVariant};
@@ -17,7 +19,9 @@ use crate::i18n::I18n;
 use crate::icons::{History, LoaderCircle, Search, Terminal};
 use crate::services::api;
 use crate::services::command;
-use crate::types::{Client, CommandLogLine, CommandStatus, CommandTask, CreateCommandRequest, Project};
+use crate::types::{
+    Client, CommandLogLine, CommandStatus, CommandTask, CreateCommandRequest, Project,
+};
 use common::entity::execution::ExecutionType;
 
 fn command_status_badge(status: &CommandStatus, t: &I18n) -> Html {
@@ -35,13 +39,154 @@ fn command_status_badge(status: &CommandStatus, t: &I18n) -> Html {
 fn is_terminal_status(status: &CommandStatus) -> bool {
     matches!(
         status,
-        CommandStatus::Success | CommandStatus::Failed | CommandStatus::Timeout | CommandStatus::Expired
+        CommandStatus::Success
+            | CommandStatus::Failed
+            | CommandStatus::Timeout
+            | CommandStatus::Expired
     )
 }
 
 fn is_waiting_for_output(status: Option<&CommandStatus>, active_logs: &[CommandLogLine]) -> bool {
     active_logs.is_empty()
-        && matches!(status, Some(CommandStatus::Pending | CommandStatus::Running) | None)
+        && matches!(
+            status,
+            Some(CommandStatus::Pending | CommandStatus::Running) | None
+        )
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum BatchOutputMode {
+    Single,
+    All,
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct BatchTasksState(Vec<CommandTask>);
+
+impl Deref for BatchTasksState {
+    type Target = [CommandTask];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+enum BatchTasksAction {
+    Replace(Vec<CommandTask>),
+    Updated(CommandTask),
+    Clear,
+}
+
+impl Reducible for BatchTasksState {
+    type Action = BatchTasksAction;
+
+    fn reduce(self: Rc<Self>, action: Self::Action) -> Rc<Self> {
+        match action {
+            BatchTasksAction::Replace(tasks) => Rc::new(Self(tasks)),
+            BatchTasksAction::Updated(updated) => {
+                let mut tasks = self.0.clone();
+                if let Some(existing) = tasks.iter_mut().find(|task| task.id == updated.id) {
+                    *existing = updated;
+                }
+                Rc::new(Self(tasks))
+            }
+            BatchTasksAction::Clear => Rc::new(Self::default()),
+        }
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct BatchLogsState {
+    by_task: HashMap<String, Vec<CommandLogLine>>,
+    errors: HashSet<String>,
+}
+
+enum BatchLogsAction {
+    Loaded(String, Vec<CommandLogLine>),
+    Failed(String),
+    Reset,
+}
+
+impl Reducible for BatchLogsState {
+    type Action = BatchLogsAction;
+
+    fn reduce(self: Rc<Self>, action: Self::Action) -> Rc<Self> {
+        let mut next = (*self).clone();
+        match action {
+            BatchLogsAction::Loaded(task_id, logs) => {
+                next.errors.remove(&task_id);
+                next.by_task.insert(task_id, logs);
+            }
+            BatchLogsAction::Failed(task_id) => {
+                next.errors.insert(task_id);
+            }
+            BatchLogsAction::Reset => return Rc::new(Self::default()),
+        }
+        Rc::new(next)
+    }
+}
+
+fn logs_are_loading(task_id: &str, status: &CommandStatus, logs: &BatchLogsState) -> bool {
+    !logs.by_task.contains_key(task_id)
+        || is_waiting_for_output(
+            Some(status),
+            logs.by_task.get(task_id).map(Vec::as_slice).unwrap_or(&[]),
+        )
+}
+
+fn fetch_logs_into_cache(task_ids: Vec<String>, logs: UseReducerHandle<BatchLogsState>) {
+    for task_id in task_ids {
+        let logs = logs.clone();
+        spawn_local(async move {
+            match command::fetch_command_logs(&task_id).await {
+                Ok(lines) => logs.dispatch(BatchLogsAction::Loaded(task_id, lines)),
+                Err(_) => logs.dispatch(BatchLogsAction::Failed(task_id)),
+            }
+        });
+    }
+}
+
+fn task_logs_panel(task: &CommandTask, logs: &BatchLogsState, t: &I18n, compact: bool) -> Html {
+    let task_logs = logs.by_task.get(&task.id).map(Vec::as_slice).unwrap_or(&[]);
+    let min_height = if compact {
+        "min-h-[120px]"
+    } else {
+        "min-h-[420px]"
+    };
+    let content_height = if compact {
+        "min-h-[80px]"
+    } else {
+        "min-h-[360px]"
+    };
+
+    html! {
+        <div class={classes!(min_height, "rounded-lg", "border", "border-border", "bg-black/90", "p-4", "font-mono", "text-xs", "text-green-300", "overflow-auto")}>
+            if logs.errors.contains(&task.id) && !logs.by_task.contains_key(&task.id) {
+                <div class={classes!(content_height, "flex", "items-center", "justify-center", "text-center", "text-sm", "text-red-300")}>
+                    {t.t("execution.batch.output_load_failed")}
+                </div>
+            } else if logs_are_loading(&task.id, &task.status, logs) {
+                <div class={classes!(content_height, "flex", "items-center", "justify-center", "gap-3", "text-muted-foreground")}>
+                    <LoaderCircle class="h-4 w-4 animate-spin" />
+                    {t.t("execution.batch.waiting_output")}
+                </div>
+            } else if task_logs.is_empty() {
+                <div class={classes!(content_height, "flex", "items-center", "justify-center", "text-center", "text-sm", "text-muted-foreground")}>
+                    {t.t("execution.batch.no_output_terminal")}
+                </div>
+            } else {
+                { for task_logs.iter().map(|line| {
+                    let color = match line.stream {
+                        common::command::LogStream::Stdout => "text-green-300",
+                        common::command::LogStream::Stderr => "text-red-300",
+                    };
+                    html! {
+                        <div class={classes!("whitespace-pre-wrap", color)}>{line.line.clone()}</div>
+                    }
+                }) }
+            }
+        </div>
+    }
 }
 
 fn parse_client_ids(query: &HashMap<String, String>) -> HashSet<String> {
@@ -87,7 +232,12 @@ fn rack_scope_label(client: &Client) -> Option<String> {
     }
 }
 
-fn matches_batch_filters(client: &Client, query: &str, active_project: &str, active_rack: &str) -> bool {
+fn matches_batch_filters(
+    client: &Client,
+    query: &str,
+    active_project: &str,
+    active_rack: &str,
+) -> bool {
     let query = query.trim().to_lowercase();
     let text_match = query.is_empty()
         || client.hostname.to_lowercase().contains(&query)
@@ -114,17 +264,20 @@ fn matches_batch_filters(client: &Client, query: &str, active_project: &str, act
             .map(|rack| rack.to_lowercase().contains(&query))
             .unwrap_or(false);
 
-    let project_match = active_project.is_empty()
-        || client.project_id.as_deref() == Some(active_project);
-    let rack_match = active_rack.is_empty()
-        || rack_scope_key(client).as_deref() == Some(active_rack);
+    let project_match =
+        active_project.is_empty() || client.project_id.as_deref() == Some(active_project);
+    let rack_match =
+        active_rack.is_empty() || rack_scope_key(client).as_deref() == Some(active_rack);
 
     text_match && project_match && rack_match
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{matches_batch_filters, parse_client_ids, preloaded_command, rack_scope_key, rack_scope_label};
+    use super::{
+        matches_batch_filters, parse_client_ids, preloaded_command, rack_scope_key,
+        rack_scope_label,
+    };
     use crate::types::{Client, CommandLogLine};
     use std::collections::{HashMap, HashSet};
 
@@ -198,24 +351,59 @@ mod tests {
     fn matches_batch_filters_checks_text_project_and_rack() {
         let client = client();
 
-        assert!(matches_batch_filters(&client, "172.16", "project-a", "rack-7||dc-a"));
-        assert!(!matches_batch_filters(&client, "172.16", "project-b", "rack-7||dc-a"));
-        assert!(!matches_batch_filters(&client, "172.16", "project-a", "rack-8||dc-a"));
-        assert!(!matches_batch_filters(&client, "missing", "project-a", "rack-7||dc-a"));
+        assert!(matches_batch_filters(
+            &client,
+            "172.16",
+            "project-a",
+            "rack-7||dc-a"
+        ));
+        assert!(!matches_batch_filters(
+            &client,
+            "172.16",
+            "project-b",
+            "rack-7||dc-a"
+        ));
+        assert!(!matches_batch_filters(
+            &client,
+            "172.16",
+            "project-a",
+            "rack-8||dc-a"
+        ));
+        assert!(!matches_batch_filters(
+            &client,
+            "missing",
+            "project-a",
+            "rack-7||dc-a"
+        ));
     }
 
     #[test]
     fn waiting_for_output_only_applies_to_live_tasks_without_logs() {
-        assert!(super::is_waiting_for_output(Some(&super::CommandStatus::Pending), &[]));
-        assert!(super::is_waiting_for_output(Some(&super::CommandStatus::Running), &[]));
-        assert!(!super::is_waiting_for_output(Some(&super::CommandStatus::Failed), &[]));
-        assert!(!super::is_waiting_for_output(Some(&super::CommandStatus::Success), &[]));
-        assert!(!super::is_waiting_for_output(Some(&super::CommandStatus::Failed), &[CommandLogLine {
-            seq: 1,
-            line: "boom".to_string(),
-            stream: common::command::LogStream::Stderr,
-            timestamp: "2026-01-01T00:00:00Z".to_string(),
-        }]));
+        assert!(super::is_waiting_for_output(
+            Some(&super::CommandStatus::Pending),
+            &[]
+        ));
+        assert!(super::is_waiting_for_output(
+            Some(&super::CommandStatus::Running),
+            &[]
+        ));
+        assert!(!super::is_waiting_for_output(
+            Some(&super::CommandStatus::Failed),
+            &[]
+        ));
+        assert!(!super::is_waiting_for_output(
+            Some(&super::CommandStatus::Success),
+            &[]
+        ));
+        assert!(!super::is_waiting_for_output(
+            Some(&super::CommandStatus::Failed),
+            &[CommandLogLine {
+                seq: 1,
+                line: "boom".to_string(),
+                stream: common::command::LogStream::Stderr,
+                timestamp: "2026-01-01T00:00:00Z".to_string(),
+            }]
+        ));
     }
 }
 
@@ -233,9 +421,10 @@ pub fn batch_exec_page() -> Html {
     let command_text = use_state(String::new);
     let submitting = use_state(|| false);
     let show_results = use_state(|| false);
-    let tasks = use_state(Vec::<CommandTask>::new);
+    let tasks = use_reducer(BatchTasksState::default);
     let active_task_id = use_state(|| None::<String>);
-    let active_logs = use_state(Vec::<CommandLogLine>::new);
+    let output_mode = use_state(|| BatchOutputMode::Single);
+    let logs = use_reducer(BatchLogsState::default);
     let notification = use_state(|| None::<(NotificationType, String)>);
 
     let query_params = location
@@ -263,7 +452,9 @@ pub fn batch_exec_page() -> Html {
         let clients = clients.clone();
         use_effect_with((), move |_| {
             spawn_local(async move {
-                if let Ok(page) = api::fetch_clients(1, 1000, None, None, Some("online".to_string())).await {
+                if let Ok(page) =
+                    api::fetch_clients(1, 1000, None, None, Some("online".to_string())).await
+                {
                     clients.set(page.items);
                 }
             });
@@ -286,41 +477,77 @@ pub fn batch_exec_page() -> Html {
     {
         let tasks = tasks.clone();
         let show_results = show_results.clone();
-        let active_task_id = active_task_id.clone();
-        let active_logs = active_logs.clone();
-        use_effect_with((*show_results, (*active_task_id).clone()), move |_| {
+        let task_ids = tasks.iter().map(|task| task.id.clone()).collect::<Vec<_>>();
+        use_effect_with((*show_results, task_ids.clone()), move |_| {
             if !*show_results {
                 return Box::new(|| ()) as Box<dyn FnOnce()>;
             }
             let tasks = tasks.clone();
-            let active_task_id = active_task_id.clone();
-            let active_logs = active_logs.clone();
-            let interval = Interval::new(2000, move || {
-                for task in (*tasks).clone() {
+            let refresh = move || {
+                for task_id in task_ids.clone() {
                     let tasks = tasks.clone();
-                    let task_id = task.id.clone();
                     spawn_local(async move {
                         if let Ok(updated) = command::fetch_command(&task_id).await {
-                            let mut next = (*tasks).clone();
-                            if let Some(existing) = next.iter_mut().find(|item| item.id == updated.id) {
-                                *existing = updated;
-                                tasks.set(next);
-                            }
+                            tasks.dispatch(BatchTasksAction::Updated(updated));
                         }
                     });
                 }
-
-                if let Some(task_id) = (*active_task_id).clone() {
-                    let active_logs = active_logs.clone();
-                    spawn_local(async move {
-                        if let Ok(logs) = command::fetch_command_logs(&task_id).await {
-                            active_logs.set(logs);
-                        }
-                    });
-                }
-            });
+            };
+            refresh();
+            let interval = Interval::new(2000, refresh);
             Box::new(move || drop(interval)) as Box<dyn FnOnce()>
         });
+    }
+
+    {
+        let show_results = show_results.clone();
+        let logs = logs.clone();
+        let active_task_id = (*active_task_id).clone();
+        let output_mode = *output_mode;
+        let task_states = tasks
+            .iter()
+            .map(|task| (task.id.clone(), task.status.clone()))
+            .collect::<Vec<_>>();
+        use_effect_with(
+            (
+                *show_results,
+                output_mode,
+                active_task_id.clone(),
+                task_states.clone(),
+            ),
+            move |_| {
+                if !*show_results {
+                    return Box::new(|| ()) as Box<dyn FnOnce()>;
+                }
+
+                let visible_ids = match output_mode {
+                    BatchOutputMode::Single => {
+                        active_task_id.clone().into_iter().collect::<Vec<_>>()
+                    }
+                    BatchOutputMode::All => task_states.iter().map(|(id, _)| id.clone()).collect(),
+                };
+                fetch_logs_into_cache(visible_ids, logs.clone());
+
+                let live_ids = task_states
+                    .iter()
+                    .filter(|(id, status)| {
+                        matches!(status, CommandStatus::Pending | CommandStatus::Running)
+                            && (output_mode == BatchOutputMode::All
+                                || active_task_id.as_deref() == Some(id.as_str()))
+                    })
+                    .map(|(id, _)| id.clone())
+                    .collect::<Vec<_>>();
+                let interval = if live_ids.is_empty() {
+                    None
+                } else {
+                    let logs = logs.clone();
+                    Some(Interval::new(2000, move || {
+                        fetch_logs_into_cache(live_ids.clone(), logs.clone());
+                    }))
+                };
+                Box::new(move || drop(interval)) as Box<dyn FnOnce()>
+            },
+        );
     }
 
     let filtered_clients = {
@@ -331,7 +558,8 @@ pub fn batch_exec_page() -> Html {
             clients
                 .iter()
                 .filter(|client| {
-                    (active_project.is_empty() || client.project_id.as_deref() == Some(active_project.as_str()))
+                    (active_project.is_empty()
+                        || client.project_id.as_deref() == Some(active_project.as_str()))
                         && (active_rack.is_empty()
                             || rack_scope_key(client).as_deref() == Some(active_rack.as_str()))
                 })
@@ -382,7 +610,11 @@ pub fn batch_exec_page() -> Html {
             value: String::new(),
             label: t.t("execution.batch.all_racks"),
         }];
-        options.extend(rack_items.into_iter().map(|(value, label)| SelectOption { value, label }));
+        options.extend(
+            rack_items
+                .into_iter()
+                .map(|(value, label)| SelectOption { value, label }),
+        );
         options
     };
 
@@ -405,24 +637,35 @@ pub fn batch_exec_page() -> Html {
         let tasks = tasks.clone();
         let active_task_id = active_task_id.clone();
         let show_results = show_results.clone();
+        let output_mode = output_mode.clone();
+        let logs = logs.clone();
         let notification = notification.clone();
         let submitting = submitting.clone();
         let t = t.clone();
         Callback::from(move |_| {
             let command_value = (*command_text).clone();
             if command_value.trim().is_empty() {
-                notification.set(Some((NotificationType::Warning, t.t("execution.batch.validation.command_required"))));
+                notification.set(Some((
+                    NotificationType::Warning,
+                    t.t("execution.batch.validation.command_required"),
+                )));
                 return;
             }
 
             let ids = (*selected_ids).iter().cloned().collect::<Vec<_>>();
             if ids.is_empty() {
-                notification.set(Some((NotificationType::Warning, t.t("execution.batch.validation.targets_required"))));
+                notification.set(Some((
+                    NotificationType::Warning,
+                    t.t("execution.batch.validation.targets_required"),
+                )));
                 return;
             }
 
             if ids.len() > 50 {
-                notification.set(Some((NotificationType::Error, t.t("execution.batch.validation.limit"))));
+                notification.set(Some((
+                    NotificationType::Error,
+                    t.t("execution.batch.validation.limit"),
+                )));
                 return;
             }
 
@@ -430,6 +673,8 @@ pub fn batch_exec_page() -> Html {
             let tasks = tasks.clone();
             let active_task_id = active_task_id.clone();
             let show_results = show_results.clone();
+            let output_mode = output_mode.clone();
+            let logs = logs.clone();
             let notification = notification.clone();
             let submitting = submitting.clone();
             let t = t.clone();
@@ -469,12 +714,17 @@ pub fn batch_exec_page() -> Html {
                 }
 
                 if created_tasks.is_empty() && approvals == 0 {
-                    notification.set(Some((NotificationType::Error, t.t("execution.batch.notifications.no_tasks"))));
+                    notification.set(Some((
+                        NotificationType::Error,
+                        t.t("execution.batch.notifications.no_tasks"),
+                    )));
                 } else {
                     let first_task_id = created_tasks.first().map(|task| task.id.clone());
                     let has_tasks = !created_tasks.is_empty();
-                    tasks.set(created_tasks);
+                    tasks.dispatch(BatchTasksAction::Replace(created_tasks));
                     active_task_id.set(first_task_id);
+                    output_mode.set(BatchOutputMode::Single);
+                    logs.dispatch(BatchLogsAction::Reset);
                     show_results.set(has_tasks);
                     if approvals > 0 {
                         let args = HashMap::from([("count".to_string(), approvals.to_string())]);
@@ -489,7 +739,10 @@ pub fn batch_exec_page() -> Html {
                             t.t_with_args("execution.batch.notifications.partial_failures", &args),
                         )));
                     } else {
-                        notification.set(Some((NotificationType::Success, t.t("execution.batch.notifications.started"))));
+                        notification.set(Some((
+                            NotificationType::Success,
+                            t.t("execution.batch.notifications.started"),
+                        )));
                     }
                 }
 
@@ -502,7 +755,10 @@ pub fn batch_exec_page() -> Html {
         .as_ref()
         .and_then(|task_id| tasks.iter().find(|task| &task.id == task_id).cloned());
 
-    let completed_count = tasks.iter().filter(|task| is_terminal_status(&task.status)).count();
+    let completed_count = tasks
+        .iter()
+        .filter(|task| is_terminal_status(&task.status))
+        .count();
     let running_count = tasks
         .iter()
         .filter(|task| matches!(task.status, CommandStatus::Pending | CommandStatus::Running))
@@ -542,12 +798,14 @@ pub fn batch_exec_page() -> Html {
                         <Button variant={ButtonVariant::Outline} size={ButtonSize::Sm} onclick={{
                             let show_results = show_results.clone();
                             let tasks = tasks.clone();
-                            let active_logs = active_logs.clone();
+                            let output_mode = output_mode.clone();
+                            let logs = logs.clone();
                             let active_task_id = active_task_id.clone();
                             Callback::from(move |_| {
                                 show_results.set(false);
-                                tasks.set(Vec::new());
-                                active_logs.set(Vec::new());
+                                tasks.dispatch(BatchTasksAction::Clear);
+                                output_mode.set(BatchOutputMode::Single);
+                                logs.dispatch(BatchLogsAction::Reset);
                                 active_task_id.set(None);
                             })
                         }} disabled={!*show_results}>
@@ -595,10 +853,10 @@ pub fn batch_exec_page() -> Html {
                                                     )}
                                                     onclick={{
                                                         let active_task_id = active_task_id.clone();
-                                                        let active_logs = active_logs.clone();
+                                                        let output_mode = output_mode.clone();
                                                         Callback::from(move |_| {
                                                             active_task_id.set(Some(task_id.clone()));
-                                                            active_logs.set(Vec::new());
+                                                            output_mode.set(BatchOutputMode::Single);
                                                         })
                                                     }}
                                                 >
@@ -619,17 +877,68 @@ pub fn batch_exec_page() -> Html {
                             <Card>
                                 <CardHeader class="gap-3 md:flex-row md:items-center md:justify-between md:space-y-0">
                                     <div>
-                                        <CardTitle class="text-lg">{t.t("execution.batch.output_title")}</CardTitle>
+                                        <CardTitle class="text-lg">
+                                            {if *output_mode == BatchOutputMode::All {
+                                                t.t("execution.batch.all_output_title")
+                                            } else {
+                                                t.t("execution.batch.output_title")
+                                            }}
+                                        </CardTitle>
                                         <p class="text-sm text-muted-foreground">
-                                            {t.t("execution.batch.output_description")}
+                                            {if *output_mode == BatchOutputMode::All {
+                                                t.t("execution.batch.all_output_description")
+                                            } else {
+                                                t.t("execution.batch.output_description")
+                                            }}
                                         </p>
                                     </div>
-                                    if let Some(task) = &selected_task {
-                                        {command_status_badge(&task.status, t.as_ref())}
-                                    }
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            variant={if *output_mode == BatchOutputMode::Single { ButtonVariant::Default } else { ButtonVariant::Outline }}
+                                            size={ButtonSize::Sm}
+                                            onclick={{
+                                                let output_mode = output_mode.clone();
+                                                Callback::from(move |_| output_mode.set(BatchOutputMode::Single))
+                                            }}
+                                        >
+                                            {t.t("execution.batch.single_output")}
+                                        </Button>
+                                        <Button
+                                            variant={if *output_mode == BatchOutputMode::All { ButtonVariant::Default } else { ButtonVariant::Outline }}
+                                            size={ButtonSize::Sm}
+                                            onclick={{
+                                                let output_mode = output_mode.clone();
+                                                Callback::from(move |_| output_mode.set(BatchOutputMode::All))
+                                            }}
+                                        >
+                                            {t.t("execution.batch.all_output")}
+                                        </Button>
+                                        if *output_mode == BatchOutputMode::Single {
+                                            if let Some(task) = &selected_task {
+                                                {command_status_badge(&task.status, t.as_ref())}
+                                            }
+                                        }
+                                    </div>
                                 </CardHeader>
                                 <CardContent class="space-y-4">
-                                    if let Some(task) = &selected_task {
+                                    if *output_mode == BatchOutputMode::All {
+                                        <div class="max-h-[680px] space-y-4 overflow-auto pr-1">
+                                            {for tasks.iter().map(|task| html! {
+                                                <section class="space-y-3 rounded-lg border border-border/70 bg-muted/10 p-3">
+                                                    <div class="flex flex-wrap items-start justify-between gap-3">
+                                                        <div class="min-w-0">
+                                                            <div class="break-all font-medium text-foreground">{task.client_id.clone()}</div>
+                                                            <div class="mt-1 break-all font-mono text-[11px] text-muted-foreground">
+                                                                {format!("{}: {}", t.t("execution.batch.task_id"), task.id)}
+                                                            </div>
+                                                        </div>
+                                                        {command_status_badge(&task.status, t.as_ref())}
+                                                    </div>
+                                                    {task_logs_panel(task, &logs, t.as_ref(), true)}
+                                                </section>
+                                            })}
+                                        </div>
+                                    } else if let Some(task) = &selected_task {
                                         <div class="grid gap-4 md:grid-cols-3">
                                             <div class="rounded-lg border border-border/70 bg-muted/20 p-3 md:col-span-2">
                                                 <div class="text-xs uppercase tracking-wide text-muted-foreground">{t.t("execution.batch.command_label")}</div>
@@ -642,28 +951,7 @@ pub fn batch_exec_page() -> Html {
                                                 <div class="mt-1 break-all font-mono text-xs text-foreground">{task.id.clone()}</div>
                                             </div>
                                         </div>
-                                        <div class="min-h-[420px] rounded-lg border border-border bg-black/90 p-4 font-mono text-xs text-green-300 overflow-auto">
-                                            if is_waiting_for_output(Some(&task.status), active_logs.as_ref()) {
-                                                <div class="flex h-full min-h-[360px] items-center justify-center gap-3 text-muted-foreground">
-                                                    <LoaderCircle class="h-4 w-4 animate-spin" />
-                                                    {t.t("execution.batch.waiting_output")}
-                                                </div>
-                                            } else if active_logs.is_empty() {
-                                                <div class="flex h-full min-h-[360px] items-center justify-center text-center text-sm text-muted-foreground">
-                                                    {t.t("execution.batch.no_output_terminal")}
-                                                </div>
-                                            } else {
-                                                { for active_logs.iter().map(|line| {
-                                                    let color = match line.stream {
-                                                        common::command::LogStream::Stdout => "text-green-300",
-                                                        common::command::LogStream::Stderr => "text-red-300",
-                                                    };
-                                                    html! {
-                                                        <div class={classes!("whitespace-pre-wrap", color)}>{line.line.clone()}</div>
-                                                    }
-                                                }) }
-                                            }
-                                        </div>
+                                        {task_logs_panel(task, &logs, t.as_ref(), false)}
                                     } else {
                                         <div class="flex min-h-[420px] items-center justify-center rounded-lg border border-border/70 bg-muted/20 text-muted-foreground">
                                             {t.t("execution.batch.select_target_prompt")}

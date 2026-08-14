@@ -10,8 +10,9 @@ openspec/
 .cargo
 
 binaries/
-# Rust
-Cargo.lock
+# Rust build output
+# Cargo.lock is intentionally tracked: this workspace ships applications and
+# release artifacts must resolve the same dependency graph as CI.
 
 # IDEs
 .idea/
@@ -29,9 +30,19 @@ front/node_modules/
 front/dist
 script/*.json
 *.json
-# Secrets / Config (if applicable - adjust as needed)
-# config.toml
-# .env
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+config.toml
+client.toml
+*.pem
+*.key
+*.p12
+*.pfx
+agent_token
+agent_token_*
+*.redb
 
 
 # Added by cargo

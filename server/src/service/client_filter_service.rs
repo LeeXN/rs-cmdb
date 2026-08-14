@@ -827,7 +827,10 @@ mod tests {
         client_repo.save(&client).await.unwrap();
 
         let hw = create_test_hardware_info(&client.id);
-        hardware_repo.save_hardware(&client.id, &hw, false).await.unwrap();
+        hardware_repo
+            .save_hardware(&client.id, &hw, false)
+            .await
+            .unwrap();
 
         let svc = ClientFilterService::new(client_repo, hardware_repo);
         let export = svc.get_hardware_export_data(&client.id).await.unwrap();
@@ -847,11 +850,14 @@ mod tests {
         client_repo.save(&client).await.unwrap();
 
         let hw = create_test_hardware_info(&client.id);
-        hardware_repo.save_hardware(&client.id, &hw, false).await.unwrap();
+        hardware_repo
+            .save_hardware(&client.id, &hw, false)
+            .await
+            .unwrap();
 
         let svc = ClientFilterService::new(client_repo, hardware_repo);
         let options = svc
-            .get_filter_options_by_client_ids(&[client.id.clone()])
+            .get_filter_options_by_client_ids(std::slice::from_ref(&client.id))
             .await
             .unwrap();
         assert!(options.cpu_vendors.contains(&"GenuineIntel".to_string()));

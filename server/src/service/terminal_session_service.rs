@@ -1,21 +1,24 @@
-use crate::repository::execution_session_repository::ExecutionSessionRepository;
 use crate::repository::terminal_session_repository::TerminalSessionRepository;
 use crate::service::cast_recorder::CastRecorderInner;
 use crate::service::execution_session_service::ExecutionSessionService;
 use crate::service::web_terminal_service::WebTerminalService;
 use chrono::Utc;
 use common::entity::execution::{ExecutionSession, ExecutionType, SessionStatus};
+use common::entity::permission::PermissionAction;
 use common::entity::permission::TerminalMode;
 use common::entity::user::Role;
 use common::error::{CmdbError, CmdbResult};
 use common::models::{
     AgentTerminalOutputRequest, AgentTerminalPollResponse, AgentTerminalStateRequest,
-    CreateTerminalSessionRequest, TerminalInputChunk, TerminalOutputChunk, TerminalResizeInstruction,
-    TerminalOpsSummaryResponse, TerminalSessionState, TerminalSessionSummary,
+    CreateTerminalSessionRequest, TerminalInputChunk, TerminalOpsSummaryResponse,
+    TerminalOutputChunk, TerminalResizeInstruction, TerminalSessionState, TerminalSessionSummary,
 };
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex as StdMutex};
-use tokio::sync::{broadcast, Mutex};
+use std::sync::{
+    Arc, Mutex as StdMutex,
+    atomic::{AtomicU64, Ordering},
+};
+use tokio::sync::{Mutex, broadcast};
 use tracing::warn;
 use uuid::Uuid;
 
@@ -31,26 +34,40 @@ pub struct TerminalSessionService {
     output_channels: Mutex<HashMap<String, OutputSender>>,
     client_channels: Mutex<HashMap<String, broadcast::Sender<()>>>,
     session_svc: StdMutex<Option<Arc<ExecutionSessionService>>>,
+    input_sequence: AtomicU64,
 }
 
 impl TerminalSessionService {
-    pub fn new(
-        repo: Arc<TerminalSessionRepository>,
-        policy: Arc<WebTerminalService>,
-    ) -> Arc<Self> {
+    pub fn new(repo: Arc<TerminalSessionRepository>, policy: Arc<WebTerminalService>) -> Arc<Self> {
         Arc::new(Self {
             repo,
             policy,
             output_channels: Mutex::new(HashMap::new()),
             client_channels: Mutex::new(HashMap::new()),
             session_svc: StdMutex::new(None),
+            input_sequence: AtomicU64::new(Utc::now().timestamp_micros().max(0) as u64),
         })
     }
 
     pub fn configure_history(&self, session_svc: Arc<ExecutionSessionService>) {
-        *self.session_svc.lock().expect("terminal session history lock") = Some(session_svc);
+        *self
+            .session_svc
+            .lock()
+            .expect("terminal session history lock") = Some(session_svc);
     }
 
+    pub async fn allows_client_permission_scope(
+        &self,
+        perm_ctx: &crate::middleware::permission::PermissionContext,
+        client_id: &str,
+        action: &PermissionAction,
+    ) -> bool {
+        self.policy
+            .allows_client_permission_scope(perm_ctx, client_id, action)
+            .await
+    }
+
+    #[allow(dead_code)]
     pub async fn create_session(
         &self,
         req: &CreateTerminalSessionRequest,
@@ -58,14 +75,30 @@ impl TerminalSessionService {
         username: &str,
         role: &Role,
     ) -> CmdbResult<TerminalSessionSummary> {
-        let mode = self.policy.check_session_allowed(user_id, role, &req.client_id).await?;
-        self.policy.on_session_open(user_id);
+        self.create_session_with_groups(req, user_id, username, role, &[])
+            .await
+    }
+
+    pub async fn create_session_with_groups(
+        &self,
+        req: &CreateTerminalSessionRequest,
+        user_id: &str,
+        username: &str,
+        role: &Role,
+        group_ids: &[String],
+    ) -> CmdbResult<TerminalSessionSummary> {
+        let mode = self
+            .policy
+            .reserve_session_slot_for_groups(user_id, role, group_ids, &req.client_id)
+            .await?;
         let now = Utc::now().to_rfc3339();
         let session = TerminalSessionSummary {
             session_id: Uuid::new_v4().to_string(),
             client_id: req.client_id.clone(),
             user_id: user_id.to_string(),
             username: username.to_string(),
+            role: role.clone(),
+            group_ids: group_ids.to_vec(),
             mode,
             state: TerminalSessionState::Pending,
             shell: req.shell.clone().unwrap_or_else(|| "/bin/bash".to_string()),
@@ -80,17 +113,20 @@ impl TerminalSessionService {
             lease_expires_at: None,
             close_reason: None,
         };
-        self.repo.save_session(&session).await?;
+        if let Err(err) = self.repo.save_session(&session).await {
+            // Roll back the in-memory reservation if persistence fails.
+            self.policy.on_session_close(user_id);
+            return Err(err);
+        }
         self.record_history_created(&session).await;
         self.notify_client(&session.client_id).await;
         Ok(session)
     }
 
     pub async fn get_session(&self, session_id: &str) -> CmdbResult<TerminalSessionSummary> {
-        self.repo
-            .get_session(session_id)
-            .await?
-            .ok_or_else(|| CmdbError::NotFound(format!("terminal session {} not found", session_id)))
+        self.repo.get_session(session_id).await?.ok_or_else(|| {
+            CmdbError::NotFound(format!("terminal session {} not found", session_id))
+        })
     }
 
     pub async fn list_client_sessions(
@@ -106,14 +142,17 @@ impl TerminalSessionService {
         sessions.sort_by(|left, right| {
             session_rank(right)
                 .cmp(&session_rank(left))
-                .then_with(|| session_sort_ts(right).cmp(&session_sort_ts(left)))
+                .then_with(|| session_sort_ts(right).cmp(session_sort_ts(left)))
         });
         Ok(sessions)
     }
 
     pub async fn list_all_sessions(&self) -> CmdbResult<Vec<TerminalSessionSummary>> {
         let sessions = self.repo.list_all_sessions().await?;
-        let client_ids: HashSet<String> = sessions.iter().map(|session| session.client_id.clone()).collect();
+        let client_ids: HashSet<String> = sessions
+            .iter()
+            .map(|session| session.client_id.clone())
+            .collect();
         for client_id in client_ids {
             let _ = self.normalize_stale_sessions(&client_id).await?;
         }
@@ -122,7 +161,7 @@ impl TerminalSessionService {
         sessions.sort_by(|left, right| {
             session_rank(right)
                 .cmp(&session_rank(left))
-                .then_with(|| session_sort_ts(right).cmp(&session_sort_ts(left)))
+                .then_with(|| session_sort_ts(right).cmp(session_sort_ts(left)))
         });
         Ok(sessions)
     }
@@ -143,7 +182,10 @@ impl TerminalSessionService {
                 TerminalSessionState::Closed => summary.closed_sessions += 1,
                 TerminalSessionState::Failed => summary.failed_sessions += 1,
             }
-            if matches!(session.state, TerminalSessionState::Pending | TerminalSessionState::Active) {
+            if matches!(
+                session.state,
+                TerminalSessionState::Pending | TerminalSessionState::Active
+            ) {
                 active_clients.insert(session.client_id);
             }
         }
@@ -152,11 +194,7 @@ impl TerminalSessionService {
         Ok(summary)
     }
 
-    pub async fn queue_input(
-        &self,
-        session_id: &str,
-        data: String,
-    ) -> CmdbResult<()> {
+    pub async fn queue_input(&self, session_id: &str, data: String) -> CmdbResult<()> {
         let mut session = self.get_session(session_id).await?;
         self.validate_session_input(&session, &data).await?;
         self.enqueue_input(session_id, &mut session, data).await
@@ -186,19 +224,21 @@ impl TerminalSessionService {
             .filter(|line| !line.is_empty())
         {
             self.policy
-                .check_command_allowed(&session.user_id, &Role::User, &session.client_id, command)
+                .check_command_allowed_for_groups(
+                    &session.user_id,
+                    &session.role,
+                    &session.group_ids,
+                    &session.client_id,
+                    command,
+                )
                 .await?;
         }
         *pending_line = remainder;
-        self.enqueue_input(session_id, &mut session, raw_ready).await
+        self.enqueue_input(session_id, &mut session, raw_ready)
+            .await
     }
 
-    pub async fn resize(
-        &self,
-        session_id: &str,
-        cols: u16,
-        rows: u16,
-    ) -> CmdbResult<()> {
+    pub async fn resize(&self, session_id: &str, cols: u16, rows: u16) -> CmdbResult<()> {
         let mut session = self.get_session(session_id).await?;
         session.cols = cols;
         session.rows = rows;
@@ -230,11 +270,13 @@ impl TerminalSessionService {
                 self.policy.on_session_close(&session.user_id);
                 self.close_channel(session_id).await;
                 self.notify_client(&session.client_id).await;
-                self.sync_history_status(&session, SessionStatus::Success).await;
+                self.sync_history_status(&session, SessionStatus::Success)
+                    .await;
             } else {
                 self.repo.request_close(session_id).await?;
                 self.notify_client(&session.client_id).await;
-                self.sync_history_status(&session, SessionStatus::Success).await;
+                self.sync_history_status(&session, SessionStatus::Success)
+                    .await;
             }
         }
         Ok(())
@@ -251,10 +293,15 @@ impl TerminalSessionService {
         };
 
         let mut work_items = Vec::new();
-        for mut session in sessions.into_iter().filter(|session| {
-            matches!(session.state, TerminalSessionState::Pending | TerminalSessionState::Active)
-                && self.can_claim_session(session, claim_id)
+        for session in sessions.into_iter().filter(|session| {
+            matches!(
+                session.state,
+                TerminalSessionState::Pending | TerminalSessionState::Active
+            ) && self.can_claim_session(session, claim_id)
         }) {
+            let Some(session) = self.claim_session(&session, client_id, claim_id).await? else {
+                continue;
+            };
             let pending_input = self.repo.drain_input(&session.session_id).await?;
             let resize = self.repo.take_resize(&session.session_id).await?;
             let close_requested = self.repo.take_close_request(&session.session_id).await?;
@@ -269,8 +316,6 @@ impl TerminalSessionService {
                 continue;
             }
 
-            self.refresh_claim(&mut session, claim_id);
-            self.repo.save_session(&session).await?;
             work_items.push(AgentTerminalPollResponse {
                 session,
                 pending_input,
@@ -292,18 +337,19 @@ impl TerminalSessionService {
         let Some(claim_id) = claim_id.filter(|value| !value.trim().is_empty()) else {
             return Ok(None);
         };
-        let session = sessions
-            .into_iter()
-            .find(|s| {
-                matches!(s.state, TerminalSessionState::Pending | TerminalSessionState::Active)
-                    && session_id.map(|id| id == s.session_id).unwrap_or(true)
-                    && self.can_claim_session(s, claim_id)
-            });
-        let Some(mut session) = session else {
+        let session = sessions.into_iter().find(|s| {
+            matches!(
+                s.state,
+                TerminalSessionState::Pending | TerminalSessionState::Active
+            ) && session_id.map(|id| id == s.session_id).unwrap_or(true)
+                && self.can_claim_session(s, claim_id)
+        });
+        let Some(session) = session else {
             return Ok(None);
         };
-        self.refresh_claim(&mut session, claim_id);
-        self.repo.save_session(&session).await?;
+        let Some(session) = self.claim_session(&session, client_id, claim_id).await? else {
+            return Ok(None);
+        };
         let pending_input = self.repo.drain_input(&session.session_id).await?;
         let resize = self.repo.take_resize(&session.session_id).await?;
         let close_requested = self.repo.take_close_request(&session.session_id).await?;
@@ -316,27 +362,100 @@ impl TerminalSessionService {
         }))
     }
 
+    #[allow(dead_code)]
     pub async fn report_output(
         &self,
         session_id: &str,
         req: AgentTerminalOutputRequest,
     ) -> CmdbResult<()> {
+        self.report_output_inner(session_id, req, None).await
+    }
+
+    pub async fn report_output_for_client(
+        &self,
+        session_id: &str,
+        client_id: &str,
+        req: AgentTerminalOutputRequest,
+    ) -> CmdbResult<()> {
+        self.report_output_inner(session_id, req, Some(client_id))
+            .await
+    }
+
+    async fn report_output_inner(
+        &self,
+        session_id: &str,
+        req: AgentTerminalOutputRequest,
+        expected_client_id: Option<&str>,
+    ) -> CmdbResult<()> {
         if req.chunks.is_empty() {
             return Ok(());
         }
+
+        if let Some(client_id) = expected_client_id {
+            let session = self.get_session(session_id).await?;
+            ensure_agent_session_client(&session, client_id)?;
+            let Some(claim_id) = req
+                .claim_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            else {
+                return Err(CmdbError::Forbidden(
+                    "terminal session claim is required".into(),
+                ));
+            };
+            if matches!(
+                session.state,
+                TerminalSessionState::Closed | TerminalSessionState::Failed
+            ) {
+                return Err(CmdbError::Forbidden(
+                    "terminal session is no longer open".into(),
+                ));
+            }
+
+            let now = Utc::now();
+            let updated = self
+                .repo
+                .append_output_if_claimed(
+                    session_id,
+                    client_id,
+                    claim_id,
+                    &req.chunks,
+                    &now.to_rfc3339(),
+                    &(now + chrono::Duration::seconds(LEASE_SECS)).to_rfc3339(),
+                )
+                .await?;
+            let Some(session) = updated else {
+                return Err(CmdbError::Forbidden(
+                    "terminal session lease is no longer valid".into(),
+                ));
+            };
+
+            self.sync_history_status(&session, SessionStatus::Running)
+                .await;
+            let sender = self.get_or_create_channel(session_id).await;
+            for chunk in req.chunks {
+                self.append_cast_frame(&session, &chunk);
+                let _ = sender.send(Arc::new(chunk));
+            }
+            return Ok(());
+        }
+
         let mut session = self.get_session(session_id).await?;
         self.ensure_claim(&mut session, req.claim_id.as_deref())?;
         self.repo.append_output(session_id, &req.chunks).await?;
         let now = Utc::now().to_rfc3339();
         session.last_activity_at = Some(now.clone());
         session.last_heartbeat_at = Some(now.clone());
-        session.lease_expires_at = Some((Utc::now() + chrono::Duration::seconds(LEASE_SECS)).to_rfc3339());
+        session.lease_expires_at =
+            Some((Utc::now() + chrono::Duration::seconds(LEASE_SECS)).to_rfc3339());
         if session.state == TerminalSessionState::Pending {
             session.state = TerminalSessionState::Active;
             session.activated_at = Some(now);
         }
         self.repo.save_session(&session).await?;
-        self.sync_history_status(&session, SessionStatus::Running).await;
+        self.sync_history_status(&session, SessionStatus::Running)
+            .await;
         let sender = self.get_or_create_channel(session_id).await;
         for chunk in req.chunks {
             self.append_cast_frame(&session, &chunk);
@@ -345,22 +464,143 @@ impl TerminalSessionService {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn report_state(
         &self,
         session_id: &str,
         req: AgentTerminalStateRequest,
     ) -> CmdbResult<()> {
+        self.report_state_inner(session_id, req, None).await
+    }
+
+    pub async fn report_state_for_client(
+        &self,
+        session_id: &str,
+        client_id: &str,
+        req: AgentTerminalStateRequest,
+    ) -> CmdbResult<()> {
+        self.report_state_inner(session_id, req, Some(client_id))
+            .await
+    }
+
+    pub async fn heartbeat_for_client(
+        &self,
+        session_id: &str,
+        client_id: &str,
+        claim_id: &str,
+    ) -> CmdbResult<()> {
+        let now = Utc::now();
+        let refreshed = self
+            .repo
+            .heartbeat_session(
+                session_id,
+                client_id,
+                claim_id,
+                &now.to_rfc3339(),
+                &(now + chrono::Duration::seconds(LEASE_SECS)).to_rfc3339(),
+            )
+            .await?;
+        if refreshed.is_some() {
+            return Ok(());
+        }
+
+        // Re-read only to select the correct response. No stale object is
+        // written back after the atomic repository check above.
+        let session = self.get_session(session_id).await?;
+        ensure_agent_session_client(&session, client_id)?;
+        if session.state != TerminalSessionState::Active {
+            return Ok(());
+        }
+        Err(CmdbError::Forbidden(
+            "terminal session lease is held by another agent".into(),
+        ))
+    }
+
+    async fn report_state_inner(
+        &self,
+        session_id: &str,
+        req: AgentTerminalStateRequest,
+        expected_client_id: Option<&str>,
+    ) -> CmdbResult<()> {
+        if let Some(client_id) = expected_client_id {
+            let session = self.get_session(session_id).await?;
+            ensure_agent_session_client(&session, client_id)?;
+            let Some(claim_id) = req
+                .claim_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            else {
+                return Err(CmdbError::Forbidden(
+                    "terminal session claim is required".into(),
+                ));
+            };
+            if matches!(
+                session.state,
+                TerminalSessionState::Closed | TerminalSessionState::Failed
+            ) {
+                // A duplicate terminal state notification is harmless, but do
+                // not let an old agent attach a new lease to a closed record.
+                if req.state == session.state {
+                    return Ok(());
+                }
+                return Err(CmdbError::Forbidden(
+                    "terminal session is no longer open".into(),
+                ));
+            }
+
+            let now = Utc::now();
+            let updated = self
+                .repo
+                .update_state_if_claimed(
+                    session_id,
+                    client_id,
+                    claim_id,
+                    req.state.clone(),
+                    req.message.clone(),
+                    &now.to_rfc3339(),
+                    &(now + chrono::Duration::seconds(LEASE_SECS)).to_rfc3339(),
+                )
+                .await?;
+            let Some(session) = updated else {
+                return Err(CmdbError::Forbidden(
+                    "terminal session lease is no longer valid".into(),
+                ));
+            };
+
+            if matches!(
+                session.state,
+                TerminalSessionState::Closed | TerminalSessionState::Failed
+            ) {
+                self.policy.on_session_close(&session.user_id);
+                self.close_channel(session_id).await;
+            }
+            let status = match session.state {
+                TerminalSessionState::Pending | TerminalSessionState::Active => {
+                    SessionStatus::Running
+                }
+                TerminalSessionState::Closed => SessionStatus::Success,
+                TerminalSessionState::Failed => SessionStatus::Failed,
+            };
+            self.sync_history_status(&session, status).await;
+            return Ok(());
+        }
+
         let mut session = self.get_session(session_id).await?;
         self.ensure_claim(&mut session, req.claim_id.as_deref())?;
         session.state = req.state.clone();
         let now = Utc::now().to_rfc3339();
         session.last_activity_at = Some(now.clone());
         session.last_heartbeat_at = Some(now.clone());
-        session.lease_expires_at = Some((Utc::now() + chrono::Duration::seconds(LEASE_SECS)).to_rfc3339());
+        session.lease_expires_at =
+            Some((Utc::now() + chrono::Duration::seconds(LEASE_SECS)).to_rfc3339());
         if req.state == TerminalSessionState::Active && session.activated_at.is_none() {
             session.activated_at = Some(now.clone());
         }
-        if matches!(req.state, TerminalSessionState::Closed | TerminalSessionState::Failed) {
+        if matches!(
+            req.state,
+            TerminalSessionState::Closed | TerminalSessionState::Failed
+        ) {
             session.closed_at = Some(now);
             session.close_reason = req.message;
             session.lease_id = None;
@@ -390,7 +630,9 @@ impl TerminalSessionService {
     }
 
     pub async fn subscribe_client_events(&self, client_id: &str) -> broadcast::Receiver<()> {
-        self.get_or_create_client_channel(client_id).await.subscribe()
+        self.get_or_create_client_channel(client_id)
+            .await
+            .subscribe()
     }
 
     async fn get_or_create_channel(&self, session_id: &str) -> OutputSender {
@@ -429,35 +671,65 @@ impl TerminalSessionService {
         &self,
         client_id: &str,
     ) -> CmdbResult<Vec<TerminalSessionSummary>> {
-        let mut sessions = self.repo.list_open_sessions_for_client(client_id).await?;
-        for session in &mut sessions {
-            if self.lease_expired(session) {
-                session.lease_id = None;
-                session.lease_expires_at = None;
-                self.repo.save_session(session).await?;
-            }
-            if session.state != TerminalSessionState::Active {
-                continue;
-            }
-            let Some(last_seen) = session.last_heartbeat_at.as_ref().or(session.activated_at.as_ref()) else {
+        let sessions = self.repo.list_open_sessions_for_client(client_id).await?;
+        for session in &sessions {
+            let configured_timeout = self
+                .policy
+                .get_session_timeout_for_groups(
+                    &session.user_id,
+                    &session.role,
+                    &session.group_ids,
+                    client_id,
+                )
+                .await;
+            let stale_secs = if configured_timeout == 0 {
+                ACTIVE_SESSION_STALE_SECS
+            } else {
+                configured_timeout as i64
+            };
+            let last_seen_str = match session.state {
+                TerminalSessionState::Active => session
+                    .last_heartbeat_at
+                    .as_ref()
+                    .or(session.activated_at.as_ref()),
+                TerminalSessionState::Pending => session
+                    .last_activity_at
+                    .as_ref()
+                    .or(Some(&session.created_at)),
+                TerminalSessionState::Closed | TerminalSessionState::Failed => None,
+            };
+            let Some(last_seen_str) = last_seen_str else {
                 continue;
             };
-            let Ok(last_seen) = chrono::DateTime::parse_from_rfc3339(last_seen) else {
+            let Ok(last_seen) = chrono::DateTime::parse_from_rfc3339(last_seen_str) else {
                 continue;
             };
-            if Utc::now().signed_duration_since(last_seen.with_timezone(&Utc)).num_seconds()
-                <= ACTIVE_SESSION_STALE_SECS
+            if Utc::now()
+                .signed_duration_since(last_seen.with_timezone(&Utc))
+                .num_seconds()
+                <= stale_secs
             {
                 continue;
             }
-            session.state = TerminalSessionState::Closed;
-            session.closed_at = Some(Utc::now().to_rfc3339());
-            session.last_activity_at = session.closed_at.clone();
-            session.close_reason = Some("agent heartbeat lost".to_string());
-            self.repo.save_session(session).await?;
-            self.sync_history_status(session, SessionStatus::Failed).await;
-            self.policy.on_session_close(&session.user_id);
-            self.close_channel(&session.session_id).await;
+            let now = Utc::now();
+            let cutoff = now - chrono::Duration::seconds(stale_secs);
+            let Some(closed) = self
+                .repo
+                .close_stale_session(
+                    &session.session_id,
+                    client_id,
+                    last_seen_str,
+                    &cutoff.to_rfc3339(),
+                    &now.to_rfc3339(),
+                )
+                .await?
+            else {
+                continue;
+            };
+            self.sync_history_status(&closed, SessionStatus::Failed)
+                .await;
+            self.policy.on_session_close(&closed.user_id);
+            self.close_channel(&closed.session_id).await;
         }
         self.repo.list_open_sessions_for_client(client_id).await
     }
@@ -468,6 +740,25 @@ impl TerminalSessionService {
             Some(existing) if existing == claim_id => true,
             Some(_) => self.lease_expired(session),
         }
+    }
+
+    async fn claim_session(
+        &self,
+        session: &TerminalSessionSummary,
+        client_id: &str,
+        claim_id: &str,
+    ) -> CmdbResult<Option<TerminalSessionSummary>> {
+        let now = Utc::now();
+        let lease_expires_at = now + chrono::Duration::seconds(LEASE_SECS);
+        self.repo
+            .claim_session(
+                &session.session_id,
+                client_id,
+                claim_id,
+                &now.to_rfc3339(),
+                &lease_expires_at.to_rfc3339(),
+            )
+            .await
     }
 
     fn ensure_claim(
@@ -523,13 +814,29 @@ impl TerminalSessionService {
         session: &TerminalSessionSummary,
         data: &str,
     ) -> CmdbResult<()> {
-        if session.state == TerminalSessionState::Closed || session.state == TerminalSessionState::Failed {
-            return Err(CmdbError::Validation("terminal session already closed".to_string()));
+        if session.state == TerminalSessionState::Closed
+            || session.state == TerminalSessionState::Failed
+        {
+            return Err(CmdbError::Validation(
+                "terminal session already closed".to_string(),
+            ));
         }
         if session.mode == TerminalMode::ReadOnly {
-            self.policy
-                .check_command_allowed(&session.user_id, &Role::User, &session.client_id, data)
-                .await?;
+            for command in data
+                .split(['\n', '\r'])
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+            {
+                self.policy
+                    .check_command_allowed_for_groups(
+                        &session.user_id,
+                        &session.role,
+                        &session.group_ids,
+                        &session.client_id,
+                        command,
+                    )
+                    .await?;
+            }
         }
         Ok(())
     }
@@ -556,7 +863,11 @@ impl TerminalSessionService {
         execution.session_id = session.session_id.clone();
         execution.start_time = session.created_at.clone();
 
-        match CastRecorderInner::init_cast(&session.session_id, session.cols as u64, session.rows as u64) {
+        match CastRecorderInner::init_cast(
+            &session.session_id,
+            session.cols as u64,
+            session.rows as u64,
+        ) {
             Ok(()) => {
                 execution.cast_file_path = Some(
                     CastRecorderInner::cast_path(&session.session_id)
@@ -564,7 +875,9 @@ impl TerminalSessionService {
                         .to_string(),
                 );
             }
-            Err(err) => warn!(session_id = %session.session_id, error = %err, "failed to init terminal cast"),
+            Err(err) => {
+                warn!(session_id = %session.session_id, error = %err, "failed to init terminal cast")
+            }
         }
 
         if let Err(err) = session_svc.save_session(&execution).await {
@@ -580,23 +893,31 @@ impl TerminalSessionService {
         match session_svc.get_session(&session.session_id).await {
             Ok(Some(mut execution)) => {
                 execution.status = status.clone();
-                if matches!(status, SessionStatus::Success | SessionStatus::Failed | SessionStatus::Partial) {
-                    let end_time = session.closed_at.clone().or_else(|| Some(Utc::now().to_rfc3339()));
+                if matches!(
+                    status,
+                    SessionStatus::Success | SessionStatus::Failed | SessionStatus::Partial
+                ) {
+                    let end_time = session
+                        .closed_at
+                        .clone()
+                        .or_else(|| Some(Utc::now().to_rfc3339()));
                     let start = chrono::DateTime::parse_from_rfc3339(&execution.start_time).ok();
                     let end = end_time
                         .as_deref()
                         .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok());
                     execution.end_time = end_time;
-                    execution.duration_secs = start
-                        .zip(end)
-                        .map(|(start, end)| end.signed_duration_since(start).num_seconds().max(0) as u64);
+                    execution.duration_secs = start.zip(end).map(|(start, end)| {
+                        end.signed_duration_since(start).num_seconds().max(0) as u64
+                    });
                 }
                 if let Err(err) = session_svc.save_session(&execution).await {
                     warn!(session_id = %session.session_id, error = %err, "failed to save terminal execution session");
                 }
             }
             Ok(None) => {}
-            Err(err) => warn!(session_id = %session.session_id, error = %err, "failed to load terminal execution session"),
+            Err(err) => {
+                warn!(session_id = %session.session_id, error = %err, "failed to load terminal execution session")
+            }
         }
     }
 
@@ -613,7 +934,8 @@ impl TerminalSessionService {
                     / 1_000_000.0
             })
             .unwrap_or(0.0);
-        if let Err(err) = CastRecorderInner::append_frame(&session.session_id, elapsed, &chunk.data) {
+        if let Err(err) = CastRecorderInner::append_frame(&session.session_id, elapsed, &chunk.data)
+        {
             warn!(session_id = %session.session_id, error = %err, "failed to append terminal cast frame");
         }
     }
@@ -624,20 +946,41 @@ impl TerminalSessionService {
         session: &mut TerminalSessionSummary,
         data: String,
     ) -> CmdbResult<()> {
-        if session.state == TerminalSessionState::Closed || session.state == TerminalSessionState::Failed {
-            return Err(CmdbError::Validation("terminal session already closed".to_string()));
+        if session.state == TerminalSessionState::Closed
+            || session.state == TerminalSessionState::Failed
+        {
+            return Err(CmdbError::Validation(
+                "terminal session already closed".to_string(),
+            ));
         }
         session.last_activity_at = Some(Utc::now().to_rfc3339());
         self.repo.save_session(session).await?;
         let timestamp = Utc::now().to_rfc3339();
-        let seq = timestamp
-            .parse::<chrono::DateTime<chrono::Utc>>()
-            .map(|dt| dt.timestamp_micros() as u64)
-            .unwrap_or(0);
-        let chunk = TerminalInputChunk { seq, data, timestamp };
+        // A timestamp alone can collide when concurrent browser requests
+        // arrive in the same microsecond. Use a process-wide monotonic
+        // sequence so queued input is never silently overwritten.
+        let seq = self.input_sequence.fetch_add(1, Ordering::Relaxed);
+        let chunk = TerminalInputChunk {
+            seq,
+            data,
+            timestamp,
+        };
         self.repo.queue_input(session_id, &chunk).await?;
         self.notify_client(&session.client_id).await;
         Ok(())
+    }
+}
+
+fn ensure_agent_session_client(
+    session: &TerminalSessionSummary,
+    client_id: &str,
+) -> CmdbResult<()> {
+    if session.client_id == client_id {
+        Ok(())
+    } else {
+        Err(CmdbError::Forbidden(
+            "terminal session does not belong to this agent".into(),
+        ))
     }
 }
 
@@ -661,9 +1004,12 @@ fn session_sort_ts(session: &TerminalSessionSummary) -> &str {
 mod tests {
     use super::*;
     use crate::db::Database;
+    use crate::repository::execution_session_repository::ExecutionSessionRepository;
     use crate::repository::web_terminal_policy_repository::WebTerminalPolicyRepository;
     use async_trait::async_trait;
-    use common::entity::permission::{CommandRules, SubjectType, TargetScope, TerminalMode, WebTerminalPolicy};
+    use common::entity::permission::{
+        CommandRules, SubjectType, TargetScope, TerminalMode, WebTerminalPolicy,
+    };
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
@@ -675,7 +1021,10 @@ mod tests {
     #[async_trait]
     impl Database for MemoryDb {
         async fn set(&self, key: &str, value: &[u8]) -> CmdbResult<()> {
-            self.data.lock().unwrap().insert(key.to_string(), value.to_vec());
+            self.data
+                .lock()
+                .unwrap()
+                .insert(key.to_string(), value.to_vec());
             Ok(())
         }
 
@@ -772,7 +1121,12 @@ mod tests {
         let policy = Arc::new(WebTerminalService::new(policy_repo));
         let svc = TerminalSessionService::new(repo, policy);
         let exec_repo = Arc::new(ExecutionSessionRepository::new(db.clone()));
-        let exec_svc = Arc::new(ExecutionSessionService::new(exec_repo, Arc::new(crate::repository::client_repository::ClientRepository::new(db.clone()))));
+        let exec_svc = Arc::new(ExecutionSessionService::new(
+            exec_repo,
+            Arc::new(crate::repository::client_repository::ClientRepository::new(
+                db.clone(),
+            )),
+        ));
         svc.configure_history(exec_svc);
         svc
     }
@@ -799,12 +1153,14 @@ mod tests {
             .await
             .unwrap();
 
-        let history = svc
+        let session_svc = svc
             .session_svc
             .lock()
             .expect("terminal session history lock")
             .as_ref()
             .unwrap()
+            .clone();
+        let history = session_svc
             .get_session(&session.session_id)
             .await
             .unwrap()
@@ -870,18 +1226,147 @@ mod tests {
             )
             .await
             .unwrap();
-        let stale = (Utc::now() - chrono::Duration::seconds(120)).to_rfc3339();
+        let stale = (Utc::now() - chrono::Duration::seconds(360)).to_rfc3339();
         session.state = TerminalSessionState::Active;
         session.activated_at = Some(stale.clone());
         session.last_activity_at = Some(stale);
         svc.repo.save_session(&session).await.unwrap();
 
-        let poll = svc.poll_for_agent("client-b", None, Some("claim-stale")).await.unwrap();
+        let poll = svc
+            .poll_for_agent("client-b", None, Some("claim-stale"))
+            .await
+            .unwrap();
         assert!(poll.is_none());
 
         let stored = svc.get_session(&session.session_id).await.unwrap();
         assert_eq!(stored.state, TerminalSessionState::Closed);
         assert_eq!(stored.close_reason.as_deref(), Some("agent heartbeat lost"));
+    }
+
+    #[tokio::test]
+    async fn late_heartbeat_does_not_reopen_closed_session() {
+        let svc = build_service().await;
+        let session = svc
+            .create_session(
+                &CreateTerminalSessionRequest {
+                    client_id: "client-heartbeat".into(),
+                    shell: Some("/bin/sh".into()),
+                    cols: Some(80),
+                    rows: Some(24),
+                },
+                "user-heartbeat",
+                "user-heartbeat",
+                &Role::User,
+            )
+            .await
+            .unwrap();
+        svc.report_state(
+            &session.session_id,
+            AgentTerminalStateRequest {
+                claim_id: Some("claim-heartbeat".into()),
+                state: TerminalSessionState::Active,
+                message: None,
+            },
+        )
+        .await
+        .unwrap();
+        svc.report_state(
+            &session.session_id,
+            AgentTerminalStateRequest {
+                claim_id: Some("claim-heartbeat".into()),
+                state: TerminalSessionState::Closed,
+                message: Some("agent exited".into()),
+            },
+        )
+        .await
+        .unwrap();
+
+        svc.heartbeat_for_client(&session.session_id, "client-heartbeat", "claim-heartbeat")
+            .await
+            .unwrap();
+        let stored = svc.get_session(&session.session_id).await.unwrap();
+        assert_eq!(stored.state, TerminalSessionState::Closed);
+        assert!(stored.lease_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn late_agent_output_and_state_cannot_overwrite_new_claim() {
+        let svc = build_service().await;
+        let session = svc
+            .create_session(
+                &CreateTerminalSessionRequest {
+                    client_id: "client-claim-race".into(),
+                    shell: Some("/bin/sh".into()),
+                    cols: Some(80),
+                    rows: Some(24),
+                },
+                "user-claim-race",
+                "user-claim-race",
+                &Role::User,
+            )
+            .await
+            .unwrap();
+
+        svc.poll_for_agent(
+            "client-claim-race",
+            Some(&session.session_id),
+            Some("claim-old"),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        let mut expired = svc.get_session(&session.session_id).await.unwrap();
+        expired.lease_expires_at = Some((Utc::now() - chrono::Duration::seconds(1)).to_rfc3339());
+        svc.repo.save_session(&expired).await.unwrap();
+
+        svc.poll_for_agent(
+            "client-claim-race",
+            Some(&session.session_id),
+            Some("claim-new"),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        let output_result = svc
+            .report_output_for_client(
+                &session.session_id,
+                "client-claim-race",
+                AgentTerminalOutputRequest {
+                    claim_id: Some("claim-old".into()),
+                    chunks: vec![TerminalOutputChunk {
+                        seq: 1,
+                        data: "late output".into(),
+                        timestamp: Utc::now().to_rfc3339(),
+                    }],
+                },
+            )
+            .await;
+        assert!(output_result.is_err());
+
+        let state_result = svc
+            .report_state_for_client(
+                &session.session_id,
+                "client-claim-race",
+                AgentTerminalStateRequest {
+                    claim_id: Some("claim-old".into()),
+                    state: TerminalSessionState::Closed,
+                    message: Some("late close".into()),
+                },
+            )
+            .await;
+        assert!(state_result.is_err());
+
+        let stored = svc.get_session(&session.session_id).await.unwrap();
+        assert_eq!(stored.state, TerminalSessionState::Pending);
+        assert_eq!(stored.lease_id.as_deref(), Some("claim-new"));
+        assert!(
+            svc.get_output(&session.session_id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
@@ -1035,12 +1520,24 @@ mod tests {
         other_pending.last_activity_at = Some(oldest_ts);
         svc.repo.save_session(&other_pending).await.unwrap();
 
-        let user_sessions = svc.list_client_sessions("client-list", "user-a", false).await.unwrap();
-        let user_ids = user_sessions.iter().map(|session| session.session_id.as_str()).collect::<Vec<_>>();
+        let user_sessions = svc
+            .list_client_sessions("client-list", "user-a", false)
+            .await
+            .unwrap();
+        let user_ids = user_sessions
+            .iter()
+            .map(|session| session.session_id.as_str())
+            .collect::<Vec<_>>();
         assert_eq!(user_ids, vec![own_pending.session_id.as_str()]);
 
-        let admin_sessions = svc.list_client_sessions("client-list", "admin-1", true).await.unwrap();
-        let admin_ids = admin_sessions.iter().map(|session| session.session_id.as_str()).collect::<Vec<_>>();
+        let admin_sessions = svc
+            .list_client_sessions("client-list", "admin-1", true)
+            .await
+            .unwrap();
+        let admin_ids = admin_sessions
+            .iter()
+            .map(|session| session.session_id.as_str())
+            .collect::<Vec<_>>();
         assert_eq!(
             admin_ids,
             vec![
@@ -1094,7 +1591,12 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, CmdbError::Forbidden(_)));
-        assert!(svc.get_output(&session.session_id).await.unwrap().is_empty());
+        assert!(
+            svc.get_output(&session.session_id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     async fn build_read_only_service(allowed_commands: Vec<&str>) -> Arc<TerminalSessionService> {
@@ -1147,7 +1649,11 @@ mod tests {
             .unwrap();
 
         let first_poll = svc
-            .poll_for_agent("client-browser-ro", Some(&session.session_id), Some("claim-ro"))
+            .poll_for_agent(
+                "client-browser-ro",
+                Some(&session.session_id),
+                Some("claim-ro"),
+            )
             .await
             .unwrap()
             .unwrap();
@@ -1159,7 +1665,11 @@ mod tests {
             .unwrap();
 
         let second_poll = svc
-            .poll_for_agent("client-browser-ro", Some(&session.session_id), Some("claim-ro"))
+            .poll_for_agent(
+                "client-browser-ro",
+                Some(&session.session_id),
+                Some("claim-ro"),
+            )
             .await
             .unwrap()
             .unwrap();
@@ -1200,7 +1710,11 @@ mod tests {
         assert_eq!(pending_line, "hostname\n");
 
         let poll = svc
-            .poll_for_agent("client-browser-deny", Some(&session.session_id), Some("claim-deny"))
+            .poll_for_agent(
+                "client-browser-deny",
+                Some(&session.session_id),
+                Some("claim-deny"),
+            )
             .await
             .unwrap()
             .unwrap();

@@ -13,3 +13,6 @@ uuid = { version = "1.7.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.31", features = ["serde"] }
 thiserror = "2.0.12"
 tracing = "0.1"
+
+[lints.clippy]
+large_enum_variant = "allow"

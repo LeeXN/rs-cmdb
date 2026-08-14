@@ -77,6 +77,7 @@ manual_strip = "allow"
 field_reassign_with_default = "allow"
 redundant_field_names = "allow"
 empty_line_after_doc_comments = "allow"
+items_after_test_module = "allow"
 [[bin]]
 name = "rs-cmdb-server"
 path = "src/main.rs"

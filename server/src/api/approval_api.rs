@@ -2,16 +2,14 @@ use crate::repository::approval_repository::ApprovalRepository;
 use crate::service::approval_service::ApprovalService;
 use crate::service::command_service::CommandService;
 use axum::extract::Path;
-use axum::{
-    extract::Extension,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use axum_macros::debug_handler;
+use chrono::Utc;
 use common::entity::permission::{ApprovalPayload, PendingApproval};
 use common::entity::user::User;
-use common::models::{ApiResponse, ApprovalSummaryResponse, CreateCommandRequest, CreateCommandResponse};
+use common::models::{
+    ApiResponse, ApprovalSummaryResponse, CreateCommandRequest, CreateCommandResponse,
+};
 use std::sync::Arc;
 use tracing::{error, info, instrument};
 
@@ -21,21 +19,24 @@ pub async fn list_pending_approvals(
     Extension(svc): Extension<Arc<ApprovalService>>,
 ) -> impl IntoResponse {
     match svc.list_all().await {
-        Ok(approvals) => {
-            (StatusCode::OK, Json(ApiResponse {
+        Ok(approvals) => (
+            StatusCode::OK,
+            Json(ApiResponse {
                 status: 200,
                 message: "Pending approvals retrieved successfully".to_string(),
                 data: Some(approvals),
-            }))
-        }
+            }),
+        ),
         Err(e) => {
             error!("Failed to list approvals: {}", e);
-            (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-             Json(ApiResponse::<Vec<PendingApproval>> {
-                status: e.status_code(),
-                message: e.log_and_user_message(),
-                data: None,
-            }))
+            (
+                StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(ApiResponse::<Vec<PendingApproval>> {
+                    status: e.status_code(),
+                    message: e.log_and_user_message(),
+                    data: None,
+                }),
+            )
         }
     }
 }
@@ -47,21 +48,24 @@ pub async fn list_my_approvals(
     Extension(user): Extension<User>,
 ) -> impl IntoResponse {
     match svc.list_by_user(&user.id).await {
-        Ok(approvals) => {
-            (StatusCode::OK, Json(ApiResponse {
+        Ok(approvals) => (
+            StatusCode::OK,
+            Json(ApiResponse {
                 status: 200,
                 message: "Your approvals retrieved successfully".to_string(),
                 data: Some(approvals),
-            }))
-        }
+            }),
+        ),
         Err(e) => {
             error!("Failed to list my approvals: {}", e);
-            (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-             Json(ApiResponse::<Vec<PendingApproval>> {
-                status: e.status_code(),
-                message: e.log_and_user_message(),
-                data: None,
-            }))
+            (
+                StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(ApiResponse::<Vec<PendingApproval>> {
+                    status: e.status_code(),
+                    message: e.log_and_user_message(),
+                    data: None,
+                }),
+            )
         }
     }
 }
@@ -73,28 +77,32 @@ pub async fn get_pending_approval(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match svc.get(&id).await {
-        Ok(Some(approval)) => {
-            (StatusCode::OK, Json(ApiResponse {
+        Ok(Some(approval)) => (
+            StatusCode::OK,
+            Json(ApiResponse {
                 status: 200,
                 message: "Pending approval retrieved successfully".to_string(),
                 data: Some(approval),
-            }))
-        }
-        Ok(None) => {
-            (StatusCode::NOT_FOUND, Json(ApiResponse::<PendingApproval> {
+            }),
+        ),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<PendingApproval> {
                 status: 404,
                 message: format!("Pending approval {} not found", id),
                 data: None,
-            }))
-        }
+            }),
+        ),
         Err(e) => {
             error!("Failed to get approval {}: {}", id, e);
-            (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-             Json(ApiResponse::<PendingApproval> {
-                status: e.status_code(),
-                message: e.log_and_user_message(),
-                data: None,
-            }))
+            (
+                StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(ApiResponse::<PendingApproval> {
+                    status: e.status_code(),
+                    message: e.log_and_user_message(),
+                    data: None,
+                }),
+            )
         }
     }
 }
@@ -119,6 +127,22 @@ pub async fn approve_request(
             };
 
             if let Some(ApprovalPayload::Command { request }) = approval.payload.clone() {
+                let materialization = match svc
+                    .begin_task_materialization(&approval.id, &Utc::now().to_rfc3339(), 300)
+                    .await
+                {
+                    Ok(claim) => claim,
+                    Err(e) => {
+                        return (
+                            StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::CONFLICT),
+                            Json(ApiResponse::<CreateCommandResponse> {
+                                status: e.status_code(),
+                                message: e.log_and_user_message(),
+                                data: None,
+                            }),
+                        );
+                    }
+                };
                 let req = CreateCommandRequest {
                     client_id: request.client_id,
                     command: request.command,
@@ -141,14 +165,76 @@ pub async fn approve_request(
                 {
                     Ok(created) => {
                         if let Some(task_id) = created.task_id.clone() {
-                            let _ = svc.attach_executed_task(&approval.id, &task_id).await;
+                            if let Err(e) = svc
+                                .attach_executed_task(
+                                    &approval.id,
+                                    &task_id,
+                                    materialization
+                                        .execution_claim_id
+                                        .as_deref()
+                                        .unwrap_or_default(),
+                                )
+                                .await
+                            {
+                                error!(
+                                    "Failed to attach executed task {} to approval {}: {}",
+                                    task_id, approval.id, e
+                                );
+                                if let Err(cleanup_error) = command_svc.delete_task(&task_id).await
+                                {
+                                    error!(
+                                        "Failed to clean up task {} after approval attach failure: {}",
+                                        task_id, cleanup_error
+                                    );
+                                }
+                                if let Err(rollback_error) = svc
+                                    .rollback_task_materialization(
+                                        &approval.id,
+                                        materialization
+                                            .execution_claim_id
+                                            .as_deref()
+                                            .unwrap_or_default(),
+                                    )
+                                    .await
+                                {
+                                    error!(
+                                        "Failed to roll back approval {} materialization claim: {}",
+                                        approval.id, rollback_error
+                                    );
+                                }
+                                return (
+                                    StatusCode::from_u16(e.status_code())
+                                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                                    Json(ApiResponse::<CreateCommandResponse> {
+                                        status: e.status_code(),
+                                        message: e.log_and_user_message(),
+                                        data: None,
+                                    }),
+                                );
+                            }
                         }
                         response = created;
                     }
                     Err(e) => {
                         error!("Failed to execute approved request {}: {}", id, e);
+                        if let Err(rollback_error) = svc
+                            .rollback_task_materialization(
+                                &approval.id,
+                                materialization
+                                    .execution_claim_id
+                                    .as_deref()
+                                    .unwrap_or_default(),
+                            )
+                            .await
+                        {
+                            error!(
+                                "Failed to roll back approval {} materialization claim: {}",
+                                approval.id, rollback_error
+                            );
+                        }
                         return (
-                            StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            StatusCode::from_u16(e.status_code())
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                             Json(ApiResponse::<CreateCommandResponse> {
                                 status: e.status_code(),
                                 message: e.log_and_user_message(),
@@ -160,20 +246,25 @@ pub async fn approve_request(
             }
 
             info!("Approval {} approved by {}", id, user.username);
-            (StatusCode::OK, Json(ApiResponse {
-                status: 200,
-                message: "Approval request approved".to_string(),
-                data: Some(response),
-            }))
+            (
+                StatusCode::OK,
+                Json(ApiResponse {
+                    status: 200,
+                    message: "Approval request approved".to_string(),
+                    data: Some(response),
+                }),
+            )
         }
         Err(e) => {
             error!("Failed to approve {}: {}", id, e);
-            (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-             Json(ApiResponse::<CreateCommandResponse> {
-                status: e.status_code(),
-                message: e.log_and_user_message(),
-                data: None,
-            }))
+            (
+                StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(ApiResponse::<CreateCommandResponse> {
+                    status: e.status_code(),
+                    message: e.log_and_user_message(),
+                    data: None,
+                }),
+            )
         }
     }
 }
@@ -188,20 +279,25 @@ pub async fn reject_request(
     match svc.reject(&id, &user.username).await {
         Ok(approval) => {
             info!("Approval {} rejected by {}", id, user.username);
-            (StatusCode::OK, Json(ApiResponse {
-                status: 200,
-                message: "Approval request rejected".to_string(),
-                data: Some(approval),
-            }))
+            (
+                StatusCode::OK,
+                Json(ApiResponse {
+                    status: 200,
+                    message: "Approval request rejected".to_string(),
+                    data: Some(approval),
+                }),
+            )
         }
         Err(e) => {
             error!("Failed to reject {}: {}", id, e);
-            (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-             Json(ApiResponse::<PendingApproval> {
-                status: e.status_code(),
-                message: e.log_and_user_message(),
-                data: None,
-            }))
+            (
+                StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(ApiResponse::<PendingApproval> {
+                    status: e.status_code(),
+                    message: e.log_and_user_message(),
+                    data: None,
+                }),
+            )
         }
     }
 }
@@ -217,20 +313,25 @@ pub async fn get_approval_summary(
             for approval in approvals {
                 summary.record_status(&approval.status, approval.executed_task_id.as_ref());
             }
-            (StatusCode::OK, Json(ApiResponse {
-                status: 200,
-                message: "Approval summary retrieved successfully".to_string(),
-                data: Some(summary),
-            }))
+            (
+                StatusCode::OK,
+                Json(ApiResponse {
+                    status: 200,
+                    message: "Approval summary retrieved successfully".to_string(),
+                    data: Some(summary),
+                }),
+            )
         }
         Err(e) => {
             error!("Failed to build approval summary: {}", e);
-            (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-             Json(ApiResponse::<ApprovalSummaryResponse> {
-                status: e.status_code(),
-                message: e.log_and_user_message(),
-                data: None,
-            }))
+            (
+                StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(ApiResponse::<ApprovalSummaryResponse> {
+                    status: e.status_code(),
+                    message: e.log_and_user_message(),
+                    data: None,
+                }),
+            )
         }
     }
 }

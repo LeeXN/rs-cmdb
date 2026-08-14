@@ -2,10 +2,14 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "master" ]
-    tags: [ "*" ]
+    branches: [master]
+    tags: ["*"]
   pull_request:
-    branches: [ "master" ]
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,25 +17,42 @@ env:
   IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/rs-cmdb
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
-  check:
-    name: Check & Test
+  quality:
+    name: Quality Gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - uses: swatinem/rust-cache@v2
-      - name: Check code
-        run: cargo check --workspace
-      - name: Run Tests
-        run: cargo test --workspace
+      - name: Verify release tag matches crate versions
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for manifest in common/Cargo.toml server/Cargo.toml client/Cargo.toml front/Cargo.toml; do
+            crate_version="$(awk -F'"' '/^version = / { print $2; exit }' "$manifest")"
+            if [[ "$crate_version" != "$tag" ]]; then
+              echo "::error file=$manifest::crate version $crate_version does not match release tag $GITHUB_REF_NAME"
+              exit 1
+            fi
+          done
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --all-features
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Run tests
+        run: cargo test --workspace --all-features
 
   build-front:
     name: Build Frontend
-    if: github.event_name != 'pull_request'
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,15 +65,18 @@ jobs:
       - uses: jetli/trunk-action@v0.5.0
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: npm
           cache-dependency-path: front/package-lock.json
-      - name: Build Frontend
+      - name: Build frontend
+        working-directory: front
+        env:
+          NO_COLOR: "true"
         run: |
-          cd front
           npm ci
           trunk build --release
-      - name: Upload Frontend Artifact
+      - name: Upload frontend artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
@@ -61,6 +85,7 @@ jobs:
 
   build-backend:
     name: Build Backend (${{ matrix.target }})
+    needs: quality
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     strategy:
@@ -73,59 +98,46 @@ jobs:
             arch-name: arm64
     steps:
       - uses: actions/checkout@v4
-      
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          
       - name: Create Python requirements
         run: echo "ziglang" > requirements.txt
-
-      - name: Install Python (for ziglang)
+      - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: pip
           cache-dependency-path: requirements.txt
-          
-      - name: Cache cargo-zigbuild binary
+      - name: Cache cargo-zigbuild
         id: cache-zigbuild
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cargo-zigbuild
           key: ${{ runner.os }}-cargo-zigbuild-v1
-
-      - name: Install Zig & cargo-zigbuild
+      - name: Install Zig and cargo-zigbuild
         shell: bash
         run: |
           pip install ziglang
-          
-          if ! command -v cargo-zigbuild &> /dev/null; then
-            echo "Cargo zigbuild not found in cache, compiling..."
-            cargo install cargo-zigbuild
-          else
-            echo "Cargo zigbuild found in cache, skipping installation."
+          if ! command -v cargo-zigbuild >/dev/null 2>&1; then
+            cargo install cargo-zigbuild --locked
           fi
-
-      - name: Rust Cache
+      - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-
-      - name: Build Binary
+      - name: Build binaries
         run: |
-          cargo zigbuild --release --package server --target ${{ matrix.target }}
-          cargo zigbuild --release --package client --target ${{ matrix.target }}
-
-      - name: Prepare Artifacts
+          cargo zigbuild --locked --release --package server --target ${{ matrix.target }}
+          cargo zigbuild --locked --release --package client --target ${{ matrix.target }}
+      - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p bin/${{ matrix.arch-name }}
           cp target/${{ matrix.target }}/release/rs-cmdb-server bin/${{ matrix.arch-name }}/
           cp target/${{ matrix.target }}/release/rs-cmdb-client bin/${{ matrix.arch-name }}/
-
-      - name: Upload Backend Artifact
+      - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-${{ matrix.arch-name }}
@@ -134,63 +146,60 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [build-backend]
+    needs: [quality, build-front, build-backend]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           pattern: backend-*
           merge-multiple: true
           path: release-dist
-      
-      - name: Rename binaries for Release
-        run: |
-          cd release-dist
-          mv amd64/rs-cmdb-server rs-cmdb-server-x86_64-linux-musl
-          mv amd64/rs-cmdb-client rs-cmdb-client-x86_64-linux-musl
-          mv arm64/rs-cmdb-server rs-cmdb-server-aarch64-linux-musl
-          mv arm64/rs-cmdb-client rs-cmdb-client-aarch64-linux-musl
-          rm -rf amd64 arm64
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
+      - uses: actions/download-artifact@v4
         with:
-          files: |
-            release-dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: frontend-dist
+          path: frontend-dist
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          mv release-dist/amd64/rs-cmdb-server release-dist/rs-cmdb-server-x86_64-linux-musl
+          mv release-dist/amd64/rs-cmdb-client release-dist/rs-cmdb-client-x86_64-linux-musl
+          mv release-dist/arm64/rs-cmdb-server release-dist/rs-cmdb-server-aarch64-linux-musl
+          mv release-dist/arm64/rs-cmdb-client release-dist/rs-cmdb-client-aarch64-linux-musl
+          rm -rf release-dist/amd64 release-dist/arm64
+          tar -C frontend-dist -czf "release-dist/rs-cmdb-front-${GITHUB_REF_NAME}.tar.gz" .
+          cd release-dist
+          sha256sum rs-cmdb-* > SHA256SUMS
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-dist/*
 
   push-docker:
     name: Push Docker Image
-    needs: [build-front, build-backend]
+    needs: [quality, build-front, build-backend]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist
-
       - uses: actions/download-artifact@v4
         with:
           name: backend-amd64
           path: bin
-      
       - uses: actions/download-artifact@v4
         with:
           name: backend-arm64
           path: bin
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Docker Meta
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -199,15 +208,13 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=ref,event=tag
             type=sha,enable=${{ github.ref == 'refs/heads/master' }}
-
-      - name: Login to Docker Hub
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and Push
-        uses: docker/build-push-action@v5
+      - name: Build and push
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.CI

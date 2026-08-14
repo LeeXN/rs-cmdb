@@ -1,22 +1,25 @@
 use crate::middleware::permission::PermissionContext;
 use crate::service::terminal_session_service::TerminalSessionService;
 use axum::{
-    Extension as AxumExtension,
-    Json,
+    Extension as AxumExtension, Json,
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::{Extension, Path, Query},
     http::StatusCode,
-    response::{IntoResponse, Response, sse::{Event, Sse}},
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    response::{
+        IntoResponse, Response,
+        sse::{Event, Sse},
+    },
 };
+use common::entity::permission::PermissionAction;
 use common::models::{
-    ApiResponse, CreateTerminalSessionRequest, CreateTerminalSessionResponse, ResizeTerminalRequest,
-    TerminalInputRequest,
+    ApiResponse, CreateTerminalSessionRequest, CreateTerminalSessionResponse,
+    ResizeTerminalRequest, TerminalInputRequest,
 };
+use futures::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
-use futures::{SinkExt, StreamExt};
 use tokio_stream::wrappers::BroadcastStream;
 
 pub async fn create_session(
@@ -24,8 +27,28 @@ pub async fn create_session(
     Extension(perm_ctx): Extension<PermissionContext>,
     Json(req): Json<CreateTerminalSessionRequest>,
 ) -> impl IntoResponse {
+    if !terminal_svc
+        .allows_client_permission_scope(&perm_ctx, &req.client_id, &PermissionAction::Update)
+        .await
+    {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::<()> {
+                status: 403,
+                message: "Forbidden".into(),
+                data: None,
+            }),
+        )
+            .into_response();
+    }
     match terminal_svc
-        .create_session(&req, &perm_ctx.user_id, &perm_ctx.user_id, &perm_ctx.role)
+        .create_session_with_groups(
+            &req,
+            &perm_ctx.user_id,
+            &perm_ctx.user_id,
+            &perm_ctx.role,
+            &perm_ctx.group_ids,
+        )
         .await
     {
         Ok(session) => (
@@ -56,7 +79,9 @@ pub async fn get_session(
 ) -> impl IntoResponse {
     match terminal_svc.get_session(&id).await {
         Ok(session) => {
-            if !can_access_session(&perm_ctx, &session) {
+            if !can_access_session(&terminal_svc, &perm_ctx, &session, &PermissionAction::View)
+                .await
+            {
                 return (
                     StatusCode::FORBIDDEN,
                     Json(ApiResponse::<()> {
@@ -69,7 +94,11 @@ pub async fn get_session(
             }
             (
                 StatusCode::OK,
-                Json(ApiResponse { status: 200, message: "OK".into(), data: Some(session) }),
+                Json(ApiResponse {
+                    status: 200,
+                    message: "OK".into(),
+                    data: Some(session),
+                }),
             )
                 .into_response()
         }
@@ -101,6 +130,20 @@ pub async fn list_sessions(
         )
             .into_response();
     };
+    if !terminal_svc
+        .allows_client_permission_scope(&perm_ctx, client_id, &PermissionAction::View)
+        .await
+    {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::<()> {
+                status: 403,
+                message: "Forbidden".into(),
+                data: None,
+            }),
+        )
+            .into_response();
+    }
     match terminal_svc
         .list_client_sessions(client_id, &perm_ctx.user_id, perm_ctx.is_admin())
         .await
@@ -133,7 +176,15 @@ pub async fn push_input(
     Json(req): Json<TerminalInputRequest>,
 ) -> impl IntoResponse {
     match terminal_svc.get_session(&id).await {
-        Ok(session) if !can_access_session(&perm_ctx, &session) => {
+        Ok(session)
+            if !can_access_session(
+                &terminal_svc,
+                &perm_ctx,
+                &session,
+                &PermissionAction::Update,
+            )
+            .await =>
+        {
             return (
                 StatusCode::FORBIDDEN,
                 Json(ApiResponse::<()> {
@@ -160,7 +211,11 @@ pub async fn push_input(
     match terminal_svc.queue_input(&id, req.input).await {
         Ok(()) => (
             StatusCode::OK,
-            Json(ApiResponse::<()> { status: 200, message: "OK".into(), data: None }),
+            Json(ApiResponse::<()> {
+                status: 200,
+                message: "OK".into(),
+                data: None,
+            }),
         )
             .into_response(),
         Err(e) => (
@@ -182,7 +237,15 @@ pub async fn resize_session(
     Json(req): Json<ResizeTerminalRequest>,
 ) -> impl IntoResponse {
     match terminal_svc.get_session(&id).await {
-        Ok(session) if !can_access_session(&perm_ctx, &session) => {
+        Ok(session)
+            if !can_access_session(
+                &terminal_svc,
+                &perm_ctx,
+                &session,
+                &PermissionAction::Update,
+            )
+            .await =>
+        {
             return (
                 StatusCode::FORBIDDEN,
                 Json(ApiResponse::<()> {
@@ -209,7 +272,11 @@ pub async fn resize_session(
     match terminal_svc.resize(&id, req.cols, req.rows).await {
         Ok(()) => (
             StatusCode::OK,
-            Json(ApiResponse::<()> { status: 200, message: "OK".into(), data: None }),
+            Json(ApiResponse::<()> {
+                status: 200,
+                message: "OK".into(),
+                data: None,
+            }),
         )
             .into_response(),
         Err(e) => (
@@ -230,7 +297,15 @@ pub async fn close_session(
     Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
     match terminal_svc.get_session(&id).await {
-        Ok(session) if !can_access_session(&perm_ctx, &session) => {
+        Ok(session)
+            if !can_access_session(
+                &terminal_svc,
+                &perm_ctx,
+                &session,
+                &PermissionAction::Update,
+            )
+            .await =>
+        {
             return (
                 StatusCode::FORBIDDEN,
                 Json(ApiResponse::<()> {
@@ -254,10 +329,17 @@ pub async fn close_session(
                 .into_response();
         }
     }
-    match terminal_svc.close_session(&id, Some("closed by operator".to_string())).await {
+    match terminal_svc
+        .close_session(&id, Some("closed by operator".to_string()))
+        .await
+    {
         Ok(()) => (
             StatusCode::OK,
-            Json(ApiResponse::<()> { status: 200, message: "OK".into(), data: None }),
+            Json(ApiResponse::<()> {
+                status: 200,
+                message: "OK".into(),
+                data: None,
+            }),
         )
             .into_response(),
         Err(e) => (
@@ -278,12 +360,19 @@ pub async fn stream_session(
     Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
     match terminal_svc.get_session(&id).await {
-        Ok(session) if !can_access_session(&perm_ctx, &session) => {
+        Ok(session)
+            if !can_access_session(&terminal_svc, &perm_ctx, &session, &PermissionAction::View)
+                .await =>
+        {
             return StatusCode::FORBIDDEN.into_response();
         }
         Ok(_) => {}
         Err(e) => {
-            return (StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), e.log_and_user_message()).into_response();
+            return (
+                StatusCode::from_u16(e.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                e.log_and_user_message(),
+            )
+                .into_response();
         }
     }
     let rx = terminal_svc.subscribe_output(&id).await;
@@ -308,12 +397,24 @@ pub async fn stream_session(
         }
     };
     Sse::new(stream)
-        .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(15)).text("keepalive"))
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keepalive"),
+        )
         .into_response()
 }
 
-fn can_access_session(perm_ctx: &PermissionContext, session: &common::models::TerminalSessionSummary) -> bool {
-    perm_ctx.is_admin() || session.user_id == perm_ctx.user_id
+async fn can_access_session(
+    terminal_svc: &TerminalSessionService,
+    perm_ctx: &PermissionContext,
+    session: &common::models::TerminalSessionSummary,
+    action: &PermissionAction,
+) -> bool {
+    (perm_ctx.is_admin() || session.user_id == perm_ctx.user_id)
+        && terminal_svc
+            .allows_client_permission_scope(perm_ctx, &session.client_id, action)
+            .await
 }
 
 pub async fn websocket_session(
@@ -324,7 +425,14 @@ pub async fn websocket_session(
 ) -> Response {
     match terminal_svc.get_session(&id).await {
         Ok(session) => {
-            if !perm_ctx.is_admin() && session.user_id != perm_ctx.user_id {
+            if !can_access_session(
+                &terminal_svc,
+                &perm_ctx,
+                &session,
+                &PermissionAction::Update,
+            )
+            .await
+            {
                 return StatusCode::FORBIDDEN.into_response();
             }
             ws.on_upgrade(move |socket| handle_terminal_socket(socket, terminal_svc, session))
@@ -355,7 +463,11 @@ async fn handle_terminal_socket(
         loop {
             match output_rx.recv().await {
                 Ok(chunk) => {
-                    if sender.send(Message::Text(chunk.data.clone().into())).await.is_err() {
+                    if sender
+                        .send(Message::Text(chunk.data.clone().into()))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -397,10 +509,14 @@ mod tests {
     use crate::service::web_terminal_service::WebTerminalService;
     use async_trait::async_trait;
     use axum::body::to_bytes;
-    use common::entity::permission::{CommandRules, SubjectType, TargetScope, TerminalMode, WebTerminalPolicy};
+    use common::entity::permission::{
+        CommandRules, SubjectType, TargetScope, TerminalMode, WebTerminalPolicy,
+    };
     use common::entity::user::Role;
     use common::error::CmdbResult;
-    use common::models::{ApiResponse, CreateTerminalSessionRequest, TerminalSessionState, TerminalSessionSummary};
+    use common::models::{
+        ApiResponse, CreateTerminalSessionRequest, TerminalSessionState, TerminalSessionSummary,
+    };
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
@@ -412,7 +528,10 @@ mod tests {
     #[async_trait]
     impl Database for MemoryDb {
         async fn set(&self, key: &str, value: &[u8]) -> CmdbResult<()> {
-            self.data.lock().unwrap().insert(key.to_string(), value.to_vec());
+            self.data
+                .lock()
+                .unwrap()
+                .insert(key.to_string(), value.to_vec());
             Ok(())
         }
 
@@ -517,6 +636,7 @@ mod tests {
         PermissionContext {
             user_id: user_id.to_string(),
             role,
+            group_ids: Vec::new(),
             permission_service,
         }
     }
@@ -604,7 +724,10 @@ mod tests {
         .await;
 
         let user_response = list_sessions(
-            Query(HashMap::from([("client_id".to_string(), "client-api-list".to_string())])),
+            Query(HashMap::from([(
+                "client_id".to_string(),
+                "client-api-list".to_string(),
+            )])),
             Extension(svc.clone()),
             Extension(build_permission_context("user-a", Role::User)),
         )
@@ -615,12 +738,18 @@ mod tests {
         let user_body = response_json::<Vec<TerminalSessionSummary>>(user_response).await;
         let user_sessions = user_body.data.unwrap();
         assert_eq!(
-            user_sessions.iter().map(|session| session.session_id.as_str()).collect::<Vec<_>>(),
+            user_sessions
+                .iter()
+                .map(|session| session.session_id.as_str())
+                .collect::<Vec<_>>(),
             vec![own_pending.session_id.as_str()]
         );
 
         let admin_response = list_sessions(
-            Query(HashMap::from([("client_id".to_string(), "client-api-list".to_string())])),
+            Query(HashMap::from([(
+                "client_id".to_string(),
+                "client-api-list".to_string(),
+            )])),
             Extension(svc),
             Extension(build_permission_context("admin-1", Role::Admin)),
         )
@@ -631,7 +760,10 @@ mod tests {
         let admin_body = response_json::<Vec<TerminalSessionSummary>>(admin_response).await;
         let admin_sessions = admin_body.data.unwrap();
         assert_eq!(
-            admin_sessions.iter().map(|session| session.session_id.as_str()).collect::<Vec<_>>(),
+            admin_sessions
+                .iter()
+                .map(|session| session.session_id.as_str())
+                .collect::<Vec<_>>(),
             vec![
                 other_active.session_id.as_str(),
                 own_pending.session_id.as_str(),

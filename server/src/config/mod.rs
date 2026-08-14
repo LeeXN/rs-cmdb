@@ -73,9 +73,10 @@ pub fn validate_cors_origins(origins: &[String]) -> Result<(), ConfigValidationE
         }
         // Basic validation: must start with http:// or https://
         if !origin.starts_with("http://") && !origin.starts_with("https://") {
-            return Err(ConfigValidationError::InvalidJwtSecret(
-                format!("cors_allowed_origins entry '{}' must start with http:// or https://", origin),
-            ));
+            return Err(ConfigValidationError::InvalidJwtSecret(format!(
+                "cors_allowed_origins entry '{}' must start with http:// or https://",
+                origin
+            )));
         }
     }
     Ok(())

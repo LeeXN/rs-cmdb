@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
 
 use crate::config::ClientConfig;
-use crate::service::load_agent_token;
+use crate::service::load_agent_token_for;
 use common::entity::hardware::Hardware;
 use common::models::ClientHardwareInfo;
 
@@ -59,9 +59,9 @@ impl PushService {
         // 推送数据
         info!("Pushing hardware information to server");
         debug!("Hardware info: {:?}", hardware_info);
-        let auth = self
-            .auth_header()
-            .ok_or_else(|| anyhow::anyhow!("Agent token not available; client may need to register again"))?;
+        let auth = self.auth_header().ok_or_else(|| {
+            anyhow::anyhow!("Agent token not available; client may need to register again")
+        })?;
         let client = reqwest::Client::builder()
             .danger_accept_invalid_certs(!self.config.server.verify_tls)
             .build()?;
@@ -87,7 +87,8 @@ impl PushService {
     }
 
     fn auth_header(&self) -> Option<String> {
-        load_agent_token().map(|token| format!("Bearer {}:{}", self.client_id, token))
+        load_agent_token_for(&self.client_id)
+            .map(|token| format!("Bearer {}:{}", self.client_id, token))
     }
 }
 

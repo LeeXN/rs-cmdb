@@ -25,12 +25,9 @@ pub async fn list_persons(
             let scope = perm_ctx
                 .evaluate(&ResourceType::Person, &PermissionAction::View)
                 .unwrap_or(ScopeConstraint::None);
-            persons = PermissionContext::filter_by_scope(
-                persons,
-                &scope,
-                &perm_ctx.user_id,
-                |p| p.created_by.as_deref(),
-            );
+            persons = PermissionContext::filter_by_scope(persons, &scope, &perm_ctx.user_id, |p| {
+                p.created_by.as_deref()
+            });
             // Filter by search term
             if let Some(ref search) = query.search {
                 let search_lower = search.to_lowercase();
@@ -98,9 +95,25 @@ pub async fn list_persons(
 pub async fn get_person(
     Path(id): Path<String>,
     Extension(person_repo): Extension<Arc<PersonRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
     match person_repo.get(&id).await {
         Ok(Some(person)) => {
+            if !perm_ctx.allows_resource(
+                &ResourceType::Person,
+                &PermissionAction::View,
+                person.created_by.as_deref(),
+            ) {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(ApiResponse::<Person> {
+                        status: 403,
+                        message: "Forbidden".into(),
+                        data: None,
+                    }),
+                )
+                    .into_response();
+            }
             let response = ApiResponse {
                 status: 200,
                 message: "Success".to_string(),
@@ -129,10 +142,20 @@ pub async fn get_person(
 
 /// Create a new person
 pub async fn create_person(
+    Extension(perm_ctx): Extension<PermissionContext>,
     Extension(user): Extension<User>,
     Extension(person_repo): Extension<Arc<PersonRepository>>,
     Json(mut person): Json<Person>,
 ) -> impl IntoResponse {
+    if !perm_ctx.allows_action(&ResourceType::Person, &PermissionAction::Create) {
+        let response = ApiResponse::<Person> {
+            status: 403,
+            message: "Forbidden: insufficient permission to create persons".to_string(),
+            data: None,
+        };
+        return (StatusCode::FORBIDDEN, Json(response)).into_response();
+    }
+
     // Ensure ID is set
     if person.id.is_empty() {
         person.id = Uuid::new_v4().to_string();
@@ -167,7 +190,7 @@ pub async fn create_person(
 /// Update a person
 pub async fn update_person(
     Path(id): Path<String>,
-    Extension(current_user): Extension<User>,
+    Extension(perm_ctx): Extension<PermissionContext>,
     Extension(person_repo): Extension<Arc<PersonRepository>>,
     Json(mut person): Json<Person>,
 ) -> impl IntoResponse {
@@ -185,13 +208,15 @@ pub async fn update_person(
 
             match person_repo.get(&id).await {
                 Ok(Some(existing_person)) => {
-                    // Ownership check: non-Admin users can only update their own resources
-                    if current_user.role != common::entity::user::Role::Admin
-                        && existing_person.created_by.as_deref() != Some(&current_user.id)
-                    {
+                    if !perm_ctx.allows_resource(
+                        &ResourceType::Person,
+                        &PermissionAction::Update,
+                        existing_person.created_by.as_deref(),
+                    ) {
                         let response = ApiResponse::<Person> {
                             status: 403,
-                            message: "Forbidden: you can only update resources you created".to_string(),
+                            message: "Forbidden: insufficient permission to update this person"
+                                .to_string(),
                             data: None,
                         };
                         return (StatusCode::FORBIDDEN, Json(response)).into_response();
@@ -261,7 +286,12 @@ mod tests {
     use serde_json::json;
     use tower::ServiceExt;
 
-    async fn make_post(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+    async fn make_post(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder()
             .method(Method::POST)
             .uri(path)
@@ -270,19 +300,26 @@ mod tests {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
         }
-        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let req = req
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
-        let mut req = Request::builder()
-            .method(Method::GET)
-            .uri(path);
+    async fn make_get(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::GET).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
@@ -291,12 +328,20 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_put(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+    async fn make_put(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder()
             .method(Method::PUT)
             .uri(path)
@@ -305,19 +350,26 @@ mod tests {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
         }
-        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let req = req
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_delete(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
-        let mut req = Request::builder()
-            .method(Method::DELETE)
-            .uri(path);
+    async fn make_delete(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::DELETE).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
@@ -326,19 +378,28 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
     #[tokio::test]
     async fn test_create_person() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) = make_post(&app.router, "/api/v1/users", Some(&app.admin_token), json!({
-            "name": "John Doe",
-            "email": "john@example.com",
-            "department": "IT"
-        })).await;
+        let (status, body) = make_post(
+            &app.router,
+            "/api/v1/users",
+            Some(&app.admin_token),
+            json!({
+                "name": "John Doe",
+                "email": "john@example.com",
+                "department": "IT"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::CREATED, "body: {:?}", body);
         assert_eq!(body["data"]["name"], "John Doe");
         assert_eq!(body["data"]["email"], "john@example.com");
@@ -347,10 +408,16 @@ mod tests {
     #[tokio::test]
     async fn test_list_persons() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, _) = make_post(&app.router, "/api/v1/users", Some(&app.admin_token), json!({
-            "name": "List Test",
-            "email": "list@test.com"
-        })).await;
+        let (create_status, _) = make_post(
+            &app.router,
+            "/api/v1/users",
+            Some(&app.admin_token),
+            json!({
+                "name": "List Test",
+                "email": "list@test.com"
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
 
         let (status, body) = make_get(&app.router, "/api/v1/users", Some(&app.admin_token)).await;
@@ -361,14 +428,25 @@ mod tests {
     #[tokio::test]
     async fn test_get_person() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, create_body) = make_post(&app.router, "/api/v1/users", Some(&app.admin_token), json!({
-            "name": "Get Test",
-            "email": "get@test.com"
-        })).await;
+        let (create_status, create_body) = make_post(
+            &app.router,
+            "/api/v1/users",
+            Some(&app.admin_token),
+            json!({
+                "name": "Get Test",
+                "email": "get@test.com"
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
         let person_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
-        let (status, body) = make_get(&app.router, &format!("/api/v1/users/{}", person_id), Some(&app.admin_token)).await;
+        let (status, body) = make_get(
+            &app.router,
+            &format!("/api/v1/users/{}", person_id),
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "body: {:?}", body);
         assert_eq!(body["data"]["name"], "Get Test");
     }
@@ -376,17 +454,29 @@ mod tests {
     #[tokio::test]
     async fn test_update_person() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, create_body) = make_post(&app.router, "/api/v1/users", Some(&app.admin_token), json!({
-            "name": "Original Name",
-            "email": "original@test.com"
-        })).await;
+        let (create_status, create_body) = make_post(
+            &app.router,
+            "/api/v1/users",
+            Some(&app.admin_token),
+            json!({
+                "name": "Original Name",
+                "email": "original@test.com"
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
         let person_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
-        let (status, body) = make_put(&app.router, &format!("/api/v1/users/{}", person_id), Some(&app.admin_token), json!({
-            "name": "Jane Doe",
-            "email": "jane@example.com"
-        })).await;
+        let (status, body) = make_put(
+            &app.router,
+            &format!("/api/v1/users/{}", person_id),
+            Some(&app.admin_token),
+            json!({
+                "name": "Jane Doe",
+                "email": "jane@example.com"
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "body: {:?}", body);
         assert_eq!(body["data"]["name"], "Jane Doe");
         assert_eq!(body["data"]["email"], "jane@example.com");
@@ -395,17 +485,33 @@ mod tests {
     #[tokio::test]
     async fn test_delete_person() {
         let app = TestAppBuilder::new().build().await;
-        let (create_status, create_body) = make_post(&app.router, "/api/v1/users", Some(&app.admin_token), json!({
-            "name": "Delete Test",
-            "email": "delete@test.com"
-        })).await;
+        let (create_status, create_body) = make_post(
+            &app.router,
+            "/api/v1/users",
+            Some(&app.admin_token),
+            json!({
+                "name": "Delete Test",
+                "email": "delete@test.com"
+            }),
+        )
+        .await;
         assert_eq!(create_status, StatusCode::CREATED);
         let person_id = create_body["data"]["id"].as_str().unwrap().to_string();
 
-        let (status, _) = make_delete(&app.router, &format!("/api/v1/users/{}", person_id), Some(&app.admin_token)).await;
+        let (status, _) = make_delete(
+            &app.router,
+            &format!("/api/v1/users/{}", person_id),
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "expected 200 OK on delete");
 
-        let (get_status, _) = make_get(&app.router, &format!("/api/v1/users/{}", person_id), Some(&app.admin_token)).await;
+        let (get_status, _) = make_get(
+            &app.router,
+            &format!("/api/v1/users/{}", person_id),
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(get_status, StatusCode::NOT_FOUND);
     }
 }
@@ -413,26 +519,25 @@ mod tests {
 /// Delete a person
 pub async fn delete_person(
     Path(id): Path<String>,
-    Extension(current_user): Extension<User>,
+    Extension(perm_ctx): Extension<PermissionContext>,
     Extension(person_repo): Extension<Arc<PersonRepository>>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
     Extension(project_repo): Extension<Arc<ProjectRepository>>,
 ) -> impl IntoResponse {
     // Ownership check
-    match person_repo.get(&id).await {
-        Ok(Some(existing)) => {
-            if current_user.role != common::entity::user::Role::Admin
-                && existing.created_by.as_deref() != Some(&current_user.id)
-            {
-                let response = ApiResponse::<()> {
-                    status: 403,
-                    message: "Forbidden: you can only delete resources you created".to_string(),
-                    data: None,
-                };
-                return (StatusCode::FORBIDDEN, Json(response)).into_response();
-            }
-        }
-        _ => {}
+    if let Ok(Some(existing)) = person_repo.get(&id).await
+        && !perm_ctx.allows_resource(
+            &ResourceType::Person,
+            &PermissionAction::Delete,
+            existing.created_by.as_deref(),
+        )
+    {
+        let response = ApiResponse::<()> {
+            status: 403,
+            message: "Forbidden: insufficient permission to delete this person".to_string(),
+            data: None,
+        };
+        return (StatusCode::FORBIDDEN, Json(response)).into_response();
     }
 
     // Cascade update: Set owner_id to null for clients

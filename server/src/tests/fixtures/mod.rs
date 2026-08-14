@@ -7,9 +7,9 @@
 
 use crate::db::{Database, redb_store::RedbStore};
 use crate::repository::terminal_session_repository::TerminalSessionRepository;
+use crate::service::auth_service::{AuthService, init_master_client_key};
 use crate::service::terminal_session_service::TerminalSessionService;
 use crate::service::web_terminal_service::WebTerminalService;
-use crate::service::auth_service::{AuthService, init_master_client_key};
 use chrono::Utc;
 use common::entity::hardware::{CPU, Disk, GPU, Hardware, IpmiInfo, NIC, OS, RAM, SystemInfo};
 use common::entity::user::{Role, User};
@@ -46,6 +46,7 @@ pub fn test_admin() -> TestUser {
 /// let user = test_user();
 /// assert_eq!(user.username, "test_user");
 /// ```
+#[allow(dead_code)]
 pub fn test_user() -> TestUser {
     TestUser {
         username: "test_user",
@@ -56,6 +57,7 @@ pub fn test_user() -> TestUser {
 }
 
 /// Returns a test viewer user
+#[allow(dead_code)]
 pub fn test_viewer() -> TestUser {
     TestUser {
         username: "test_viewer",
@@ -227,6 +229,7 @@ pub fn create_test_client(id: &str) -> Client {
         status: None,
         environment: None,
         asset_tag: None,
+        tags: Vec::new(),
         warranty_expiration: None,
         supplier: None,
         power_consumption: None,
@@ -529,9 +532,8 @@ use crate::service::{
     approval_service::ApprovalService, client_filter_service::ClientFilterService,
     client_service::ClientService, command_service::CommandService,
     component_service::ComponentService, danger_detection::DangerDetectionService,
-    execution_session_service::ExecutionSessionService,
-    export_service::ExportService, hardware_service::HardwareService,
-    permission_service::PermissionService, sse_hub::SseHub,
+    execution_session_service::ExecutionSessionService, export_service::ExportService,
+    hardware_service::HardwareService, permission_service::PermissionService, sse_hub::SseHub,
     stats_service::StatsService, validation_service::ValidationService,
 };
 
@@ -542,6 +544,7 @@ pub struct TestApp {
     pub auth_token: String,
     pub admin_token: String,
     pub test_user: User,
+    #[allow(dead_code)]
     pub test_admin: User,
 }
 
@@ -567,16 +570,19 @@ impl TestAppBuilder {
         Self::default()
     }
 
+    #[allow(dead_code)]
     pub fn with_db(mut self, db: Arc<RedbStore>) -> Self {
         self.db = Some(db);
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_auth_service(mut self, svc: Arc<AuthService>) -> Self {
         self.auth_service = Some(svc);
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_jwt_secret(mut self, secret: &str) -> Self {
         self.jwt_secret = secret.to_string();
         self
@@ -607,9 +613,9 @@ impl TestAppBuilder {
         let dictionary_repo = Arc::new(DictionaryRepository::new(db.clone()));
         let rack_repo = Arc::new(RackRepository::new(db.clone()));
 
-        let auth_service = self.auth_service.unwrap_or_else(|| {
-            Arc::new(AuthService::new(self.jwt_secret.clone()))
-        });
+        let auth_service = self
+            .auth_service
+            .unwrap_or_else(|| Arc::new(AuthService::new(self.jwt_secret.clone())));
 
         let _client_dao = Arc::new(ClientDao::new(client_repo.clone(), hardware_repo.clone()));
         let _rack_dao = Arc::new(RackDao::new(rack_repo.clone(), client_repo.clone()));
@@ -723,7 +729,8 @@ impl TestAppBuilder {
 
         let exec_policy_repo = Arc::new(ExecPolicyRepository::new(db.clone()));
         let web_terminal_policy_repo = Arc::new(WebTerminalPolicyRepository::new(db.clone()));
-        let web_terminal_service = Arc::new(WebTerminalService::new(web_terminal_policy_repo.clone()));
+        let web_terminal_service =
+            Arc::new(WebTerminalService::new(web_terminal_policy_repo.clone()));
 
         let execution_session_repo = Arc::new(ExecutionSessionRepository::new(db.clone()));
         let terminal_session_repo = Arc::new(TerminalSessionRepository::new(db.clone()));

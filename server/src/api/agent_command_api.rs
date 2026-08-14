@@ -10,6 +10,7 @@
 //!   POST /api/v1/agent/commands/{id}/logs             – push log lines
 //!   POST /api/v1/agent/commands/{id}/complete         – mark task completed/failed
 
+use crate::middleware::agent_auth::AuthenticatedAgent;
 use crate::service::command_service::CommandService;
 use axum::{
     Json,
@@ -35,27 +36,28 @@ const LONG_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 pub async fn poll_pending(
     Extension(cmd_svc): Extension<Arc<CommandService>>,
+    Extension(agent): Extension<AuthenticatedAgent>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let client_id = match params.get("client_id") {
-        Some(id) if !id.is_empty() => id.clone(),
-        _ => {
+    if let Some(requested_id) = params.get("client_id") {
+        if requested_id != &agent.client_id {
             return (
-                StatusCode::BAD_REQUEST,
+                StatusCode::FORBIDDEN,
                 Json(ApiResponse::<()> {
-                    status: 400,
-                    message: "client_id query param required".into(),
+                    status: 403,
+                    message: "client_id does not match authenticated agent".into(),
                     data: None,
                 }),
             )
                 .into_response();
         }
-    };
+    }
+    let client_id = agent.client_id.clone();
 
     // Long-poll loop
     let start = tokio::time::Instant::now();
     loop {
-        match cmd_svc.get_pending_for_client(&client_id).await {
+        match cmd_svc.claim_pending_for_client(&client_id).await {
             Ok(Some(task)) => {
                 info!("Dispatching task {} to client {}", task.id, client_id);
                 return (
@@ -96,11 +98,16 @@ pub async fn poll_pending(
 pub async fn start_command(
     Path(id): Path<String>,
     Extension(cmd_svc): Extension<Arc<CommandService>>,
+    Extension(agent): Extension<AuthenticatedAgent>,
 ) -> impl IntoResponse {
-    match cmd_svc.mark_running(&id).await {
+    match cmd_svc.mark_running_for_client(&id, &agent.client_id).await {
         Ok(()) => (
             StatusCode::OK,
-            Json(ApiResponse::<()> { status: 200, message: "OK".into(), data: None }),
+            Json(ApiResponse::<()> {
+                status: 200,
+                message: "OK".into(),
+                data: None,
+            }),
         )
             .into_response(),
         Err(e) => {
@@ -123,20 +130,29 @@ pub async fn start_command(
 pub async fn push_logs(
     Path(id): Path<String>,
     Extension(cmd_svc): Extension<Arc<CommandService>>,
+    Extension(agent): Extension<AuthenticatedAgent>,
     Json(req): Json<AgentLogRequest>,
 ) -> impl IntoResponse {
-    match cmd_svc.push_logs(&id, req).await {
+    match cmd_svc
+        .push_logs_for_client(&id, &agent.client_id, req)
+        .await
+    {
         Ok(()) => (
             StatusCode::OK,
-            Json(ApiResponse::<()> { status: 200, message: "OK".into(), data: None }),
+            Json(ApiResponse::<()> {
+                status: 200,
+                message: "OK".into(),
+                data: None,
+            }),
         )
             .into_response(),
         Err(e) => {
             error!("push_logs {}: {}", id, e);
+            let code = e.status_code();
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                 Json(ApiResponse::<()> {
-                    status: 500,
+                    status: code,
                     message: e.log_and_user_message(),
                     data: None,
                 }),
@@ -151,12 +167,20 @@ pub async fn push_logs(
 pub async fn complete_command(
     Path(id): Path<String>,
     Extension(cmd_svc): Extension<Arc<CommandService>>,
+    Extension(agent): Extension<AuthenticatedAgent>,
     Json(req): Json<AgentCompleteRequest>,
 ) -> impl IntoResponse {
-    match cmd_svc.complete_task(&id, req).await {
+    match cmd_svc
+        .complete_task_for_client(&id, &agent.client_id, req)
+        .await
+    {
         Ok(()) => (
             StatusCode::OK,
-            Json(ApiResponse::<()> { status: 200, message: "OK".into(), data: None }),
+            Json(ApiResponse::<()> {
+                status: 200,
+                message: "OK".into(),
+                data: None,
+            }),
         )
             .into_response(),
         Err(e) => {
@@ -195,8 +219,11 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap_or(serde_json::Value::Null);
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap_or(serde_json::Value::Null);
         (status, body)
     }
 
@@ -205,13 +232,18 @@ mod tests {
             .method(Method::POST)
             .uri(path)
             .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&serde_json::json!({})).unwrap()))
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({})).unwrap(),
+            ))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap_or(serde_json::Value::Null);
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap_or(serde_json::Value::Null);
         (status, body)
     }
 
@@ -225,7 +257,8 @@ mod tests {
     #[tokio::test]
     async fn test_agent_start_unauthorized() {
         let app = TestAppBuilder::new().build().await;
-        let (status, _body) = make_post(&app.router, "/api/v1/agent/commands/nonexistent/start").await;
+        let (status, _body) =
+            make_post(&app.router, "/api/v1/agent/commands/nonexistent/start").await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
 }

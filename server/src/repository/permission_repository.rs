@@ -88,9 +88,8 @@ impl PermissionRepository {
             Some(d) => d,
             None => return Ok(None),
         };
-        let group = serde_json::from_slice(&data).map_err(|e| {
-            CmdbError::Serialization(format!("Failed to deserialize group: {}", e))
-        })?;
+        let group = serde_json::from_slice(&data)
+            .map_err(|e| CmdbError::Serialization(format!("Failed to deserialize group: {}", e)))?;
         Ok(Some(group))
     }
 

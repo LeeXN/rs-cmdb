@@ -170,358 +170,1337 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("execution.status.running".to_string(), "执行中".to_string());
     translations.insert("execution.status.success".to_string(), "成功".to_string());
     translations.insert("execution.status.failed".to_string(), "失败".to_string());
-    translations.insert("execution.status.partial".to_string(), "部分成功".to_string());
+    translations.insert(
+        "execution.status.partial".to_string(),
+        "部分成功".to_string(),
+    );
     translations.insert("execution.status.timeout".to_string(), "超时".to_string());
     translations.insert("execution.status.expired".to_string(), "已过期".to_string());
     translations.insert("execution.type.terminal".to_string(), "终端".to_string());
     translations.insert("execution.type.batch".to_string(), "批量执行".to_string());
-    translations.insert("execution.actions.reset_filters".to_string(), "重置筛选".to_string());
+    translations.insert(
+        "execution.actions.reset_filters".to_string(),
+        "重置筛选".to_string(),
+    );
     translations.insert("execution.actions.hide".to_string(), "收起".to_string());
     translations.insert("execution.actions.details".to_string(), "详情".to_string());
-    translations.insert("execution.actions.rerun".to_string(), "重新执行".to_string());
-    translations.insert("execution.actions.replay".to_string(), "查看回放".to_string());
-    translations.insert("execution.history.title".to_string(), "执行历史".to_string());
-    translations.insert("execution.history.description".to_string(), "统一查看终端会话与批量执行的历史记录。".to_string());
-    translations.insert("execution.history.records_badge".to_string(), "{count} 条记录".to_string());
-    translations.insert("execution.history.search_label".to_string(), "搜索执行记录".to_string());
-    translations.insert("execution.history.search_placeholder".to_string(), "命令 / 用户 / 会话 ID / client id".to_string());
-    translations.insert("execution.history.client_scope".to_string(), "客户端范围".to_string());
+    translations.insert(
+        "execution.actions.rerun".to_string(),
+        "重新执行".to_string(),
+    );
+    translations.insert(
+        "execution.actions.replay".to_string(),
+        "查看回放".to_string(),
+    );
+    translations.insert(
+        "execution.history.title".to_string(),
+        "执行历史".to_string(),
+    );
+    translations.insert(
+        "execution.history.description".to_string(),
+        "统一查看终端会话与批量执行的历史记录。".to_string(),
+    );
+    translations.insert(
+        "execution.history.records_badge".to_string(),
+        "{count} 条记录".to_string(),
+    );
+    translations.insert(
+        "execution.history.search_label".to_string(),
+        "搜索执行记录".to_string(),
+    );
+    translations.insert(
+        "execution.history.search_placeholder".to_string(),
+        "命令 / 用户 / 会话 ID / client id".to_string(),
+    );
+    translations.insert(
+        "execution.history.client_scope".to_string(),
+        "客户端范围".to_string(),
+    );
     translations.insert("execution.history.status".to_string(), "状态".to_string());
-    translations.insert("execution.history.execution_type".to_string(), "执行类型".to_string());
+    translations.insert(
+        "execution.history.execution_type".to_string(),
+        "执行类型".to_string(),
+    );
     translations.insert("execution.history.from".to_string(), "开始日期".to_string());
     translations.insert("execution.history.to".to_string(), "结束日期".to_string());
-    translations.insert("execution.history.loading".to_string(), "正在加载执行历史...".to_string());
-    translations.insert("execution.history.empty".to_string(), "当前筛选条件下没有匹配的执行记录。".to_string());
-    translations.insert("execution.history.all_clients".to_string(), "全部客户端".to_string());
-    translations.insert("execution.history.all_statuses".to_string(), "全部状态".to_string());
-    translations.insert("execution.history.all_execution_types".to_string(), "全部执行类型".to_string());
-    translations.insert("execution.history.table.time".to_string(), "时间".to_string());
-    translations.insert("execution.history.table.type".to_string(), "类型".to_string());
-    translations.insert("execution.history.table.targets".to_string(), "目标".to_string());
-    translations.insert("execution.history.table.command".to_string(), "命令".to_string());
-    translations.insert("execution.history.table.status".to_string(), "状态".to_string());
-    translations.insert("execution.history.table.duration".to_string(), "耗时".to_string());
-    translations.insert("execution.history.table.user".to_string(), "用户".to_string());
-    translations.insert("execution.history.table.actions".to_string(), "操作".to_string());
-    translations.insert("execution.history.full_command".to_string(), "完整命令 / 脚本".to_string());
-    translations.insert("execution.history.status_summary".to_string(), "状态摘要".to_string());
-    translations.insert("execution.history.started".to_string(), "开始时间".to_string());
-    translations.insert("execution.history.ended".to_string(), "结束时间".to_string());
-    translations.insert("execution.history.recording".to_string(), "录制".to_string());
-    translations.insert("execution.history.recording_available".to_string(), "可用".to_string());
-    translations.insert("execution.history.recording_missing".to_string(), "未录制".to_string());
-    translations.insert("execution.history.details_title".to_string(), "执行详情".to_string());
-    translations.insert("execution.history.details_description".to_string(), "集中查看命令、输出和执行元数据。".to_string());
-    translations.insert("execution.history.open_replay".to_string(), "前往回放".to_string());
+    translations.insert(
+        "execution.history.loading".to_string(),
+        "正在加载执行历史...".to_string(),
+    );
+    translations.insert(
+        "execution.history.empty".to_string(),
+        "当前筛选条件下没有匹配的执行记录。".to_string(),
+    );
+    translations.insert(
+        "execution.history.all_clients".to_string(),
+        "全部客户端".to_string(),
+    );
+    translations.insert(
+        "execution.history.all_statuses".to_string(),
+        "全部状态".to_string(),
+    );
+    translations.insert(
+        "execution.history.all_execution_types".to_string(),
+        "全部执行类型".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.time".to_string(),
+        "时间".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.type".to_string(),
+        "类型".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.targets".to_string(),
+        "目标".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.command".to_string(),
+        "命令".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.status".to_string(),
+        "状态".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.duration".to_string(),
+        "耗时".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.user".to_string(),
+        "用户".to_string(),
+    );
+    translations.insert(
+        "execution.history.table.actions".to_string(),
+        "操作".to_string(),
+    );
+    translations.insert(
+        "execution.history.full_command".to_string(),
+        "完整命令 / 脚本".to_string(),
+    );
+    translations.insert(
+        "execution.history.status_summary".to_string(),
+        "状态摘要".to_string(),
+    );
+    translations.insert(
+        "execution.history.started".to_string(),
+        "开始时间".to_string(),
+    );
+    translations.insert(
+        "execution.history.ended".to_string(),
+        "结束时间".to_string(),
+    );
+    translations.insert(
+        "execution.history.recording".to_string(),
+        "录制".to_string(),
+    );
+    translations.insert(
+        "execution.history.recording_available".to_string(),
+        "可用".to_string(),
+    );
+    translations.insert(
+        "execution.history.recording_missing".to_string(),
+        "未录制".to_string(),
+    );
+    translations.insert(
+        "execution.history.details_title".to_string(),
+        "执行详情".to_string(),
+    );
+    translations.insert(
+        "execution.history.details_description".to_string(),
+        "集中查看命令、输出和执行元数据。".to_string(),
+    );
+    translations.insert(
+        "execution.history.open_replay".to_string(),
+        "前往回放".to_string(),
+    );
     translations.insert("execution.batch.title".to_string(), "批量执行".to_string());
-    translations.insert("execution.batch.description".to_string(), "面向多客户端的命令执行工作区，保留原始命令内容并按客户端查看结果。".to_string());
-    translations.insert("execution.batch.selected_badge".to_string(), "已选 {count} 台".to_string());
-    translations.insert("execution.batch.limit_badge".to_string(), "超过 50 台上限".to_string());
-    translations.insert("execution.batch.preloaded_badge".to_string(), "来自历史预填".to_string());
-    translations.insert("execution.batch.back_to_workspace".to_string(), "返回工作区".to_string());
-    translations.insert("execution.batch.targets".to_string(), "目标列表".to_string());
+    translations.insert(
+        "execution.batch.description".to_string(),
+        "面向多客户端的命令执行工作区，保留原始命令内容并按客户端查看结果。".to_string(),
+    );
+    translations.insert(
+        "execution.batch.selected_badge".to_string(),
+        "已选 {count} 台".to_string(),
+    );
+    translations.insert(
+        "execution.batch.limit_badge".to_string(),
+        "超过 50 台上限".to_string(),
+    );
+    translations.insert(
+        "execution.batch.preloaded_badge".to_string(),
+        "来自历史预填".to_string(),
+    );
+    translations.insert(
+        "execution.batch.back_to_workspace".to_string(),
+        "返回工作区".to_string(),
+    );
+    translations.insert(
+        "execution.batch.targets".to_string(),
+        "目标列表".to_string(),
+    );
     translations.insert("execution.batch.running".to_string(), "运行中".to_string());
-    translations.insert("execution.batch.completed".to_string(), "已完成".to_string());
-    translations.insert("execution.batch.output_title".to_string(), "单客户端输出".to_string());
-    translations.insert("execution.batch.output_description".to_string(), "逐台查看输出，同时保留完整批量执行上下文。".to_string());
-    translations.insert("execution.batch.command_label".to_string(), "命令".to_string());
-    translations.insert("execution.batch.target_client".to_string(), "目标客户端".to_string());
+    translations.insert(
+        "execution.batch.completed".to_string(),
+        "已完成".to_string(),
+    );
+    translations.insert(
+        "execution.batch.output_title".to_string(),
+        "单客户端输出".to_string(),
+    );
+    translations.insert(
+        "execution.batch.output_description".to_string(),
+        "逐台查看输出，同时保留完整批量执行上下文。".to_string(),
+    );
+    translations.insert(
+        "execution.batch.single_output".to_string(),
+        "单节点".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_output".to_string(),
+        "全部节点".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_output_title".to_string(),
+        "全部节点输出".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_output_description".to_string(),
+        "集中查看本次批量执行中所有节点的结果。".to_string(),
+    );
+    translations.insert(
+        "execution.batch.command_label".to_string(),
+        "命令".to_string(),
+    );
+    translations.insert(
+        "execution.batch.target_client".to_string(),
+        "目标客户端".to_string(),
+    );
     translations.insert("execution.batch.task_id".to_string(), "任务 ID".to_string());
-    translations.insert("execution.batch.waiting_output".to_string(), "等待客户端输出...".to_string());
+    translations.insert(
+        "execution.batch.waiting_output".to_string(),
+        "等待客户端输出...".to_string(),
+    );
+    translations.insert(
+        "execution.batch.output_load_failed".to_string(),
+        "输出加载失败，请切换节点后重试。".to_string(),
+    );
     translations.insert("execution.batch.no_output_terminal".to_string(), "任务已结束，但客户端没有返回输出。若为失败任务，请检查错误日志、命令白名单或客户端执行环境。".to_string());
-    translations.insert("execution.batch.select_target_prompt".to_string(), "请先从左侧选择一台目标客户端查看输出。".to_string());
-    translations.insert("execution.batch.select_targets".to_string(), "选择目标".to_string());
-    translations.insert("execution.batch.search_label".to_string(), "搜索客户端".to_string());
-    translations.insert("execution.batch.search_placeholder".to_string(), "主机名 / IP / client id / 序列号 / 位置 / 机架".to_string());
-    translations.insert("execution.batch.project_filter".to_string(), "项目".to_string());
-    translations.insert("execution.batch.rack_filter".to_string(), "机架 / 位置".to_string());
-    translations.insert("execution.batch.all_projects".to_string(), "全部项目".to_string());
-    translations.insert("execution.batch.all_racks".to_string(), "全部机架 / 位置".to_string());
-    translations.insert("execution.batch.select_visible".to_string(), "选择当前结果".to_string());
-    translations.insert("execution.batch.clear_all".to_string(), "清空全部".to_string());
-    translations.insert("execution.batch.matches".to_string(), "{count} 条匹配".to_string());
-    translations.insert("execution.batch.summary_title".to_string(), "选择摘要".to_string());
-    translations.insert("execution.batch.reduce_limit".to_string(), "请将选择数量减少到 50 台以内".to_string());
-    translations.insert("execution.batch.summary_empty".to_string(), "请从左侧选择一个或多个客户端。也可以从历史记录跳转过来并带上预选目标。".to_string());
-    translations.insert("execution.batch.editor_title".to_string(), "命令或脚本".to_string());
-    translations.insert("execution.batch.editor_help".to_string(), "重新执行时会保留原始输入：参数、空白和多行脚本都会按下方内容原样提交。".to_string());
-    translations.insert("execution.batch.editor_placeholder".to_string(), "单行命令或多行 Shell 脚本\nShift+Enter：换行\nCtrl+Enter：执行".to_string());
-    translations.insert("execution.batch.shortcut_newline".to_string(), "Shift+Enter = 换行".to_string());
-    translations.insert("execution.batch.shortcut_execute".to_string(), "Ctrl+Enter = 执行".to_string());
-    translations.insert("execution.batch.submitting".to_string(), "提交中...".to_string());
-    translations.insert("execution.batch.execute".to_string(), "对所选客户端执行".to_string());
-    translations.insert("execution.batch.validation.command_required".to_string(), "请输入命令或脚本".to_string());
-    translations.insert("execution.batch.validation.targets_required".to_string(), "请至少选择一台客户端".to_string());
-    translations.insert("execution.batch.validation.limit".to_string(), "批量执行最多支持 50 台客户端".to_string());
-    translations.insert("execution.batch.notifications.no_tasks".to_string(), "没有成功创建任何任务".to_string());
-    translations.insert("execution.batch.notifications.partial_failures".to_string(), "批量执行已启动，但有 {count} 个任务提交失败".to_string());
-    translations.insert("execution.batch.notifications.started".to_string(), "批量执行已启动".to_string());
-    translations.insert("execution.batch.notifications.approvals_created".to_string(), "有 {count} 个目标已提交审批".to_string());
+    translations.insert(
+        "execution.batch.select_target_prompt".to_string(),
+        "请先从左侧选择一台目标客户端查看输出。".to_string(),
+    );
+    translations.insert(
+        "execution.batch.select_targets".to_string(),
+        "选择目标".to_string(),
+    );
+    translations.insert(
+        "execution.batch.search_label".to_string(),
+        "搜索客户端".to_string(),
+    );
+    translations.insert(
+        "execution.batch.search_placeholder".to_string(),
+        "主机名 / IP / client id / 序列号 / 位置 / 机架".to_string(),
+    );
+    translations.insert(
+        "execution.batch.project_filter".to_string(),
+        "项目".to_string(),
+    );
+    translations.insert(
+        "execution.batch.rack_filter".to_string(),
+        "机架 / 位置".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_projects".to_string(),
+        "全部项目".to_string(),
+    );
+    translations.insert(
+        "execution.batch.all_racks".to_string(),
+        "全部机架 / 位置".to_string(),
+    );
+    translations.insert(
+        "execution.batch.select_visible".to_string(),
+        "选择当前结果".to_string(),
+    );
+    translations.insert(
+        "execution.batch.clear_all".to_string(),
+        "清空全部".to_string(),
+    );
+    translations.insert(
+        "execution.batch.matches".to_string(),
+        "{count} 条匹配".to_string(),
+    );
+    translations.insert(
+        "execution.batch.summary_title".to_string(),
+        "选择摘要".to_string(),
+    );
+    translations.insert(
+        "execution.batch.reduce_limit".to_string(),
+        "请将选择数量减少到 50 台以内".to_string(),
+    );
+    translations.insert(
+        "execution.batch.summary_empty".to_string(),
+        "请从左侧选择一个或多个客户端。也可以从历史记录跳转过来并带上预选目标。".to_string(),
+    );
+    translations.insert(
+        "execution.batch.editor_title".to_string(),
+        "命令或脚本".to_string(),
+    );
+    translations.insert(
+        "execution.batch.editor_help".to_string(),
+        "重新执行时会保留原始输入：参数、空白和多行脚本都会按下方内容原样提交。".to_string(),
+    );
+    translations.insert(
+        "execution.batch.editor_placeholder".to_string(),
+        "单行命令或多行 Shell 脚本\nShift+Enter：换行\nCtrl+Enter：执行".to_string(),
+    );
+    translations.insert(
+        "execution.batch.shortcut_newline".to_string(),
+        "Shift+Enter = 换行".to_string(),
+    );
+    translations.insert(
+        "execution.batch.shortcut_execute".to_string(),
+        "Ctrl+Enter = 执行".to_string(),
+    );
+    translations.insert(
+        "execution.batch.submitting".to_string(),
+        "提交中...".to_string(),
+    );
+    translations.insert(
+        "execution.batch.execute".to_string(),
+        "对所选客户端执行".to_string(),
+    );
+    translations.insert(
+        "execution.batch.validation.command_required".to_string(),
+        "请输入命令或脚本".to_string(),
+    );
+    translations.insert(
+        "execution.batch.validation.targets_required".to_string(),
+        "请至少选择一台客户端".to_string(),
+    );
+    translations.insert(
+        "execution.batch.validation.limit".to_string(),
+        "批量执行最多支持 50 台客户端".to_string(),
+    );
+    translations.insert(
+        "execution.batch.notifications.no_tasks".to_string(),
+        "没有成功创建任何任务".to_string(),
+    );
+    translations.insert(
+        "execution.batch.notifications.partial_failures".to_string(),
+        "批量执行已启动，但有 {count} 个任务提交失败".to_string(),
+    );
+    translations.insert(
+        "execution.batch.notifications.started".to_string(),
+        "批量执行已启动".to_string(),
+    );
+    translations.insert(
+        "execution.batch.notifications.approvals_created".to_string(),
+        "有 {count} 个目标已提交审批".to_string(),
+    );
     translations.insert("execution.replay.title".to_string(), "执行回放".to_string());
-    translations.insert("execution.replay.description".to_string(), "查看已完成或进行中的执行会话所录制的输出内容。".to_string());
-    translations.insert("execution.replay.loading".to_string(), "正在加载回放...".to_string());
-    translations.insert("execution.replay.load_session_error".to_string(), "加载会话失败".to_string());
-    translations.insert("execution.replay.load_output_error".to_string(), "加载回放输出失败".to_string());
+    translations.insert(
+        "execution.replay.description".to_string(),
+        "查看已完成或进行中的执行会话所录制的输出内容。".to_string(),
+    );
+    translations.insert(
+        "execution.replay.loading".to_string(),
+        "正在加载回放...".to_string(),
+    );
+    translations.insert(
+        "execution.replay.load_session_error".to_string(),
+        "加载会话失败".to_string(),
+    );
+    translations.insert(
+        "execution.replay.load_cast_error".to_string(),
+        "加载回放文件失败".to_string(),
+    );
+    translations.insert(
+        "execution.replay.load_output_error".to_string(),
+        "加载回放输出失败".to_string(),
+    );
     translations.insert("execution.replay.command".to_string(), "命令".to_string());
     translations.insert("execution.replay.status".to_string(), "状态".to_string());
-    translations.insert("execution.replay.output_title".to_string(), "录制输出".to_string());
-    translations.insert("execution.replay.output_description".to_string(), "回放内容按会话录制时的原始结果展示。".to_string());
-    translations.insert("execution.replay.back".to_string(), "返回执行历史".to_string());
+    translations.insert(
+        "execution.replay.output_title".to_string(),
+        "录制输出".to_string(),
+    );
+    translations.insert(
+        "execution.replay.output_description".to_string(),
+        "回放内容按会话录制时的原始结果展示。".to_string(),
+    );
+    translations.insert(
+        "execution.replay.back".to_string(),
+        "返回执行历史".to_string(),
+    );
     translations.insert("execution.replay.read_only".to_string(), "只读".to_string());
-    translations.insert("execution.replay.waiting".to_string(), "等待回放数据...".to_string());
-    translations.insert("execution.settings.title".to_string(), "远程执行设置".to_string());
-    translations.insert("execution.settings.description".to_string(), "控制是否允许运维人员向已连接客户端提交远程命令。".to_string());
-    translations.insert("execution.settings.enabled".to_string(), "已启用".to_string());
-    translations.insert("execution.settings.disabled".to_string(), "已禁用".to_string());
-    translations.insert("execution.settings.loading".to_string(), "正在加载远程执行设置...".to_string());
-    translations.insert("execution.settings.toggle_title".to_string(), "启用远程命令执行".to_string());
-    translations.insert("execution.settings.toggle_description".to_string(), "启用后，管理员可通过 CMDB 的执行工作流下发远程命令。".to_string());
-    translations.insert("execution.settings.allow".to_string(), "允许远程执行".to_string());
-    translations.insert("execution.settings.block".to_string(), "阻止远程执行".to_string());
-    translations.insert("execution.settings.warning".to_string(), "关闭该开关后，应立即拒绝新的命令提交，同时保留历史记录与录制数据。".to_string());
-    translations.insert("execution.settings.saving".to_string(), "保存中...".to_string());
-    translations.insert("execution.settings.save".to_string(), "保存设置".to_string());
-    translations.insert("execution.settings.updated".to_string(), "远程执行配置已更新".to_string());
+    translations.insert(
+        "execution.replay.waiting".to_string(),
+        "等待回放数据...".to_string(),
+    );
+    translations.insert("execution.replay.play".to_string(), "播放".to_string());
+    translations.insert("execution.replay.pause".to_string(), "暂停".to_string());
+    translations.insert(
+        "execution.replay.restart".to_string(),
+        "从头播放".to_string(),
+    );
+    translations.insert(
+        "execution.settings.title".to_string(),
+        "远程执行设置".to_string(),
+    );
+    translations.insert(
+        "execution.settings.description".to_string(),
+        "控制是否允许运维人员向已连接客户端提交远程命令。".to_string(),
+    );
+    translations.insert(
+        "execution.settings.enabled".to_string(),
+        "已启用".to_string(),
+    );
+    translations.insert(
+        "execution.settings.disabled".to_string(),
+        "已禁用".to_string(),
+    );
+    translations.insert(
+        "execution.settings.loading".to_string(),
+        "正在加载远程执行设置...".to_string(),
+    );
+    translations.insert(
+        "execution.settings.toggle_title".to_string(),
+        "启用远程命令执行".to_string(),
+    );
+    translations.insert(
+        "execution.settings.toggle_description".to_string(),
+        "启用后，管理员可通过 CMDB 的执行工作流下发远程命令。".to_string(),
+    );
+    translations.insert(
+        "execution.settings.allow".to_string(),
+        "允许远程执行".to_string(),
+    );
+    translations.insert(
+        "execution.settings.block".to_string(),
+        "阻止远程执行".to_string(),
+    );
+    translations.insert(
+        "execution.settings.warning".to_string(),
+        "关闭该开关后，应立即拒绝新的命令提交，同时保留历史记录与录制数据。".to_string(),
+    );
+    translations.insert(
+        "execution.settings.saving".to_string(),
+        "保存中...".to_string(),
+    );
+    translations.insert(
+        "execution.settings.save".to_string(),
+        "保存设置".to_string(),
+    );
+    translations.insert(
+        "execution.settings.updated".to_string(),
+        "远程执行配置已更新".to_string(),
+    );
     translations.insert("execution.actions.cancel".to_string(), "取消".to_string());
     translations.insert("execution.danger.safe".to_string(), "安全".to_string());
     translations.insert("execution.danger.warning".to_string(), "警告".to_string());
     translations.insert("execution.danger.blocked".to_string(), "已阻止".to_string());
-    translations.insert("execution.terminal.title".to_string(), "Web 终端".to_string());
-    translations.insert("execution.terminal.description".to_string(), "面向单台客户端的实时命令工作区，可持续查看流式输出。".to_string());
-    translations.insert("execution.terminal.auto_attach_hint".to_string(), "进入页面后会自动接管活动终端；如果当前没有可用会话，系统会自动创建一个新终端。".to_string());
-    translations.insert("execution.terminal.auto_create_hint".to_string(), "每次打开页面都会创建当前浏览器专属的终端会话；离开页面后会自动关闭。".to_string());
-    translations.insert("execution.terminal.console_title".to_string(), "终端控制台".to_string());
+    translations.insert(
+        "execution.terminal.title".to_string(),
+        "Web 终端".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.description".to_string(),
+        "面向单台客户端的实时命令工作区，可持续查看流式输出。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.auto_attach_hint".to_string(),
+        "进入页面后会自动接管活动终端；如果当前没有可用会话，系统会自动创建一个新终端。"
+            .to_string(),
+    );
+    translations.insert(
+        "execution.terminal.auto_create_hint".to_string(),
+        "每次打开页面都会创建当前浏览器专属的终端会话；离开页面后会自动关闭。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.console_title".to_string(),
+        "终端控制台".to_string(),
+    );
     translations.insert("execution.terminal.console_description".to_string(), "进入页面后会自动接管活动终端，没有会话时自动创建；这里只保留尺寸调整、手动刷新和会话切换。".to_string());
-    translations.insert("execution.terminal.console_new_session_description".to_string(), "当前页面会创建独立终端，这里只保留尺寸调整、手动重连和历史入口。".to_string());
-    translations.insert("execution.terminal.mode_hint".to_string(), "受限终端并不是纯查看模式，它仍可输入命令，但只能执行策略明确放行的命令。".to_string());
-    translations.insert("execution.terminal.switchable_sessions".to_string(), "可切换会话".to_string());
-    translations.insert("execution.terminal.live_shell".to_string(), "实时 Shell".to_string());
-    translations.insert("execution.terminal.enabled".to_string(), "远程执行已启用".to_string());
-    translations.insert("execution.terminal.disabled".to_string(), "远程执行已禁用".to_string());
-    translations.insert("execution.terminal.view_history".to_string(), "查看历史".to_string());
-    translations.insert("execution.terminal.reconnect".to_string(), "重新连接输出流".to_string());
-    translations.insert("execution.terminal.close".to_string(), "关闭会话".to_string());
-    translations.insert("execution.terminal.target_client".to_string(), "目标客户端".to_string());
-    translations.insert("execution.terminal.hostname".to_string(), "主机名".to_string());
+    translations.insert(
+        "execution.terminal.console_new_session_description".to_string(),
+        "当前页面会创建独立终端，这里只保留尺寸调整、手动重连和历史入口。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_hint".to_string(),
+        "受限终端并不是纯查看模式，它仍可输入命令，但只能执行策略明确放行的命令。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.switchable_sessions".to_string(),
+        "可切换会话".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.live_shell".to_string(),
+        "实时 Shell".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.enabled".to_string(),
+        "远程执行已启用".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.disabled".to_string(),
+        "远程执行已禁用".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.view_history".to_string(),
+        "查看历史".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.reconnect".to_string(),
+        "重新连接输出流".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.close".to_string(),
+        "关闭会话".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.target_client".to_string(),
+        "目标客户端".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.hostname".to_string(),
+        "主机名".to_string(),
+    );
     translations.insert("execution.terminal.ip".to_string(), "IP".to_string());
     translations.insert("execution.terminal.os".to_string(), "操作系统".to_string());
-    translations.insert("execution.terminal.current_session".to_string(), "当前会话".to_string());
-    translations.insert("execution.terminal.available_sessions".to_string(), "可附着会话".to_string());
-    translations.insert("execution.terminal.no_available_sessions".to_string(), "当前客户端没有可复用的终端会话。".to_string());
+    translations.insert(
+        "execution.terminal.current_session".to_string(),
+        "当前会话".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.available_sessions".to_string(),
+        "可附着会话".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.no_available_sessions".to_string(),
+        "当前客户端没有可复用的终端会话。".to_string(),
+    );
     translations.insert("execution.terminal.attach".to_string(), "附着".to_string());
-    translations.insert("execution.terminal.attached".to_string(), "已附着".to_string());
-    translations.insert("execution.terminal.session_id".to_string(), "会话 ID".to_string());
-    translations.insert("execution.terminal.created_at".to_string(), "创建时间".to_string());
-    translations.insert("execution.terminal.last_activity".to_string(), "最近活动".to_string());
-    translations.insert("execution.terminal.last_heartbeat".to_string(), "最近心跳".to_string());
-    translations.insert("execution.terminal.lease".to_string(), "租约到期".to_string());
-    translations.insert("execution.terminal.live_terminal".to_string(), "实时终端".to_string());
-    translations.insert("execution.terminal.live_terminal_description".to_string(), "在浏览器中打开真正的交互式 Shell。键盘输入会直接流式发送到远端 PTY。".to_string());
-    translations.insert("execution.terminal.live_terminal_empty".to_string(), "请先打开或附着到一个终端会话，然后开始交互。".to_string());
+    translations.insert(
+        "execution.terminal.attached".to_string(),
+        "已附着".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.session_id".to_string(),
+        "会话 ID".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.created_at".to_string(),
+        "创建时间".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.last_activity".to_string(),
+        "最近活动".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.last_heartbeat".to_string(),
+        "最近心跳".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.lease".to_string(),
+        "租约到期".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.live_terminal".to_string(),
+        "实时终端".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.live_terminal_description".to_string(),
+        "在浏览器中打开真正的交互式 Shell。键盘输入会直接流式发送到远端 PTY。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.live_terminal_empty".to_string(),
+        "请先打开或附着到一个终端会话，然后开始交互。".to_string(),
+    );
     translations.insert("execution.terminal.browser_terminal_note".to_string(), "当前视图已改为浏览器终端：按键、粘贴和回车都会作为终端输入直接发送，而不是把左侧文本框整段提交。".to_string());
-    translations.insert("execution.terminal.open_terminal".to_string(), "打开终端".to_string());
-    translations.insert("execution.terminal.opening_terminal".to_string(), "正在打开终端...".to_string());
-    translations.insert("execution.terminal.connecting".to_string(), "连接中".to_string());
-    translations.insert("execution.terminal.connected".to_string(), "已连接".to_string());
-    translations.insert("execution.terminal.disconnected".to_string(), "已断开".to_string());
-    translations.insert("execution.terminal.preloaded_command".to_string(), "预填命令".to_string());
-    translations.insert("execution.terminal.notifications.opened".to_string(), "终端会话已打开。".to_string());
-    translations.insert("execution.terminal.task_id".to_string(), "任务 ID".to_string());
-    translations.insert("execution.terminal.exit_code".to_string(), "退出码".to_string());
+    translations.insert(
+        "execution.terminal.open_terminal".to_string(),
+        "打开终端".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.opening_terminal".to_string(),
+        "正在打开终端...".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.connecting".to_string(),
+        "连接中".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.connected".to_string(),
+        "已连接".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.disconnected".to_string(),
+        "已断开".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.preloaded_command".to_string(),
+        "预填命令".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.notifications.opened".to_string(),
+        "终端会话已打开。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.task_id".to_string(),
+        "任务 ID".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.exit_code".to_string(),
+        "退出码".to_string(),
+    );
     translations.insert("execution.terminal.shell".to_string(), "Shell".to_string());
-    translations.insert("execution.terminal.size".to_string(), "终端尺寸".to_string());
+    translations.insert(
+        "execution.terminal.size".to_string(),
+        "终端尺寸".to_string(),
+    );
     translations.insert("execution.terminal.cols".to_string(), "列数".to_string());
     translations.insert("execution.terminal.rows".to_string(), "行数".to_string());
     translations.insert("execution.terminal.state".to_string(), "状态".to_string());
-    translations.insert("execution.terminal.state_closed".to_string(), "已关闭".to_string());
-    translations.insert("execution.terminal.mode_read_only".to_string(), "只读".to_string());
-    translations.insert("execution.terminal.mode_read_write".to_string(), "可写".to_string());
-    translations.insert("execution.terminal.mode_restricted".to_string(), "受限终端".to_string());
-    translations.insert("execution.terminal.mode_standard".to_string(), "标准终端".to_string());
-    translations.insert("permissions.web_terminal.page_description".to_string(), "控制 Web Terminal 的访问模式、会话约束以及受限命令规则。".to_string());
-    translations.insert("permissions.web_terminal.modal_description".to_string(), "终端策略独立于命令执行策略；这里只约束 Web Terminal 会话与受限命令行为。".to_string());
-    translations.insert("execution.terminal.close_reason".to_string(), "关闭原因".to_string());
-    translations.insert("execution.terminal.no_session".to_string(), "当前终端尚未执行任何命令。".to_string());
-    translations.insert("execution.terminal.run_command".to_string(), "执行命令".to_string());
-    translations.insert("execution.terminal.command_label".to_string(), "命令或脚本".to_string());
-    translations.insert("execution.terminal.command_placeholder".to_string(), "支持原样输入命令、参数和多行脚本。".to_string());
-    translations.insert("execution.terminal.timeout".to_string(), "超时（秒）".to_string());
-    translations.insert("execution.terminal.pinned_note".to_string(), "终端会固定绑定到当前客户端；当前命令结束前不会提交新的命令。".to_string());
-    translations.insert("execution.terminal.submitting".to_string(), "提交中...".to_string());
-    translations.insert("execution.terminal.running".to_string(), "执行中...".to_string());
-    translations.insert("execution.terminal.execute".to_string(), "在终端中执行".to_string());
-    translations.insert("execution.terminal.output_title".to_string(), "实时输出".to_string());
-    translations.insert("execution.terminal.output_description".to_string(), "展示当前终端命令的流式输出。".to_string());
-    translations.insert("execution.terminal.current_command".to_string(), "当前命令".to_string());
-    translations.insert("execution.terminal.output_empty".to_string(), "先执行一条命令以打开实时输出流。".to_string());
-    translations.insert("execution.terminal.output_waiting".to_string(), "等待输出中...".to_string());
-    translations.insert("execution.terminal.client_load_failed".to_string(), "无法加载所选客户端，暂时不能进入终端。".to_string());
-    translations.insert("execution.terminal.validation.command_required".to_string(), "请输入命令".to_string());
-    translations.insert("execution.terminal.notifications.submitted".to_string(), "命令已提交".to_string());
-    translations.insert("execution.terminal.notifications.closed".to_string(), "已请求关闭终端会话".to_string());
-    translations.insert("execution.terminal.danger_title".to_string(), "检测到危险命令".to_string());
-    translations.insert("execution.terminal.matched_rule".to_string(), "匹配规则：{rule}".to_string());
-    translations.insert("execution.terminal.confirm_prefix".to_string(), "输入 ".to_string());
-    translations.insert("execution.terminal.confirm_suffix".to_string(), " 以继续。".to_string());
-    translations.insert("execution.terminal.confirm_placeholder".to_string(), "CONFIRM".to_string());
-    translations.insert("execution.terminal.execute_anyway".to_string(), "仍然执行".to_string());
-    translations.insert("execution.terminal.disabled_message".to_string(), "当前策略已禁用远程命令执行。".to_string());
-    translations.insert("execution.terminal.websocket_error".to_string(), "终端连接异常，请稍后重试。".to_string());
-    translations.insert("execution.ops.summary.exec_policies".to_string(), "执行策略".to_string());
-    translations.insert("execution.ops.summary.web_terminal_policies".to_string(), "终端策略".to_string());
-    translations.insert("execution.ops.summary.pending_approvals".to_string(), "待审批".to_string());
-    translations.insert("execution.ops.summary.active_terminal_sessions".to_string(), "活跃终端会话".to_string());
-    translations.insert("execution.ops.overview.title".to_string(), "远程执行运维总览".to_string());
-    translations.insert("execution.ops.overview.description".to_string(), "集中查看审批积压、终端活跃度、会话陈旧阈值和录屏存储位置。".to_string());
-    translations.insert("execution.ops.overview.total_sessions".to_string(), "总终端会话".to_string());
-    translations.insert("execution.ops.overview.active_clients".to_string(), "活跃客户端".to_string());
-    translations.insert("execution.ops.overview.pending_active".to_string(), "待激活 / 活跃".to_string());
-    translations.insert("execution.ops.overview.stale_threshold".to_string(), "陈旧阈值".to_string());
-    translations.insert("execution.ops.overview.cast_storage_dir".to_string(), "Cast 存储目录".to_string());
-    translations.insert("execution.ops.actions.refresh".to_string(), "刷新运维数据".to_string());
-    translations.insert("execution.ops.actions.force_close".to_string(), "强制关闭".to_string());
-    translations.insert("execution.ops.cleanup.retention_days".to_string(), "清理保留天数".to_string());
-    translations.insert("execution.ops.cleanup.run".to_string(), "执行 Cast 清理".to_string());
-    translations.insert("execution.ops.terminal_governance.title".to_string(), "终端会话治理".to_string());
-    translations.insert("execution.ops.terminal_governance.empty".to_string(), "当前没有终端会话".to_string());
-    translations.insert("execution.ops.terminal_governance.ended".to_string(), "已结束".to_string());
-    translations.insert("execution.ops.terminal_state.pending".to_string(), "待激活".to_string());
-    translations.insert("execution.ops.terminal_state.active".to_string(), "活跃".to_string());
-    translations.insert("execution.ops.terminal_state.closed".to_string(), "已关闭".to_string());
-    translations.insert("execution.ops.terminal_state.failed".to_string(), "失败".to_string());
-    translations.insert("execution.ops.terminal_mode.read_only".to_string(), "只读".to_string());
-    translations.insert("execution.ops.terminal_mode.read_write".to_string(), "读写".to_string());
-    translations.insert("execution.ops.terminal_mode.restricted".to_string(), "受限终端".to_string());
-    translations.insert("execution.ops.terminal_mode.standard".to_string(), "标准终端".to_string());
-    translations.insert("execution.ops.table.session".to_string(), "会话".to_string());
-    translations.insert("execution.ops.table.client".to_string(), "客户端".to_string());
+    translations.insert(
+        "execution.terminal.state_closed".to_string(),
+        "已关闭".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_read_only".to_string(),
+        "只读".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_read_write".to_string(),
+        "可写".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_restricted".to_string(),
+        "受限终端".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.mode_standard".to_string(),
+        "标准终端".to_string(),
+    );
+    translations.insert(
+        "permissions.web_terminal.page_description".to_string(),
+        "控制 Web Terminal 的访问模式、会话约束以及受限命令规则。".to_string(),
+    );
+    translations.insert(
+        "permissions.web_terminal.modal_description".to_string(),
+        "终端策略独立于命令执行策略；这里只约束 Web Terminal 会话与受限命令行为。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.close_reason".to_string(),
+        "关闭原因".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.no_session".to_string(),
+        "当前终端尚未执行任何命令。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.run_command".to_string(),
+        "执行命令".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.command_label".to_string(),
+        "命令或脚本".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.command_placeholder".to_string(),
+        "支持原样输入命令、参数和多行脚本。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.timeout".to_string(),
+        "超时（秒）".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.pinned_note".to_string(),
+        "终端会固定绑定到当前客户端；当前命令结束前不会提交新的命令。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.submitting".to_string(),
+        "提交中...".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.running".to_string(),
+        "执行中...".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.execute".to_string(),
+        "在终端中执行".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.output_title".to_string(),
+        "实时输出".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.output_description".to_string(),
+        "展示当前终端命令的流式输出。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.current_command".to_string(),
+        "当前命令".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.output_empty".to_string(),
+        "先执行一条命令以打开实时输出流。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.output_waiting".to_string(),
+        "等待输出中...".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.client_load_failed".to_string(),
+        "无法加载所选客户端，暂时不能进入终端。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.validation.command_required".to_string(),
+        "请输入命令".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.notifications.submitted".to_string(),
+        "命令已提交".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.notifications.closed".to_string(),
+        "已请求关闭终端会话".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.danger_title".to_string(),
+        "检测到危险命令".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.matched_rule".to_string(),
+        "匹配规则：{rule}".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.confirm_prefix".to_string(),
+        "输入 ".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.confirm_suffix".to_string(),
+        " 以继续。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.confirm_placeholder".to_string(),
+        "CONFIRM".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.execute_anyway".to_string(),
+        "仍然执行".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.disabled_message".to_string(),
+        "当前策略已禁用远程命令执行。".to_string(),
+    );
+    translations.insert(
+        "execution.terminal.websocket_error".to_string(),
+        "终端连接异常，请稍后重试。".to_string(),
+    );
+    translations.insert(
+        "execution.ops.summary.exec_policies".to_string(),
+        "执行策略".to_string(),
+    );
+    translations.insert(
+        "execution.ops.summary.web_terminal_policies".to_string(),
+        "终端策略".to_string(),
+    );
+    translations.insert(
+        "execution.ops.summary.pending_approvals".to_string(),
+        "待审批".to_string(),
+    );
+    translations.insert(
+        "execution.ops.summary.active_terminal_sessions".to_string(),
+        "活跃终端会话".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.title".to_string(),
+        "远程执行运维总览".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.description".to_string(),
+        "集中查看审批积压、终端活跃度、会话陈旧阈值和录屏存储位置。".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.total_sessions".to_string(),
+        "总终端会话".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.active_clients".to_string(),
+        "活跃客户端".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.pending_active".to_string(),
+        "待激活 / 活跃".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.stale_threshold".to_string(),
+        "陈旧阈值".to_string(),
+    );
+    translations.insert(
+        "execution.ops.overview.cast_storage_dir".to_string(),
+        "Cast 存储目录".to_string(),
+    );
+    translations.insert(
+        "execution.ops.actions.refresh".to_string(),
+        "刷新运维数据".to_string(),
+    );
+    translations.insert(
+        "execution.ops.actions.force_close".to_string(),
+        "强制关闭".to_string(),
+    );
+    translations.insert(
+        "execution.ops.cleanup.retention_days".to_string(),
+        "清理保留天数".to_string(),
+    );
+    translations.insert(
+        "execution.ops.cleanup.run".to_string(),
+        "执行 Cast 清理".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_governance.title".to_string(),
+        "终端会话治理".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_governance.empty".to_string(),
+        "当前没有终端会话".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_governance.ended".to_string(),
+        "已结束".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_state.pending".to_string(),
+        "待激活".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_state.active".to_string(),
+        "活跃".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_state.closed".to_string(),
+        "已关闭".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_state.failed".to_string(),
+        "失败".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_mode.read_only".to_string(),
+        "只读".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_mode.read_write".to_string(),
+        "读写".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_mode.restricted".to_string(),
+        "受限终端".to_string(),
+    );
+    translations.insert(
+        "execution.ops.terminal_mode.standard".to_string(),
+        "标准终端".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.session".to_string(),
+        "会话".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.client".to_string(),
+        "客户端".to_string(),
+    );
     translations.insert("execution.ops.table.user".to_string(), "用户".to_string());
     translations.insert("execution.ops.table.mode".to_string(), "模式".to_string());
     translations.insert("execution.ops.table.state".to_string(), "状态".to_string());
-    translations.insert("execution.ops.table.last_activity".to_string(), "最近活动".to_string());
-    translations.insert("execution.ops.table.last_heartbeat".to_string(), "最近心跳".to_string());
-    translations.insert("execution.ops.table.close_reason".to_string(), "关闭原因".to_string());
-    translations.insert("execution.ops.table.operations".to_string(), "操作".to_string());
-    translations.insert("execution.ops.messages.cast_cleanup_prefix".to_string(), "Cast 清理完成，删除".to_string());
-    translations.insert("execution.ops.messages.cast_cleanup_suffix".to_string(), "个历史文件".to_string());
-    translations.insert("execution.ops.messages.session_closed_prefix".to_string(), "终端会话".to_string());
-    translations.insert("execution.ops.messages.session_closed_suffix".to_string(), "已关闭".to_string());
+    translations.insert(
+        "execution.ops.table.last_activity".to_string(),
+        "最近活动".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.last_heartbeat".to_string(),
+        "最近心跳".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.close_reason".to_string(),
+        "关闭原因".to_string(),
+    );
+    translations.insert(
+        "execution.ops.table.operations".to_string(),
+        "操作".to_string(),
+    );
+    translations.insert(
+        "execution.ops.messages.cast_cleanup_prefix".to_string(),
+        "Cast 清理完成，删除".to_string(),
+    );
+    translations.insert(
+        "execution.ops.messages.cast_cleanup_suffix".to_string(),
+        "个历史文件".to_string(),
+    );
+    translations.insert(
+        "execution.ops.messages.session_closed_prefix".to_string(),
+        "终端会话".to_string(),
+    );
+    translations.insert(
+        "execution.ops.messages.session_closed_suffix".to_string(),
+        "已关闭".to_string(),
+    );
     translations.insert("execution.ops.none".to_string(), "无".to_string());
-    translations.insert("execution.history.output_title".to_string(), "执行输出".to_string());
-    translations.insert("execution.history.output_pending".to_string(), "执行中，日志会逐步补齐".to_string());
-    translations.insert("execution.history.output_empty".to_string(), "暂无执行输出".to_string());
-    translations.insert("execution.history.output_replay_hint".to_string(), "该终端会话的输出已写入回放文件，请点击“回放”查看完整终端内容。".to_string());
-    translations.insert("permissions.manage.title".to_string(), "权限规则与分组".to_string());
-    translations.insert("permissions.manage.tab.rules".to_string(), "规则".to_string());
-    translations.insert("permissions.manage.tab.groups".to_string(), "分组".to_string());
-    translations.insert("permissions.manage.loading".to_string(), "正在加载权限配置...".to_string());
-    translations.insert("permissions.manage.empty_rules".to_string(), "当前还没有权限规则".to_string());
-    translations.insert("permissions.manage.empty_groups".to_string(), "当前还没有权限分组".to_string());
-    translations.insert("permissions.manage.overview.rules".to_string(), "规则数量".to_string());
-    translations.insert("permissions.manage.overview.groups".to_string(), "分组数量".to_string());
-    translations.insert("permissions.manage.overview.exec_policies".to_string(), "执行策略".to_string());
-    translations.insert("permissions.manage.overview.web_terminal_policies".to_string(), "终端策略".to_string());
-    translations.insert("permissions.manage.rules.title".to_string(), "权限规则".to_string());
-    translations.insert("permissions.manage.rules.description".to_string(), "维护主体、资源和动作范围，收敛权限判断逻辑。".to_string());
-    translations.insert("permissions.manage.groups.title".to_string(), "权限分组".to_string());
-    translations.insert("permissions.manage.groups.description".to_string(), "维护用户分组，为更细粒度的授权和策略匹配做准备。".to_string());
-    translations.insert("permissions.manage.subject.role".to_string(), "角色".to_string());
-    translations.insert("permissions.manage.subject.user".to_string(), "用户".to_string());
-    translations.insert("permissions.manage.subject.group".to_string(), "分组".to_string());
-    translations.insert("permissions.manage.resource.client".to_string(), "客户端".to_string());
-    translations.insert("permissions.manage.resource.component".to_string(), "组件".to_string());
-    translations.insert("permissions.manage.resource.rack".to_string(), "机架".to_string());
-    translations.insert("permissions.manage.resource.person".to_string(), "人员".to_string());
-    translations.insert("permissions.manage.resource.project".to_string(), "项目".to_string());
-    translations.insert("permissions.manage.resource.dictionary".to_string(), "字典".to_string());
-    translations.insert("permissions.manage.resource.command".to_string(), "命令执行".to_string());
-    translations.insert("permissions.manage.resource.user".to_string(), "用户管理".to_string());
-    translations.insert("permissions.manage.action.view".to_string(), "查看".to_string());
-    translations.insert("permissions.manage.action.create".to_string(), "创建".to_string());
-    translations.insert("permissions.manage.action.update".to_string(), "更新".to_string());
-    translations.insert("permissions.manage.action.delete".to_string(), "删除".to_string());
-    translations.insert("permissions.manage.constraint.unset".to_string(), "未设置".to_string());
-    translations.insert("permissions.manage.constraint.all".to_string(), "全部资源".to_string());
-    translations.insert("permissions.manage.constraint.owned".to_string(), "仅本人资源".to_string());
-    translations.insert("permissions.manage.constraint.project_scope".to_string(), "指定项目".to_string());
-    translations.insert("permissions.manage.constraint.project_list".to_string(), "项目".to_string());
-    translations.insert("permissions.manage.constraint.tag_scope".to_string(), "指定标签".to_string());
-    translations.insert("permissions.manage.constraint.tag_list".to_string(), "标签".to_string());
-    translations.insert("permissions.manage.constraint.none".to_string(), "无权限范围".to_string());
-    translations.insert("permissions.manage.rule.id".to_string(), "规则 ID".to_string());
-    translations.insert("permissions.manage.rule.subject_type".to_string(), "主体类型".to_string());
-    translations.insert("permissions.manage.rule.subject_id".to_string(), "主体 ID".to_string());
-    translations.insert("permissions.manage.rule.resource_type".to_string(), "资源类型".to_string());
-    translations.insert("permissions.manage.rule.actions".to_string(), "动作".to_string());
-    translations.insert("permissions.manage.rule.actions_help".to_string(), "勾选该规则允许的动作，可多选。".to_string());
-    translations.insert("permissions.manage.rule.constraint".to_string(), "作用范围".to_string());
-    translations.insert("permissions.manage.rule.constraint_values_placeholder".to_string(), "多个值用英文逗号分隔，例如 project-a, project-b".to_string());
-    translations.insert("permissions.manage.rule.constraint_help".to_string(), "选择资源作用范围。指定项目或标签时，在下方的输入框填写具体值。".to_string());
-    translations.insert("permissions.manage.rule.priority".to_string(), "优先级".to_string());
-    translations.insert("permissions.manage.rule.constraint_invalid".to_string(), "约束 JSON 无法解析".to_string());
-    translations.insert("permissions.manage.group.id".to_string(), "分组 ID".to_string());
-    translations.insert("permissions.manage.group.name".to_string(), "分组名称".to_string());
-    translations.insert("permissions.manage.group.members".to_string(), "成员 ID".to_string());
-    translations.insert("permissions.manage.group.members_help".to_string(), "支持换行或逗号分隔多个成员 ID。".to_string());
+    translations.insert(
+        "execution.history.output_title".to_string(),
+        "执行输出".to_string(),
+    );
+    translations.insert(
+        "execution.history.output_pending".to_string(),
+        "执行中，日志会逐步补齐".to_string(),
+    );
+    translations.insert(
+        "execution.history.output_empty".to_string(),
+        "暂无执行输出".to_string(),
+    );
+    translations.insert(
+        "execution.history.output_replay_hint".to_string(),
+        "该终端会话的输出已写入回放文件，请点击“回放”查看完整终端内容。".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.title".to_string(),
+        "权限规则与分组".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.tab.rules".to_string(),
+        "规则".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.tab.groups".to_string(),
+        "分组".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.loading".to_string(),
+        "正在加载权限配置...".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.empty_rules".to_string(),
+        "当前还没有权限规则".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.empty_groups".to_string(),
+        "当前还没有权限分组".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.overview.rules".to_string(),
+        "规则数量".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.overview.groups".to_string(),
+        "分组数量".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.overview.exec_policies".to_string(),
+        "执行策略".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.overview.web_terminal_policies".to_string(),
+        "终端策略".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rules.title".to_string(),
+        "权限规则".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rules.description".to_string(),
+        "维护主体、资源和动作范围，收敛权限判断逻辑。".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.groups.title".to_string(),
+        "权限分组".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.groups.description".to_string(),
+        "维护用户分组，为更细粒度的授权和策略匹配做准备。".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.subject.role".to_string(),
+        "角色".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.subject.user".to_string(),
+        "用户".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.subject.group".to_string(),
+        "分组".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.client".to_string(),
+        "客户端".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.component".to_string(),
+        "组件".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.rack".to_string(),
+        "机架".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.person".to_string(),
+        "人员".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.project".to_string(),
+        "项目".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.dictionary".to_string(),
+        "字典".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.command".to_string(),
+        "命令执行".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.resource.user".to_string(),
+        "用户管理".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.action.view".to_string(),
+        "查看".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.action.create".to_string(),
+        "创建".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.action.update".to_string(),
+        "更新".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.action.delete".to_string(),
+        "删除".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.unset".to_string(),
+        "未设置".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.all".to_string(),
+        "全部资源".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.owned".to_string(),
+        "仅本人资源".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.project_scope".to_string(),
+        "指定项目".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.project_list".to_string(),
+        "项目".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.tag_scope".to_string(),
+        "指定标签".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.tag_list".to_string(),
+        "标签".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.constraint.none".to_string(),
+        "无权限范围".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.id".to_string(),
+        "规则 ID".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.subject_type".to_string(),
+        "主体类型".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.subject_id".to_string(),
+        "主体 ID".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.resource_type".to_string(),
+        "资源类型".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.actions".to_string(),
+        "动作".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.actions_help".to_string(),
+        "勾选该规则允许的动作，可多选。".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.constraint".to_string(),
+        "作用范围".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.constraint_values_placeholder".to_string(),
+        "多个值用英文逗号分隔，例如 project-a, project-b".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.constraint_help".to_string(),
+        "选择资源作用范围。指定项目或标签时，在下方的输入框填写具体值。".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.priority".to_string(),
+        "优先级".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.rule.constraint_invalid".to_string(),
+        "约束 JSON 无法解析".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.group.id".to_string(),
+        "分组 ID".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.group.name".to_string(),
+        "分组名称".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.group.members".to_string(),
+        "成员 ID".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.group.members_help".to_string(),
+        "支持换行或逗号分隔多个成员 ID。".to_string(),
+    );
     translations.insert("permissions.manage.table.id".to_string(), "ID".to_string());
-    translations.insert("permissions.manage.table.subject".to_string(), "主体".to_string());
-    translations.insert("permissions.manage.table.resource".to_string(), "资源".to_string());
-    translations.insert("permissions.manage.table.actions".to_string(), "动作".to_string());
-    translations.insert("permissions.manage.table.constraint".to_string(), "约束".to_string());
-    translations.insert("permissions.manage.table.priority".to_string(), "优先级".to_string());
-    translations.insert("permissions.manage.table.operations".to_string(), "操作".to_string());
-    translations.insert("permissions.manage.table.name".to_string(), "名称".to_string());
-    translations.insert("permissions.manage.table.member_count".to_string(), "成员数".to_string());
-    translations.insert("permissions.manage.table.members".to_string(), "成员".to_string());
-    translations.insert("permissions.manage.actions.cancel".to_string(), "取消".to_string());
-    translations.insert("permissions.manage.actions.new_rule".to_string(), "新建规则".to_string());
-    translations.insert("permissions.manage.actions.save_rule".to_string(), "保存规则".to_string());
-    translations.insert("permissions.manage.actions.update_rule".to_string(), "更新规则".to_string());
-    translations.insert("permissions.manage.actions.new_group".to_string(), "新建分组".to_string());
-    translations.insert("permissions.manage.actions.save_group".to_string(), "保存分组".to_string());
-    translations.insert("permissions.manage.actions.update_group".to_string(), "更新分组".to_string());
-    translations.insert("permissions.manage.actions.edit".to_string(), "编辑".to_string());
-    translations.insert("permissions.manage.actions.delete".to_string(), "删除".to_string());
-    translations.insert("permissions.manage.messages.rule_saved".to_string(), "权限规则已保存".to_string());
-    translations.insert("permissions.manage.messages.rule_deleted".to_string(), "权限规则已删除".to_string());
-    translations.insert("permissions.manage.messages.group_saved".to_string(), "权限分组已保存".to_string());
-    translations.insert("permissions.manage.messages.group_deleted".to_string(), "权限分组已删除".to_string());
-    translations.insert("permissions.manage.messages.default_protected".to_string(), "默认规则/分组不允许直接删除。".to_string());
-    translations.insert("permissions.manage.labels.default".to_string(), "默认".to_string());
-    translations.insert("permissions.approvals.title".to_string(), "审批".to_string());
-    translations.insert("permissions.approvals.tab.pending".to_string(), "待审批".to_string());
-    translations.insert("permissions.approvals.tab.mine".to_string(), "我的".to_string());
-    translations.insert("permissions.approvals.loading".to_string(), "加载中...".to_string());
-    translations.insert("permissions.approvals.empty".to_string(), "暂无审批".to_string());
+    translations.insert(
+        "permissions.manage.table.subject".to_string(),
+        "主体".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.resource".to_string(),
+        "资源".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.actions".to_string(),
+        "动作".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.constraint".to_string(),
+        "约束".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.priority".to_string(),
+        "优先级".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.operations".to_string(),
+        "操作".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.name".to_string(),
+        "名称".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.member_count".to_string(),
+        "成员数".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.table.members".to_string(),
+        "成员".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.cancel".to_string(),
+        "取消".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.new_rule".to_string(),
+        "新建规则".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.save_rule".to_string(),
+        "保存规则".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.update_rule".to_string(),
+        "更新规则".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.new_group".to_string(),
+        "新建分组".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.save_group".to_string(),
+        "保存分组".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.update_group".to_string(),
+        "更新分组".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.edit".to_string(),
+        "编辑".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.actions.delete".to_string(),
+        "删除".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.rule_saved".to_string(),
+        "权限规则已保存".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.rule_deleted".to_string(),
+        "权限规则已删除".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.group_saved".to_string(),
+        "权限分组已保存".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.group_deleted".to_string(),
+        "权限分组已删除".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.messages.default_protected".to_string(),
+        "默认规则/分组不允许直接删除。".to_string(),
+    );
+    translations.insert(
+        "permissions.manage.labels.default".to_string(),
+        "默认".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.title".to_string(),
+        "审批".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.tab.pending".to_string(),
+        "待审批".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.tab.mine".to_string(),
+        "我的".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.loading".to_string(),
+        "加载中...".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.empty".to_string(),
+        "暂无审批".to_string(),
+    );
     translations.insert("permissions.approvals.none".to_string(), "无".to_string());
-    translations.insert("permissions.approvals.summary.total".to_string(), "总数".to_string());
-    translations.insert("permissions.approvals.summary.pending".to_string(), "待审批".to_string());
-    translations.insert("permissions.approvals.summary.approved".to_string(), "已批准".to_string());
-    translations.insert("permissions.approvals.summary.rejected".to_string(), "已驳回".to_string());
-    translations.insert("permissions.approvals.summary.expired".to_string(), "已过期".to_string());
-    translations.insert("permissions.approvals.summary.executed".to_string(), "已转执行".to_string());
-    translations.insert("permissions.approvals.status.pending".to_string(), "待审批".to_string());
-    translations.insert("permissions.approvals.status.approved".to_string(), "已批准".to_string());
-    translations.insert("permissions.approvals.status.rejected".to_string(), "已驳回".to_string());
-    translations.insert("permissions.approvals.status.expired".to_string(), "已过期".to_string());
-    translations.insert("permissions.approvals.policy_type.command".to_string(), "命令执行".to_string());
-    translations.insert("permissions.approvals.table.id".to_string(), "ID".to_string());
-    translations.insert("permissions.approvals.table.type".to_string(), "类型".to_string());
-    translations.insert("permissions.approvals.table.requester".to_string(), "申请人".to_string());
-    translations.insert("permissions.approvals.table.client".to_string(), "客户端".to_string());
-    translations.insert("permissions.approvals.table.command".to_string(), "命令".to_string());
-    translations.insert("permissions.approvals.table.task".to_string(), "执行任务".to_string());
-    translations.insert("permissions.approvals.table.status".to_string(), "状态".to_string());
-    translations.insert("permissions.approvals.table.created_at".to_string(), "创建时间".to_string());
-    translations.insert("permissions.approvals.table.operations".to_string(), "操作".to_string());
-    translations.insert("permissions.approvals.actions.go_history".to_string(), "前往执行历史".to_string());
-    translations.insert("permissions.approvals.actions.approve".to_string(), "批准".to_string());
-    translations.insert("permissions.approvals.actions.reject".to_string(), "驳回".to_string());
-    translations.insert("permissions.approvals.messages.approved_created_task".to_string(), "已批准，并创建任务".to_string());
-    translations.insert("permissions.approvals.messages.approved_updated".to_string(), "已批准，审批单已更新".to_string());
-    translations.insert("permissions.approvals.messages.approved".to_string(), "已批准".to_string());
-    translations.insert("permissions.approvals.messages.rejected".to_string(), "已驳回".to_string());
-    translations.insert("permissions.approvals.messages.task_created".to_string(), "已创建任务".to_string());
+    translations.insert(
+        "permissions.approvals.summary.total".to_string(),
+        "总数".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.pending".to_string(),
+        "待审批".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.approved".to_string(),
+        "已批准".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.rejected".to_string(),
+        "已驳回".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.expired".to_string(),
+        "已过期".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.summary.executed".to_string(),
+        "已转执行".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.status.pending".to_string(),
+        "待审批".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.status.approved".to_string(),
+        "已批准".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.status.rejected".to_string(),
+        "已驳回".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.status.expired".to_string(),
+        "已过期".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.policy_type.command".to_string(),
+        "命令执行".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.id".to_string(),
+        "ID".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.type".to_string(),
+        "类型".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.requester".to_string(),
+        "申请人".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.client".to_string(),
+        "客户端".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.command".to_string(),
+        "命令".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.task".to_string(),
+        "执行任务".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.status".to_string(),
+        "状态".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.created_at".to_string(),
+        "创建时间".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.table.operations".to_string(),
+        "操作".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.actions.go_history".to_string(),
+        "前往执行历史".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.actions.approve".to_string(),
+        "批准".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.actions.reject".to_string(),
+        "驳回".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.approved_created_task".to_string(),
+        "已批准，并创建任务".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.approved_updated".to_string(),
+        "已批准，审批单已更新".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.approved".to_string(),
+        "已批准".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.rejected".to_string(),
+        "已驳回".to_string(),
+    );
+    translations.insert(
+        "permissions.approvals.messages.task_created".to_string(),
+        "已创建任务".to_string(),
+    );
 
     // IPMI
     translations.insert("ipmi.access_denied".to_string(), "访问被拒绝".to_string());
@@ -932,14 +1911,20 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("menu.accounts".to_string(), "账号管理".to_string());
     translations.insert("menu.permissions".to_string(), "权限管理".to_string());
     translations.insert("menu.exec_policies".to_string(), "执行策略".to_string());
-    translations.insert("menu.web_terminal_policies".to_string(), "终端策略".to_string());
+    translations.insert(
+        "menu.web_terminal_policies".to_string(),
+        "终端策略".to_string(),
+    );
     translations.insert("menu.approvals".to_string(), "审批".to_string());
     translations.insert("menu.source_code".to_string(), "源代码".to_string());
     translations.insert("menu.terminal".to_string(), "终端".to_string());
     translations.insert("menu.execution".to_string(), "命令执行".to_string());
     translations.insert("menu.batch_execution".to_string(), "批量执行".to_string());
     translations.insert("menu.execution_history".to_string(), "执行历史".to_string());
-    translations.insert("menu.remote_exec_settings".to_string(), "远程执行设置".to_string());
+    translations.insert(
+        "menu.remote_exec_settings".to_string(),
+        "远程执行设置".to_string(),
+    );
     translations.insert("client_detail.terminal".to_string(), "打开终端".to_string());
 
     // Terminal / Remote Command Execution
@@ -950,20 +1935,38 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert("terminal.remote_exec".to_string(), "远程执行".to_string());
     translations.insert("terminal.enabled".to_string(), "已启用".to_string());
     translations.insert("terminal.disabled".to_string(), "已禁用".to_string());
-    translations.insert("terminal.disabled_msg".to_string(), "远程命令执行已禁用，请由管理员通过上方开关启用。".to_string());
-    translations.insert("terminal.select_client".to_string(), "选择客户端...".to_string());
+    translations.insert(
+        "terminal.disabled_msg".to_string(),
+        "远程命令执行已禁用，请由管理员通过上方开关启用。".to_string(),
+    );
+    translations.insert(
+        "terminal.select_client".to_string(),
+        "选择客户端...".to_string(),
+    );
     translations.insert("terminal.client".to_string(), "目标客户端".to_string());
     translations.insert("terminal.command".to_string(), "命令".to_string());
-    translations.insert("terminal.command_placeholder".to_string(), "例如: df -h".to_string());
-    translations.insert("terminal.timeout_secs".to_string(), "超时（秒）".to_string());
+    translations.insert(
+        "terminal.command_placeholder".to_string(),
+        "例如: df -h".to_string(),
+    );
+    translations.insert(
+        "terminal.timeout_secs".to_string(),
+        "超时（秒）".to_string(),
+    );
     translations.insert("terminal.run".to_string(), "执行命令".to_string());
     translations.insert("terminal.submitting".to_string(), "提交中...".to_string());
     translations.insert("terminal.col_client".to_string(), "客户端".to_string());
     translations.insert("terminal.col_command".to_string(), "命令".to_string());
     translations.insert("terminal.col_status".to_string(), "状态".to_string());
     translations.insert("terminal.col_danger".to_string(), "危险级别".to_string());
-    translations.insert("terminal.col_submitted_by".to_string(), "提交人".to_string());
-    translations.insert("terminal.col_created_at".to_string(), "创建时间".to_string());
+    translations.insert(
+        "terminal.col_submitted_by".to_string(),
+        "提交人".to_string(),
+    );
+    translations.insert(
+        "terminal.col_created_at".to_string(),
+        "创建时间".to_string(),
+    );
 
     // Header
     translations.insert(
@@ -1654,6 +2657,35 @@ pub fn get_translations() -> HashMap<String, String> {
     translations.insert(
         "client_setup.quick_install_desc".to_string(),
         "此命令将自动下载、安装并启动客户端服务".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_title".to_string(),
+        "Agent 升级".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_desc".to_string(),
+        "升级脚本只替换客户端二进制文件，不会覆盖现有配置和凭据。".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_preserve".to_string(),
+        "脚本会保留 client.toml、客户端 ID 和 Agent Token；如果服务正在运行，升级后会自动重启，启动失败时会尝试回滚旧版本。".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_command_label".to_string(),
+        "快速升级命令（在目标 Linux 主机上执行）：".to_string(),
+    );
+    translations.insert(
+        "client_setup.agent_upgrade_command_desc".to_string(),
+        "也可以将下面的脚本保存为 upgrade.sh 后执行。建议先确认服务器地址和下载来源可信。"
+            .to_string(),
+    );
+    translations.insert(
+        "client_setup.ansible_title".to_string(),
+        "Ansible 安装/升级示例".to_string(),
+    );
+    translations.insert(
+        "client_setup.ansible_desc".to_string(),
+        "适用于 Linux 主机；首次运行会创建默认配置，后续运行不会覆盖已有配置。生产环境建议为 rs_cmdb_agent_checksum 配置 SHA-256 校验值。".to_string(),
     );
     translations.insert(
         "client_setup.step3_manual_install".to_string(),

@@ -1,3 +1,4 @@
+use crate::middleware::permission::PermissionContext;
 use crate::queue::{Message, MessageQueue};
 use crate::repository::{
     client_repository::ClientRepository, hardware_repository::HardwareRepository,
@@ -9,6 +10,7 @@ use axum::{
 };
 use axum_macros::debug_handler;
 use common::entity::hardware::Hardware;
+use common::entity::permission::{PermissionAction, ResourceType};
 use common::models::{ApiResponse, ClientHardwareInfo, HardwareHistoryEntry, PullRequest};
 use std::sync::Arc;
 use tracing::{error, info, instrument};
@@ -21,7 +23,48 @@ pub async fn get_hardware(
     Path(client_id): Path<String>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
     Extension(hardware_repo): Extension<Arc<HardwareRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
+    let client = match client_repo.get(&client_id).await {
+        Ok(Some(client)) => client,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<Hardware> {
+                    status: 404,
+                    message: format!("Client {} not found", client_id),
+                    data: None,
+                }),
+            );
+        }
+        Err(err) => {
+            return (
+                StatusCode::from_u16(err.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(ApiResponse::<Hardware> {
+                    status: err.status_code(),
+                    message: err.log_and_user_message(),
+                    data: None,
+                }),
+            );
+        }
+    };
+    if !perm_ctx.allows_resource_with_scope(
+        &ResourceType::Client,
+        &PermissionAction::View,
+        client.created_by.as_deref(),
+        client.project_id.as_deref(),
+        &PermissionContext::client_tags(&client),
+    ) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::<Hardware> {
+                status: 403,
+                message: "Forbidden".into(),
+                data: None,
+            }),
+        );
+    }
     // Check if client exists
     match client_repo.exists(&client_id).await {
         Ok(true) => {
@@ -94,7 +137,48 @@ pub async fn get_hardware_history(
     Path(client_id): Path<String>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
     Extension(hardware_repo): Extension<Arc<HardwareRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
+    let client = match client_repo.get(&client_id).await {
+        Ok(Some(client)) => client,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<Vec<HardwareHistoryEntry>> {
+                    status: 404,
+                    message: format!("Client {} not found", client_id),
+                    data: None,
+                }),
+            );
+        }
+        Err(err) => {
+            return (
+                StatusCode::from_u16(err.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(ApiResponse::<Vec<HardwareHistoryEntry>> {
+                    status: err.status_code(),
+                    message: err.log_and_user_message(),
+                    data: None,
+                }),
+            );
+        }
+    };
+    if !perm_ctx.allows_resource_with_scope(
+        &ResourceType::Client,
+        &PermissionAction::View,
+        client.created_by.as_deref(),
+        client.project_id.as_deref(),
+        &PermissionContext::client_tags(&client),
+    ) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::<Vec<HardwareHistoryEntry>> {
+                status: 403,
+                message: "Forbidden".into(),
+                data: None,
+            }),
+        );
+    }
     // Check if client exists
     match client_repo.exists(&client_id).await {
         Ok(true) => {
@@ -165,6 +249,20 @@ pub async fn update_hardware(
     Json(hardware_info): Json<ClientHardwareInfo>,
 ) -> impl IntoResponse {
     info!("Updating hardware info for client: {}", client_id);
+    // The agent token is bound to the path client_id. Do not let an
+    // authenticated agent put a different client_id into the queued payload,
+    // otherwise the asynchronous processor could overwrite another client's
+    // hardware record.
+    if hardware_info.client_id != client_id {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::<()> {
+                status: 403,
+                message: "hardware payload client_id does not match authenticated client".into(),
+                data: None,
+            }),
+        );
+    }
     // Check if client exists
     match client_repo.exists(&client_id).await {
         Ok(true) => {
@@ -305,12 +403,21 @@ pub async fn pull_hardware(
     Path(client_id): Path<String>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
     Extension(message_queue): Extension<Arc<dyn MessageQueue>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
     Json(components): Json<Vec<String>>, // List of components to pull
 ) -> impl IntoResponse {
     info!("Initiating pull hardware for client: {}", client_id);
     // Check if client exists
-    match client_repo.exists(&client_id).await {
-        Ok(true) => {
+    match client_repo.get(&client_id).await {
+        Ok(Some(client))
+            if perm_ctx.allows_resource_with_scope(
+                &ResourceType::Client,
+                &PermissionAction::Update,
+                client.created_by.as_deref(),
+                client.project_id.as_deref(),
+                &PermissionContext::client_tags(&client),
+            ) =>
+        {
             // Create pull request
             let pull_request = PullRequest {
                 request_id: Uuid::new_v4().to_string(),
@@ -345,7 +452,15 @@ pub async fn pull_hardware(
 
             (StatusCode::ACCEPTED, Json(response))
         }
-        Ok(false) => {
+        Ok(Some(_)) => {
+            let response = ApiResponse::<PullRequest> {
+                status: 403,
+                message: "Forbidden".into(),
+                data: None,
+            };
+            (StatusCode::FORBIDDEN, Json(response))
+        }
+        Ok(None) => {
             let response = ApiResponse::<PullRequest> {
                 status: 404,
                 message: format!("Client {} not found", client_id),
@@ -382,7 +497,12 @@ mod tests {
     use serde_json::json;
     use tower::ServiceExt;
 
-    async fn make_post(app: &axum::Router, path: &str, token: Option<&str>, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+    async fn make_post(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder()
             .method(Method::POST)
             .uri(path)
@@ -391,19 +511,26 @@ mod tests {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
         }
-        let req = req.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap();
+        let req = req
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
-    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
-        let mut req = Request::builder()
-            .method(Method::GET)
-            .uri(path);
+    async fn make_get(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut req = Request::builder().method(Method::GET).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
             req = req.header(k, v);
@@ -412,8 +539,11 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap()
-        ).unwrap();
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         (status, body)
     }
 
@@ -422,21 +552,38 @@ mod tests {
         let app = TestAppBuilder::new().build().await;
         let client_id = "test-c-001";
 
-        let (status, body) = make_post(&app.router, "/api/v1/clients/register", None, json!({
-            "id": client_id,
-            "hostname": "test-client",
-            "ip_address": "10.0.0.1",
-        })).await;
+        let (status, body) = make_post(
+            &app.router,
+            "/api/v1/clients/register",
+            None,
+            json!({
+                "id": client_id,
+                "hostname": "test-client",
+                "ip_address": "10.0.0.1",
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "register failed: {:?}", body);
 
         let agent_token = body["data"]["agent_token"].as_str().unwrap().to_string();
         let agent_auth = format!("{}:{}", client_id, agent_token);
 
         let push_body = serde_json::to_value(create_client_hardware_info(client_id)).unwrap();
-        let (status, body) = make_post(&app.router, &format!("/api/v1/clients/{}/hardware", client_id), Some(&agent_auth), push_body).await;
+        let (status, body) = make_post(
+            &app.router,
+            &format!("/api/v1/clients/{}/hardware", client_id),
+            Some(&agent_auth),
+            push_body,
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "push failed: {:?}", body);
 
-        let (status, body) = make_get(&app.router, &format!("/api/v1/clients/{}/hardware", client_id), Some(&app.admin_token)).await;
+        let (status, body) = make_get(
+            &app.router,
+            &format!("/api/v1/clients/{}/hardware", client_id),
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "get failed: {:?}", body);
         assert!(body["data"].is_object());
     }
@@ -444,7 +591,12 @@ mod tests {
     #[tokio::test]
     async fn test_get_hardware_not_found() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) = make_get(&app.router, "/api/v1/clients/nonexistent/hardware", Some(&app.admin_token)).await;
+        let (status, body) = make_get(
+            &app.router,
+            "/api/v1/clients/nonexistent/hardware",
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["status"], 404);
     }
@@ -454,11 +606,17 @@ mod tests {
         let app = TestAppBuilder::new().build().await;
         let client_id = "test-c-002";
 
-        let (status, body) = make_post(&app.router, "/api/v1/clients/register", None, json!({
-            "id": client_id,
-            "hostname": "test-client-2",
-            "ip_address": "10.0.0.2",
-        })).await;
+        let (status, body) = make_post(
+            &app.router,
+            "/api/v1/clients/register",
+            None,
+            json!({
+                "id": client_id,
+                "hostname": "test-client-2",
+                "ip_address": "10.0.0.2",
+            }),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "register failed: {:?}", body);
 
         let agent_token = body["data"]["agent_token"].as_str().unwrap().to_string();
@@ -466,7 +624,13 @@ mod tests {
 
         let mut info1 = create_client_hardware_info(client_id);
         info1.collected_at = "2024-01-01T00:00:00Z".to_string();
-        let (status, _) = make_post(&app.router, &format!("/api/v1/clients/{}/hardware", client_id), Some(&agent_auth), serde_json::to_value(&info1).unwrap()).await;
+        let (status, _) = make_post(
+            &app.router,
+            &format!("/api/v1/clients/{}/hardware", client_id),
+            Some(&agent_auth),
+            serde_json::to_value(&info1).unwrap(),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "first push failed");
 
         let mut info2 = create_client_hardware_info(client_id);
@@ -476,11 +640,27 @@ mod tests {
             hw.cpu.threads = 32;
             hw.cpu.model_name = "Intel(R) Xeon(R) Gold 6438M".to_string();
         }
-        let (status, _) = make_post(&app.router, &format!("/api/v1/clients/{}/hardware", client_id), Some(&agent_auth), serde_json::to_value(&info2).unwrap()).await;
+        let (status, _) = make_post(
+            &app.router,
+            &format!("/api/v1/clients/{}/hardware", client_id),
+            Some(&agent_auth),
+            serde_json::to_value(&info2).unwrap(),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "second push failed");
 
-        let (status, body) = make_get(&app.router, &format!("/api/v1/clients/{}/hardware/history", client_id), Some(&app.admin_token)).await;
+        let (status, body) = make_get(
+            &app.router,
+            &format!("/api/v1/clients/{}/hardware/history", client_id),
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "history failed: {:?}", body);
-        assert!(body["data"].as_array().map(|a| a.len() >= 2).unwrap_or(false));
+        assert!(
+            body["data"]
+                .as_array()
+                .map(|a| a.len() >= 2)
+                .unwrap_or(false)
+        );
     }
 }

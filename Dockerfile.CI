@@ -6,9 +6,11 @@ WORKDIR /app
 ARG TARGETARCH
 
 COPY bin/${TARGETARCH}/rs-cmdb-server ./rs-cmdb-server
+COPY bin/amd64/rs-cmdb-client ./binaries/linux/x86_64/rs-cmdb-client
+COPY bin/arm64/rs-cmdb-client ./binaries/linux/aarch64/rs-cmdb-client
 COPY dist ./dist
 
-RUN chmod +x ./rs-cmdb-server
+RUN chmod +x ./rs-cmdb-server ./binaries/linux/x86_64/rs-cmdb-client ./binaries/linux/aarch64/rs-cmdb-client
 
 EXPOSE 8080
 CMD ["./rs-cmdb-server"]

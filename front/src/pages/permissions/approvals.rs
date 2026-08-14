@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 use yew_router::prelude::*;
 
 use crate::components::notification::{Notification, NotificationType};
@@ -19,10 +19,22 @@ use crate::utils::format::format_datetime_with_ago;
 
 fn approval_status_badge(status: &str, t: &I18n) -> Html {
     let (variant, label) = match status {
-        "Pending" => (BadgeVariant::Warning, t.t("permissions.approvals.status.pending")),
-        "Approved" => (BadgeVariant::Success, t.t("permissions.approvals.status.approved")),
-        "Rejected" => (BadgeVariant::Destructive, t.t("permissions.approvals.status.rejected")),
-        "Expired" => (BadgeVariant::Secondary, t.t("permissions.approvals.status.expired")),
+        "Pending" => (
+            BadgeVariant::Warning,
+            t.t("permissions.approvals.status.pending"),
+        ),
+        "Approved" => (
+            BadgeVariant::Success,
+            t.t("permissions.approvals.status.approved"),
+        ),
+        "Rejected" => (
+            BadgeVariant::Destructive,
+            t.t("permissions.approvals.status.rejected"),
+        ),
+        "Expired" => (
+            BadgeVariant::Secondary,
+            t.t("permissions.approvals.status.expired"),
+        ),
         other => (BadgeVariant::Outline, other.to_string()),
     };
 
@@ -118,13 +130,22 @@ pub fn approvals_page() -> Html {
                 match approve_request(&id).await {
                     Ok(resp) => {
                         let task_id = resp["task_id"].as_str().unwrap_or_default().to_string();
-                        let approval_id = resp["approval_id"].as_str().unwrap_or_default().to_string();
+                        let approval_id =
+                            resp["approval_id"].as_str().unwrap_or_default().to_string();
                         let message = if !task_id.is_empty() {
                             approved_task_id.set(Some(task_id.clone()));
-                            format!("{} {}", t.t("permissions.approvals.messages.approved_created_task"), task_id)
+                            format!(
+                                "{} {}",
+                                t.t("permissions.approvals.messages.approved_created_task"),
+                                task_id
+                            )
                         } else if !approval_id.is_empty() {
                             approved_task_id.set(None);
-                            format!("{} {}", t.t("permissions.approvals.messages.approved_updated"), approval_id)
+                            format!(
+                                "{} {}",
+                                t.t("permissions.approvals.messages.approved_updated"),
+                                approval_id
+                            )
                         } else {
                             approved_task_id.set(None);
                             t.t("permissions.approvals.messages.approved")
@@ -152,7 +173,10 @@ pub fn approvals_page() -> Html {
                 match reject_request(&id, None).await {
                     Ok(_) => {
                         approved_task_id.set(None);
-                        n.set(Some((NotificationType::Success, t.t("permissions.approvals.messages.rejected"))));
+                        n.set(Some((
+                            NotificationType::Success,
+                            t.t("permissions.approvals.messages.rejected"),
+                        )));
                         r.emit(());
                     }
                     Err(e) => n.set(Some((NotificationType::Error, e.message))),

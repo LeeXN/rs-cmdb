@@ -7,23 +7,23 @@ use crate::pages::client_setup::ClientSetupPage;
 use crate::pages::clients::ClientsPage;
 use crate::pages::components::Components;
 use crate::pages::dictionaries::Dictionaries;
+use crate::pages::execution::batch::BatchExecPage;
+use crate::pages::execution::history::HistoryPage;
+use crate::pages::execution::replay::ReplayPage;
 use crate::pages::home::HomePage;
 use crate::pages::login::Login;
 use crate::pages::not_found::NotFoundPage;
+use crate::pages::permissions::approvals::ApprovalsPage;
+use crate::pages::permissions::exec_policies::ExecPoliciesPage;
+use crate::pages::permissions::manage::PermissionManagePage;
+use crate::pages::permissions::web_terminal_policies::WebTerminalPoliciesPage;
 use crate::pages::persons::Persons;
 use crate::pages::projects::Projects;
 use crate::pages::racks::Racks;
 use crate::pages::settings::change_password::ChangePassword;
+use crate::pages::settings::remote_exec::RemoteExec;
 use crate::pages::settings::users::Users;
 use crate::pages::terminal::TerminalPage;
-use crate::pages::execution::batch::BatchExecPage;
-use crate::pages::execution::history::HistoryPage;
-use crate::pages::execution::replay::ReplayPage;
-use crate::pages::permissions::exec_policies::ExecPoliciesPage;
-use crate::pages::permissions::web_terminal_policies::WebTerminalPoliciesPage;
-use crate::pages::permissions::approvals::ApprovalsPage;
-use crate::pages::permissions::manage::PermissionManagePage;
-use crate::pages::settings::remote_exec::RemoteExec;
 
 #[derive(Debug, Clone, PartialEq, Routable)]
 pub enum Route {

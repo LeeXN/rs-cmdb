@@ -8,11 +8,13 @@ use common::error::{CmdbError, CmdbResult};
 use hmac::{Hmac, Mac};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use uuid::Uuid;
 
 use std::sync::OnceLock;
+
+const MASTER_CLIENT_KEY_STORAGE_KEY: &str = "config:master_client_key";
 
 /// Validate password complexity requirements.
 ///
@@ -110,6 +112,32 @@ pub fn init_master_client_key(key: String) {
     MASTER_CLIENT_KEY.set(key).ok();
 }
 
+/// Load the agent-token signing key from durable server storage, creating it
+/// only on the first startup. Generating this key on every process restart
+/// invalidates all persisted agent tokens and makes already-running agents
+/// fail authentication until they register again.
+pub async fn init_master_client_key_from_db(db: Arc<dyn crate::db::Database>) -> CmdbResult<()> {
+    let existing = db
+        .get(MASTER_CLIENT_KEY_STORAGE_KEY)
+        .await?
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .filter(|key| key.len() >= 32);
+    let key = match existing {
+        Some(key) => key,
+        None => {
+            let key = Uuid::new_v4().to_string()
+                + &Uuid::new_v4().to_string()
+                + &Uuid::new_v4().to_string()
+                + &Uuid::new_v4().to_string();
+            db.set(MASTER_CLIENT_KEY_STORAGE_KEY, key.as_bytes())
+                .await?;
+            key
+        }
+    };
+    init_master_client_key(key);
+    Ok(())
+}
+
 /// Generate a deterministic client token bound to the given client_id
 /// using HMAC-SHA256. This binds the token to the specific client so
 /// it cannot be reused to impersonate other clients.
@@ -117,10 +145,27 @@ pub fn generate_client_token(client_id: &str) -> String {
     let key = MASTER_CLIENT_KEY
         .get()
         .expect("MASTER_CLIENT_KEY not initialized - call init_master_client_key at startup");
-    let mut mac = Hmac::<Sha256>::new_from_slice(key.as_bytes())
-        .expect("HMAC key should be valid length");
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(key.as_bytes()).expect("HMAC key should be valid length");
     mac.update(client_id.as_bytes());
     hex::encode(mac.finalize().into_bytes())
+}
+
+/// Check whether a presented token was issued for `client_id` by this server.
+/// HMAC verification avoids scanning every stored Argon2 hash during legacy
+/// identity migration and performs the digest comparison in constant time.
+pub fn client_token_matches_id(token: &str, client_id: &str) -> bool {
+    let Ok(token_bytes) = hex::decode(token) else {
+        return false;
+    };
+    let Some(key) = MASTER_CLIENT_KEY.get() else {
+        return false;
+    };
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(key.as_bytes()) else {
+        return false;
+    };
+    mac.update(client_id.as_bytes());
+    mac.verify_slice(&token_bytes).is_ok()
 }
 
 pub struct AuthService {
@@ -133,9 +178,13 @@ pub struct AuthService {
 
 impl AuthService {
     pub fn new(jwt_secret: String) -> Self {
-        let refresh_secret = Uuid::new_v4().to_string()
-            + &Uuid::new_v4().to_string()
-            + &Uuid::new_v4().to_string();
+        // Derive the refresh-token key from the durable JWT secret instead of
+        // generating it per process. Otherwise a normal server restart would
+        // invalidate every still-valid refresh token.
+        let mut refresh_hasher = Sha256::new();
+        refresh_hasher.update(b"rs-cmdb:refresh-token:");
+        refresh_hasher.update(jwt_secret.as_bytes());
+        let refresh_secret = hex::encode(refresh_hasher.finalize());
         Self {
             jwt_secret,
             refresh_secret,
@@ -281,7 +330,10 @@ impl AuthService {
         }
     }
 
-    pub fn generate_access_refresh_pair(&self, user: &User) -> CmdbResult<(String, String, usize, usize)> {
+    pub fn generate_access_refresh_pair(
+        &self,
+        user: &User,
+    ) -> CmdbResult<(String, String, usize, usize)> {
         let (access, access_exp) = {
             let exp = Utc::now()
                 .checked_add_signed(Duration::minutes(30))
@@ -300,7 +352,8 @@ impl AuthService {
                 &Header::default(),
                 &claims,
                 &EncodingKey::from_secret(self.jwt_secret.as_bytes()),
-            ).map_err(|e| CmdbError::Internal(format!("Failed to generate token: {}", e)))?;
+            )
+            .map_err(|e| CmdbError::Internal(format!("Failed to generate token: {}", e)))?;
             (token, exp)
         };
 
@@ -319,7 +372,8 @@ impl AuthService {
                 &Header::default(),
                 &claims,
                 &EncodingKey::from_secret(self.refresh_secret.as_bytes()),
-            ).map_err(|e| CmdbError::Internal(format!("Failed to generate refresh token: {}", e)))?;
+            )
+            .map_err(|e| CmdbError::Internal(format!("Failed to generate refresh token: {}", e)))?;
             (token, exp)
         };
 
@@ -478,7 +532,10 @@ mod tests {
             .checked_add_signed(chrono::Duration::minutes(30))
             .expect("Valid timestamp")
             .timestamp() as usize;
-        assert_eq!(claims.exp, exp_time, "Token should have 30 minute expiration");
+        assert_eq!(
+            claims.exp, exp_time,
+            "Token should have 30 minute expiration"
+        );
     }
 
     #[test]
@@ -608,7 +665,10 @@ mod tests {
         init_master_client_key("test-binding-key".to_string());
         let token_a = generate_client_token("client-A");
         let token_b = generate_client_token("client-B");
-        assert_ne!(token_a, token_b, "different client_ids must produce different tokens");
+        assert_ne!(
+            token_a, token_b,
+            "different client_ids must produce different tokens"
+        );
     }
 
     #[test]
@@ -637,6 +697,27 @@ mod tests {
         assert!(refresh_exp > access_exp);
     }
 
+    #[test]
+    fn test_refresh_token_survives_auth_service_recreation() {
+        let secret = "stable-jwt-secret-for-refresh-tests!!";
+        let first = AuthService::new(secret.to_string());
+        let user = User {
+            id: "user-refresh".to_string(),
+            username: "refresh-test".to_string(),
+            password_hash: "hash".to_string(),
+            role: Role::User,
+            created_at: Utc::now().to_rfc3339(),
+            last_login: None,
+            is_active: true,
+        };
+        let (_, refresh, _, _) = first.generate_access_refresh_pair(&user).unwrap();
+
+        let recreated = AuthService::new(secret.to_string());
+        let claims = recreated.verify_refresh_token(&refresh).unwrap();
+        assert_eq!(claims.sub, user.id);
+        assert_eq!(claims.typ, "refresh");
+    }
+
     #[tokio::test]
     async fn test_token_blacklist_revoke() {
         use crate::service::token_blacklist::TokenBlacklist;
@@ -644,8 +725,8 @@ mod tests {
 
         let db = Arc::new(setup_test_db().unwrap());
         let bl = Arc::new(TokenBlacklist::new(db));
-        let auth = AuthService::new("test-jwt-secret-for-unit-tests!!".to_string())
-            .with_blacklist(bl);
+        let auth =
+            AuthService::new("test-jwt-secret-for-unit-tests!!".to_string()).with_blacklist(bl);
 
         let user = User {
             id: "user-blacklist".to_string(),
@@ -656,8 +737,7 @@ mod tests {
             last_login: None,
             is_active: true,
         };
-        let (access, _refresh, access_exp, _) =
-            auth.generate_access_refresh_pair(&user).unwrap();
+        let (access, _refresh, access_exp, _) = auth.generate_access_refresh_pair(&user).unwrap();
         let claims = auth.verify_token(&access).unwrap();
         assert_eq!(claims.sub, "user-blacklist");
 

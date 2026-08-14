@@ -102,23 +102,6 @@ impl MessageProcessor {
     /// Internal processing logic
     async fn process_message_internal(&self, message: Message) -> CmdbResult<()> {
         match message {
-            Message::ClientRegistration(registration) => {
-                info!("Processing client registration: {}", registration.id);
-
-                // Register the client
-                self.client_service
-                    .register_client(
-                        &registration.hostname,
-                        &registration.ip_address,
-                        &registration.sys_vendor.unwrap_or_default(),
-                        &registration.product_name.unwrap_or_default(),
-                        &registration.serial_number.unwrap_or_default(),
-                        &registration.os.unwrap_or_default(),
-                        Some(registration.id.clone()),
-                        registration.primary_ip.clone(),
-                    )
-                    .await?;
-            }
             Message::ClientHardwareInfo(hardware_info) => {
                 info!(
                     "Processing hardware info from client: {}",
@@ -177,16 +160,12 @@ mod tests {
     use crate::db::Database;
     use crate::queue::mock_queue::MockMessageQueue;
     use crate::repository::{
-        client_repository::ClientRepository,
-        command_repository::CommandRepository,
-        component_repository::ComponentRepository,
-        hardware_repository::HardwareRepository,
+        client_repository::ClientRepository, command_repository::CommandRepository,
+        component_repository::ComponentRepository, hardware_repository::HardwareRepository,
         rack_repository::RackRepository,
     };
     use crate::service::component_service::ComponentService;
-    use crate::tests::fixtures::{
-        create_client_hardware_info, create_test_client, setup_test_db,
-    };
+    use crate::tests::fixtures::{create_client_hardware_info, create_test_client, setup_test_db};
 
     fn setup_processor(db: Arc<dyn Database>) -> (Arc<MockMessageQueue>, MessageProcessor) {
         let mq = Arc::new(MockMessageQueue::new());
@@ -250,11 +229,7 @@ mod tests {
         let db: Arc<dyn Database> = Arc::new(db);
         let (_mq, processor) = setup_processor(db.clone());
 
-        let entry = AuditLogEntry::new(
-            AuditAction::CommandCreate,
-            "admin",
-            "Test audit log",
-        );
+        let entry = AuditLogEntry::new(AuditAction::CommandCreate, "admin", "Test audit log");
         let msg = Message::AuditLog(entry);
         let result = processor.process_message_internal(msg).await;
         assert!(result.is_ok());

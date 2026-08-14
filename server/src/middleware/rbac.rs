@@ -29,7 +29,7 @@ pub async fn require_user(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::Body, routing::get, Router};
+    use axum::{Router, body::Body, routing::get};
     use common::entity::user::Role;
     use tower::ServiceExt;
 

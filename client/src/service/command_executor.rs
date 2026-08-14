@@ -7,21 +7,21 @@
 //! The token is persisted to disk by `ClientService::register_client` and loaded here.
 
 use anyhow::{bail, Result};
-use common::command::{CommandLogLine, CommandTask, LogStream, split_command};
+use common::command::{split_command, CommandLogLine, CommandTask, LogStream};
 use common::entity::permission::{CommandAction, CommandRules};
 use reqwest::Client as HttpClient;
-use std::io::{BufRead as _, BufReader};
+use std::io::{BufRead as _, BufReader, Read};
 use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
-use std::process::{Child, ChildStderr, ChildStdout, ExitStatus};
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::process::{Child, ExitStatus};
+use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use crate::config::ClientConfig;
-use crate::service::{load_agent_token, save_agent_token};
+use crate::service::load_agent_token_for;
 
 /// Maximum lines to batch before flushing to server.
 const LOG_BATCH_SIZE: usize = 20;
@@ -48,14 +48,20 @@ fn resolve_command_rules(config: &ClientConfig) -> CommandRules {
         return config.command_rules.clone();
     }
 
-    CommandRules::default()
+    // The legacy allow-list is the secure default when no richer rule set is
+    // configured. An empty list means deny all, never allow all.
+    CommandRules::allow_list(config.allowed_commands.clone())
 }
 
 fn ensure_command_allowed(rules: &CommandRules, command: &str, subject: &str) -> Result<()> {
     match rules.evaluate(command) {
         CommandAction::Allow => Ok(()),
         CommandAction::Deny => bail!("{} '{}' is denied by command rules", subject, command),
-        CommandAction::Warn => bail!("{} '{}' requires confirmation and is not allowed on the agent", subject, command),
+        CommandAction::Warn => bail!(
+            "{} '{}' requires confirmation and is not allowed on the agent",
+            subject,
+            command
+        ),
     }
 }
 
@@ -76,34 +82,45 @@ fn parse_shell_lines(script: &str) -> Vec<(usize, String, Vec<String>)> {
 
 fn spawn_sandboxed_child(program: &str, args: &[String]) -> Result<Child> {
     let mut command = std::process::Command::new(program);
-    command.args(args).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    command
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
     unsafe {
-        command.pre_exec(|| crate::service::sandbox::apply_sandbox());
+        command.pre_exec(|| {
+            // Put every command in its own process group so timeout cleanup
+            // cannot leave descendants running after the direct child exits.
+            if libc::setpgid(0, 0) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            crate::service::sandbox::apply_sandbox()
+        });
     }
     Ok(command.spawn()?)
 }
 
 fn emit_output_line(
     line_tx: &mpsc::UnboundedSender<CommandLogLine>,
-    seq: &mut u64,
+    seq: &AtomicU64,
     line: String,
     stream: LogStream,
 ) {
+    let sequence = seq.fetch_add(1, Ordering::Relaxed);
     let _ = line_tx.send(CommandLogLine {
-        seq: *seq,
+        seq: sequence,
         line,
         stream,
         timestamp: chrono::Utc::now().to_rfc3339(),
     });
-    *seq += 1;
 }
 
-fn stream_reader_lines(
-    reader: &mut BufReader<impl std::io::Read>,
+fn stream_reader_lines<R: Read>(
+    reader: R,
     line_tx: &mpsc::UnboundedSender<CommandLogLine>,
-    seq: &mut u64,
+    seq: Arc<AtomicU64>,
     stream: LogStream,
 ) {
+    let mut reader = BufReader::new(reader);
     loop {
         let mut buf = String::new();
         match reader.read_line(&mut buf) {
@@ -111,7 +128,7 @@ fn stream_reader_lines(
             Ok(_) => {
                 let line = buf.trim_end_matches(&['\r', '\n'][..]);
                 if !line.is_empty() {
-                    emit_output_line(line_tx, seq, line.to_string(), stream.clone());
+                    emit_output_line(line_tx, &seq, line.to_string(), stream.clone());
                 }
             }
             Err(e) => {
@@ -126,21 +143,30 @@ fn wait_with_output(
     mut child: Child,
     line_tx: &mpsc::UnboundedSender<CommandLogLine>,
     child_pid: &Arc<AtomicI32>,
-    seq: &mut u64,
+    seq: &Arc<AtomicU64>,
 ) -> Result<ExitStatus> {
     child_pid.store(child.id() as i32, Ordering::Release);
 
-    let stdout: ChildStdout = child.stdout.take().expect("stdout piped");
-    let stderr: ChildStderr = child.stderr.take().expect("stderr piped");
-    let mut stdout_reader = BufReader::new(stdout);
-    let mut stderr_reader = BufReader::new(stderr);
+    let stdout = child.stdout.take().expect("stdout piped");
+    let stderr = child.stderr.take().expect("stderr piped");
+    let stdout_tx = line_tx.clone();
+    let stderr_tx = line_tx.clone();
+    let stdout_seq = seq.clone();
+    let stderr_seq = seq.clone();
+    let stdout_handle = std::thread::spawn(move || {
+        stream_reader_lines(stdout, &stdout_tx, stdout_seq, LogStream::Stdout);
+    });
+    let stderr_handle = std::thread::spawn(move || {
+        stream_reader_lines(stderr, &stderr_tx, stderr_seq, LogStream::Stderr);
+    });
 
-    stream_reader_lines(&mut stdout_reader, line_tx, seq, LogStream::Stdout);
-    stream_reader_lines(&mut stderr_reader, line_tx, seq, LogStream::Stderr);
-
-    let status = child.wait()?;
+    // Both pipes are drained concurrently. Reading stdout fully before
+    // stderr can deadlock a child that writes enough data to the other pipe.
+    let status = child.wait();
+    let _ = stdout_handle.join();
+    let _ = stderr_handle.join();
     child_pid.store(0, Ordering::Release);
-    Ok(status)
+    Ok(status?)
 }
 
 impl CommandExecutor {
@@ -164,7 +190,8 @@ impl CommandExecutor {
     /// Build the `Authorization: Bearer {client_id}:{token}` header value.
     /// Returns `None` if the token hasn't been persisted yet.
     fn auth_header(&self) -> Option<String> {
-        load_agent_token().map(|token| format!("Bearer {}:{}", self.client_id, token))
+        load_agent_token_for(&self.client_id)
+            .map(|token| format!("Bearer {}:{}", self.client_id, token))
     }
 
     /// Run the long-poll loop forever (until the task is cancelled).
@@ -218,8 +245,15 @@ impl CommandExecutor {
             self.config.server.url, self.client_id
         );
 
-        let auth = self.auth_header().ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
-        let resp = self.http.get(&url).header("Authorization", auth).send().await?;
+        let auth = self
+            .auth_header()
+            .ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", auth)
+            .send()
+            .await?;
 
         if resp.status() == reqwest::StatusCode::NO_CONTENT {
             return Ok(None);
@@ -237,30 +271,14 @@ impl CommandExecutor {
 
         // The server wraps the task in ApiResponse { data: CommandTask }
         let value: serde_json::Value = resp.json().await?;
-        let task: CommandTask = serde_json::from_value(
-            value.get("data").cloned().unwrap_or(value)
-        )?;
+        let task: CommandTask =
+            serde_json::from_value(value.get("data").cloned().unwrap_or(value))?;
         Ok(Some(task))
     }
 
     /// Shell metacharacters that are rejected in any argument token.
     const REJECTED_ARG_CHARS: &[char] = &['|', ';', '&', '$', '`', '>', '<', '\n', '\r'];
     const REJECTED_SCRIPT_CHARS: &[char] = &['|', ';', '&', '$', '`', '>', '<'];
-
-    /// Try to hot-reload the command rules from config files on disk.
-    /// The load_config() function reads from multiple sources (env vars, toml files).
-    fn try_reload_rules(&self) {
-        if let Ok(config) = crate::config::load_config() {
-            if let Ok(mut guard) = self.command_rules.write() {
-                let new_rules = resolve_command_rules(&config);
-                if *guard != new_rules {
-                    let count = new_rules.overrides.len();
-                    *guard = new_rules;
-                    info!("Hot-reloaded command rules ({} overrides)", count);
-                }
-            }
-        }
-    }
 
     /// Validate that the command is in the whitelist and args are safe.
     fn validate_task(&self, task: &CommandTask) -> Result<()> {
@@ -271,7 +289,10 @@ impl CommandExecutor {
         let cmd = &task.command;
 
         // Check whitelist
-        let rules = self.command_rules.read().map_err(|_| anyhow::anyhow!("command rules lock poisoned"))?;
+        let rules = self
+            .command_rules
+            .read()
+            .map_err(|_| anyhow::anyhow!("command rules lock poisoned"))?;
         ensure_command_allowed(&rules, cmd, "Command")?;
         drop(rules);
 
@@ -299,10 +320,18 @@ impl CommandExecutor {
     }
 
     fn validate_shell_task(&self, task: &CommandTask) -> Result<()> {
-        let rules = self.command_rules.read().map_err(|_| anyhow::anyhow!("command rules lock poisoned"))?;
+        let rules = self
+            .command_rules
+            .read()
+            .map_err(|_| anyhow::anyhow!("command rules lock poisoned"))?;
 
         for (line_no, cmd, args) in parse_shell_lines(&task.command) {
-            let line = task.command.lines().nth(line_no - 1).unwrap_or_default().trim();
+            let line = task
+                .command
+                .lines()
+                .nth(line_no - 1)
+                .unwrap_or_default()
+                .trim();
 
             if let Some(pos) = line.find(Self::REJECTED_SCRIPT_CHARS) {
                 bail!(
@@ -313,7 +342,11 @@ impl CommandExecutor {
                 );
             }
 
-            ensure_command_allowed(&rules, &cmd, &format!("Script line {} command", line_no + 1))?;
+            ensure_command_allowed(
+                &rules,
+                &cmd,
+                &format!("Script line {} command", line_no + 1),
+            )?;
 
             for (arg_index, arg) in args.iter().enumerate() {
                 if let Some(pos) = arg.find(Self::REJECTED_SCRIPT_CHARS) {
@@ -336,8 +369,11 @@ impl CommandExecutor {
         let task_id = task.id.clone();
         let timeout_secs = task.timeout_secs;
 
-        // Hot-reload rules before each task execution
-        self.try_reload_rules();
+        // Claim the task before reporting a local validation failure. The
+        // server accepts logs/completion only after the claimed agent has
+        // transitioned the task to Running; otherwise a rejected task would
+        // remain Pending until its dispatch lease expired.
+        self.notify_start(&task_id).await?;
 
         // Validate command against whitelist and args against shell metacharacters
         if let Err(e) = self.validate_task(&task) {
@@ -352,9 +388,6 @@ impl CommandExecutor {
             self.notify_complete(&task_id, -1, "failed").await?;
             return Err(e);
         }
-
-        // Notify server we started
-        self.notify_start(&task_id).await?;
 
         // Channel for streaming log lines from blocking task
         let (line_tx, mut line_rx) = mpsc::unbounded_channel::<CommandLogLine>();
@@ -374,7 +407,7 @@ impl CommandExecutor {
 
         // Spawn blocking task: applies sandbox via pre_exec, streams logs
         let blocking_handle = tokio::task::spawn_blocking(move || {
-            let mut seq: u64 = 0;
+            let seq = Arc::new(AtomicU64::new(0));
 
             if shell_mode {
                 let mut final_status = ExitStatus::from_raw(0);
@@ -387,14 +420,17 @@ impl CommandExecutor {
                         Err(err) => {
                             emit_output_line(
                                 &line_tx,
-                                &mut seq,
-                                format!("Script line {} failed to start '{}': {}", line_no, program, err),
+                                &seq,
+                                format!(
+                                    "Script line {} failed to start '{}': {}",
+                                    line_no, program, err
+                                ),
                                 LogStream::Stderr,
                             );
                             return Err(err);
                         }
                     };
-                    final_status = wait_with_output(child, &line_tx, &child_pid, &mut seq)?;
+                    final_status = wait_with_output(child, &line_tx, &child_pid, &seq)?;
                     if !final_status.success() {
                         break;
                     }
@@ -403,7 +439,7 @@ impl CommandExecutor {
                 Ok(final_status)
             } else {
                 let child = spawn_sandboxed_child(&cmd, &args)?;
-                let status = wait_with_output(child, &line_tx, &child_pid, &mut seq)?;
+                let status = wait_with_output(child, &line_tx, &child_pid, &seq)?;
                 drop(line_tx);
                 Ok(status)
             }
@@ -452,7 +488,8 @@ impl CommandExecutor {
                 }
             };
             result
-        }).await;
+        })
+        .await;
 
         let (exit_code, status_str) = match exit_result {
             Ok(Ok(pair)) => pair,
@@ -461,16 +498,23 @@ impl CommandExecutor {
                 (-1, "failed".to_string())
             }
             Err(_) => {
-                warn!("CommandExecutor: task {} timed out, killing process", task_id);
+                warn!(
+                    "CommandExecutor: task {} timed out, killing process",
+                    task_id
+                );
                 let pid = pid_for_timeout.load(Ordering::Acquire);
                 if pid > 0 {
-                    unsafe { libc::kill(pid, libc::SIGTERM); }
+                    unsafe {
+                        libc::kill(-pid, libc::SIGTERM);
+                        libc::kill(-pid, libc::SIGKILL);
+                    }
                 }
                 (-1, "timeout".to_string())
             }
         };
 
-        self.notify_complete(&task_id, exit_code, &status_str).await?;
+        self.notify_complete(&task_id, exit_code, &status_str)
+            .await?;
         info!(
             "CommandExecutor: task {} finished with status={} exit_code={}",
             task_id, status_str, exit_code
@@ -480,13 +524,18 @@ impl CommandExecutor {
 
     /// Build a request builder pre-loaded with the auth header.
     fn authed_post(&self, url: &str) -> anyhow::Result<reqwest::RequestBuilder> {
-        let auth = self.auth_header().ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
+        let auth = self
+            .auth_header()
+            .ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
         Ok(self.http.post(url).header("Authorization", auth))
     }
 
     /// POST /agent/commands/{id}/start
     async fn notify_start(&self, task_id: &str) -> Result<()> {
-        let url = format!("{}/agent/commands/{}/start", self.config.server.url, task_id);
+        let url = format!(
+            "{}/agent/commands/{}/start",
+            self.config.server.url, task_id
+        );
         let resp = self.authed_post(&url)?.send().await?;
         if !resp.status().is_success() {
             let status = resp.status();

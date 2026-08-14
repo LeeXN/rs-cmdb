@@ -613,6 +613,9 @@
   .max-h-\[560px\] {
     max-height: 560px;
   }
+  .max-h-\[680px\] {
+    max-height: 680px;
+  }
   .min-h-0 {
     min-height: calc(var(--spacing) * 0);
   }
@@ -630,6 +633,9 @@
   }
   .min-h-\[80px\] {
     min-height: 80px;
+  }
+  .min-h-\[120px\] {
+    min-height: 120px;
   }
   .min-h-\[360px\] {
     min-height: 360px;
@@ -1355,6 +1361,12 @@
   }
   .bg-muted {
     background-color: var(--color-muted);
+  }
+  .bg-muted\/10 {
+    background-color: color-mix(in srgb, hsl(var(--muted)) 10%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-muted) 10%, transparent);
+    }
   }
   .bg-muted\/20 {
     background-color: color-mix(in srgb, hsl(var(--muted)) 20%, transparent);

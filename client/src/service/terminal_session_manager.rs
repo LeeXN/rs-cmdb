@@ -13,18 +13,22 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task;
-use tokio_tungstenite::{connect_async, tungstenite::{client::IntoClientRequest, http::HeaderValue, protocol::Message}};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{client::IntoClientRequest, http::HeaderValue, protocol::Message},
+};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::config::ClientConfig;
-use crate::service::load_agent_token;
+use crate::service::load_agent_token_for;
 
 const POLL_RETRY_DELAY: Duration = Duration::from_secs(5);
 const TOKEN_WAIT_DELAY: Duration = Duration::from_secs(30);
 const ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(150);
 
-type TerminalWs = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+type TerminalWs =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type TerminalUpdateTx = mpsc::UnboundedSender<AgentTerminalPollResponse>;
 type TerminalUpdateRx = mpsc::UnboundedReceiver<AgentTerminalPollResponse>;
 type OutboundTx = mpsc::UnboundedSender<Message>;
@@ -54,25 +58,38 @@ impl TerminalSessionManager {
     }
 
     fn auth_header(&self) -> Option<String> {
-        load_agent_token().map(|token| format!("Bearer {}:{}", self.client_id, token))
+        load_agent_token_for(&self.client_id)
+            .map(|token| format!("Bearer {}:{}", self.client_id, token))
     }
 
     pub async fn run_poll_loop(&self) {
-        info!("TerminalSessionManager: starting terminal manager for client {}", self.client_id);
+        info!(
+            "TerminalSessionManager: starting terminal manager for client {}",
+            self.client_id
+        );
         loop {
             if self.auth_header().is_none() {
-                warn!("TerminalSessionManager: agent token missing, retrying in {:?}", TOKEN_WAIT_DELAY);
+                warn!(
+                    "TerminalSessionManager: agent token missing, retrying in {:?}",
+                    TOKEN_WAIT_DELAY
+                );
                 tokio::time::sleep(TOKEN_WAIT_DELAY).await;
                 continue;
             }
             match self.run_stream_loop().await {
                 Ok(()) => {
-                    warn!("TerminalSessionManager: terminal stream disconnected, retrying in {:?}", POLL_RETRY_DELAY);
+                    warn!(
+                        "TerminalSessionManager: terminal stream disconnected, retrying in {:?}",
+                        POLL_RETRY_DELAY
+                    );
                     tokio::time::sleep(POLL_RETRY_DELAY).await;
                     continue;
                 }
                 Err(err) => {
-                    warn!("TerminalSessionManager stream error: {}, falling back to polling", err);
+                    warn!(
+                        "TerminalSessionManager stream error: {}, falling back to polling",
+                        err
+                    );
                 }
             }
             match self.poll_once().await {
@@ -91,13 +108,14 @@ impl TerminalSessionManager {
     }
 
     async fn run_stream_loop(&self) -> Result<()> {
-        let auth = self.auth_header().ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
+        let auth = self
+            .auth_header()
+            .ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
         let url = self.stream_url()?;
         let mut request = url.into_client_request()?;
-        request.headers_mut().insert(
-            "Authorization",
-            HeaderValue::from_str(&auth)?,
-        );
+        request
+            .headers_mut()
+            .insert("Authorization", HeaderValue::from_str(&auth)?);
         let (stream, _) = connect_async(request).await?;
         let (mut writer, mut reader) = stream.split();
         let (outbound_tx, mut outbound_rx): (OutboundTx, OutboundRx) = mpsc::unbounded_channel();
@@ -118,7 +136,17 @@ impl TerminalSessionManager {
                         AgentTerminalStreamServerMessage::Sync { work } => {
                             self.dispatch_stream_work(work, &mut session_updates, &outbound_tx);
                         }
-                        AgentTerminalStreamServerMessage::Heartbeat => {}
+                        AgentTerminalStreamServerMessage::Heartbeat => {
+                            let message = AgentTerminalStreamClientMessage::Heartbeat {
+                                session_ids: session_updates.keys().cloned().collect(),
+                                claim_id: self.claim_id.clone(),
+                            };
+                            outbound_tx
+                                .send(Message::Text(serde_json::to_string(&message)?.into()))
+                                .map_err(|_| {
+                                    anyhow::anyhow!("terminal heartbeat channel closed")
+                                })?;
+                        }
                     }
                 }
                 Message::Ping(payload) => {
@@ -143,15 +171,24 @@ impl TerminalSessionManager {
             "{}/agent/terminal-sessions/pending?client_id={}&claim_id={}",
             self.config.server.url, self.client_id, self.claim_id
         );
-        let auth = self.auth_header().ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
-        let resp = self.http.get(&url).header("Authorization", auth).send().await?;
+        let auth = self
+            .auth_header()
+            .ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", auth)
+            .send()
+            .await?;
         if resp.status() == reqwest::StatusCode::NO_CONTENT {
             return Ok(None);
         }
         if !resp.status().is_success() {
             anyhow::bail!("terminal poll returned {}", resp.status());
         }
-        let body = resp.json::<common::models::ApiResponse<AgentTerminalPollResponse>>().await?;
+        let body = resp
+            .json::<common::models::ApiResponse<AgentTerminalPollResponse>>()
+            .await?;
         Ok(body.data)
     }
 
@@ -195,8 +232,13 @@ impl TerminalSessionManager {
         outbound_tx: Option<OutboundTx>,
     ) -> Result<()> {
         let session = work.session.clone();
-        self.send_state(&session.session_id, TerminalSessionState::Active, None, outbound_tx.as_ref())
-            .await?;
+        self.send_state(
+            &session.session_id,
+            TerminalSessionState::Active,
+            None,
+            outbound_tx.as_ref(),
+        )
+        .await?;
 
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
@@ -299,7 +341,8 @@ impl TerminalSessionManager {
 
         let status = child.wait()?;
         while let Ok(chunk) = output_rx.try_recv() {
-            self.send_output(&session_id, vec![chunk], outbound_tx.as_ref()).await?;
+            self.send_output(&session_id, vec![chunk], outbound_tx.as_ref())
+                .await?;
         }
         let _ = output_task.await;
         let close_state = if status.success() {
@@ -316,26 +359,43 @@ impl TerminalSessionManager {
         .await
     }
 
-    async fn poll_session_update(&self, session_id: &str) -> Result<Option<AgentTerminalPollResponse>> {
+    async fn poll_session_update(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<AgentTerminalPollResponse>> {
         let url = format!(
             "{}/agent/terminal-sessions/pending?client_id={}&session_id={}&claim_id={}",
             self.config.server.url, self.client_id, session_id, self.claim_id
         );
-        let auth = self.auth_header().ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
-        let resp = self.http.get(&url).header("Authorization", auth).send().await?;
+        let auth = self
+            .auth_header()
+            .ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", auth)
+            .send()
+            .await?;
         if resp.status() == reqwest::StatusCode::NO_CONTENT {
             return Ok(None);
         }
         if !resp.status().is_success() {
             anyhow::bail!("terminal session poll returned {}", resp.status());
         }
-        let body = resp.json::<common::models::ApiResponse<AgentTerminalPollResponse>>().await?;
+        let body = resp
+            .json::<common::models::ApiResponse<AgentTerminalPollResponse>>()
+            .await?;
         Ok(body.data)
     }
 
     async fn push_output(&self, session_id: &str, chunks: Vec<TerminalOutputChunk>) -> Result<()> {
-        let url = format!("{}/agent/terminal-sessions/{}/output", self.config.server.url, session_id);
-        let auth = self.auth_header().ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
+        let url = format!(
+            "{}/agent/terminal-sessions/{}/output",
+            self.config.server.url, session_id
+        );
+        let auth = self
+            .auth_header()
+            .ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
         let resp = self
             .http
             .post(&url)
@@ -359,14 +419,17 @@ impl TerminalSessionManager {
         outbound_tx: Option<&OutboundTx>,
     ) -> Result<()> {
         if let Some(tx) = outbound_tx {
-            tx.send(Message::Text(serde_json::to_string(&AgentTerminalStreamClientMessage::Output {
+            tx.send(Message::Text(
+                serde_json::to_string(&AgentTerminalStreamClientMessage::Output {
                     session_id: session_id.to_string(),
                     payload: AgentTerminalOutputRequest {
                         claim_id: Some(self.claim_id.clone()),
                         chunks,
                     },
-                })?.into()))
-                .map_err(|_| anyhow::anyhow!("terminal stream outbound channel closed"))?;
+                })?
+                .into(),
+            ))
+            .map_err(|_| anyhow::anyhow!("terminal stream outbound channel closed"))?;
             Ok(())
         } else {
             self.push_output(session_id, chunks).await
@@ -379,8 +442,13 @@ impl TerminalSessionManager {
         state: TerminalSessionState,
         message: Option<String>,
     ) -> Result<()> {
-        let url = format!("{}/agent/terminal-sessions/{}/state", self.config.server.url, session_id);
-        let auth = self.auth_header().ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
+        let url = format!(
+            "{}/agent/terminal-sessions/{}/state",
+            self.config.server.url, session_id
+        );
+        let auth = self
+            .auth_header()
+            .ok_or_else(|| anyhow::anyhow!("agent token not available"))?;
         let resp = self
             .http
             .post(&url)
@@ -406,15 +474,18 @@ impl TerminalSessionManager {
         outbound_tx: Option<&OutboundTx>,
     ) -> Result<()> {
         if let Some(tx) = outbound_tx {
-            tx.send(Message::Text(serde_json::to_string(&AgentTerminalStreamClientMessage::State {
+            tx.send(Message::Text(
+                serde_json::to_string(&AgentTerminalStreamClientMessage::State {
                     session_id: session_id.to_string(),
                     payload: AgentTerminalStateRequest {
                         claim_id: Some(self.claim_id.clone()),
                         state,
                         message,
                     },
-                })?.into()))
-                .map_err(|_| anyhow::anyhow!("terminal stream outbound channel closed"))?;
+                })?
+                .into(),
+            ))
+            .map_err(|_| anyhow::anyhow!("terminal stream outbound channel closed"))?;
             Ok(())
         } else {
             self.report_state(session_id, state, message).await
@@ -429,7 +500,10 @@ impl TerminalSessionManager {
         } else if without_api.starts_with("http://") {
             "ws://"
         } else {
-            anyhow::bail!("unsupported server url for terminal stream: {}", self.config.server.url);
+            anyhow::bail!(
+                "unsupported server url for terminal stream: {}",
+                self.config.server.url
+            );
         };
         let host = without_api
             .trim_start_matches("https://")
@@ -465,7 +539,9 @@ impl TerminalSessionManager {
     }
 }
 
-async fn recv_update(update_rx: &mut Option<TerminalUpdateRx>) -> Option<AgentTerminalPollResponse> {
+async fn recv_update(
+    update_rx: &mut Option<TerminalUpdateRx>,
+) -> Option<AgentTerminalPollResponse> {
     match update_rx {
         Some(rx) => rx.recv().await,
         None => None,

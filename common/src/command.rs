@@ -80,6 +80,9 @@ pub struct CommandTask {
     pub args: Vec<String>,
     /// 下发人 user_id
     pub submitted_by: String,
+    /// Stable user identifier of the submitter.
+    #[serde(default)]
+    pub submitted_by_id: Option<String>,
     /// 当前状态
     pub status: CommandStatus,
     /// 危险等级（检测时记录）
@@ -101,6 +104,14 @@ pub struct CommandTask {
     /// 是否日志被截断
     #[serde(default)]
     pub truncated: bool,
+    /// Agent-side dispatch lease owner. This prevents the same pending task
+    /// from being handed to multiple agent workers concurrently.
+    #[serde(default)]
+    pub claimed_by: Option<String>,
+    /// Expiry of the dispatch lease. A crashed agent can therefore allow the
+    /// task to be claimed again without leaving it permanently stuck.
+    #[serde(default)]
+    pub claim_expires_at: Option<String>,
 }
 
 fn default_timeout() -> u64 {
@@ -114,7 +125,10 @@ pub fn split_command(command: &str) -> (String, Vec<String>) {
     if parts.is_empty() {
         (String::new(), vec![])
     } else {
-        (parts[0].to_string(), parts[1..].iter().map(|s| s.to_string()).collect())
+        (
+            parts[0].to_string(),
+            parts[1..].iter().map(|s| s.to_string()).collect(),
+        )
     }
 }
 
@@ -146,6 +160,7 @@ impl CommandTask {
             shell_mode: false,
             args,
             submitted_by,
+            submitted_by_id: None,
             status: CommandStatus::Pending,
             danger_level,
             timeout_secs: timeout_secs.unwrap_or(300),
@@ -155,6 +170,8 @@ impl CommandTask {
             completed_at: None,
             exit_code: None,
             truncated: false,
+            claimed_by: None,
+            claim_expires_at: None,
         }
     }
 }
@@ -385,7 +402,10 @@ mod tests {
     fn test_audit_action_display() {
         assert_eq!(AuditAction::CommandCreate.to_string(), "command_create");
         assert_eq!(AuditAction::UserCreated.to_string(), "user_created");
-        assert_eq!(AuditAction::ComponentDeleted.to_string(), "component_deleted");
+        assert_eq!(
+            AuditAction::ComponentDeleted.to_string(),
+            "component_deleted"
+        );
     }
 
     #[test]
@@ -440,7 +460,14 @@ mod tests {
 
     #[test]
     fn test_command_task_args_field() {
-        let task = CommandTask::new("c1".into(), "ping".into(), vec!["-c".into(), "1".into(), "8.8.8.8".into()], "u".into(), DangerLevel::Safe, None);
+        let task = CommandTask::new(
+            "c1".into(),
+            "ping".into(),
+            vec!["-c".into(), "1".into(), "8.8.8.8".into()],
+            "u".into(),
+            DangerLevel::Safe,
+            None,
+        );
         assert_eq!(task.args, vec!["-c", "1", "8.8.8.8"]);
     }
 
@@ -450,6 +477,9 @@ mod tests {
         let task: CommandTask = serde_json::from_str(old_json).unwrap();
         assert_eq!(task.command, "ls -la");
         assert!(!task.shell_mode);
-        assert!(task.args.is_empty(), "old data without args field should default to empty vec");
+        assert!(
+            task.args.is_empty(),
+            "old data without args field should default to empty vec"
+        );
     }
 }

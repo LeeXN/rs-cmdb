@@ -1,86 +1,33 @@
 //! API service for permission management (exec policies, web terminal policies, approvals).
 
-use gloo_net::http::Request;
-use gloo_storage::{LocalStorage, Storage};
-use log::info;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::window;
 use yew::Callback;
 
-use crate::stores::auth_store::AuthStore;
+use crate::services::auth;
 use crate::types::{ApiResponse, ApprovalSummaryResponse, PermissionOverviewResponse};
 
 const BASE: &str = "/api/v1/permissions";
 
-fn get_auth_header() -> Option<String> {
-    if let Ok(store) = LocalStorage::get::<AuthStore>("auth_store") {
-        if let Some(token) = store.token {
-            return Some(format!("Bearer {}", token));
-        }
-    }
-    if let Ok(store) = LocalStorage::get::<AuthStore>("AuthStore") {
-        if let Some(token) = store.token {
-            return Some(format!("Bearer {}", token));
-        }
-    }
-    None
-}
-
-fn check_auth(resp: &gloo_net::http::Response) {
-    if resp.status() == 401 {
-        info!("401 Unauthorized – redirecting to login");
-        LocalStorage::delete("auth_store");
-        LocalStorage::delete("AuthStore");
-        if let Some(win) = window() {
-            let _ = win.location().set_href("/login");
-        }
-    }
-}
-
 async fn get(url: &str) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::get(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let resp = req.send().await?;
-    check_auth(&resp);
-    Ok(resp)
+    auth::get(url).await
 }
 
 async fn post_json<T: serde::Serialize>(
     url: &str,
     body: &T,
 ) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::post(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let resp = req.json(body)?.send().await?;
-    check_auth(&resp);
-    Ok(resp)
+    auth::post_json(url, body).await
 }
 
 async fn put_json<T: serde::Serialize>(
     url: &str,
     body: &T,
 ) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::put(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let resp = req.json(body)?.send().await?;
-    check_auth(&resp);
-    Ok(resp)
+    auth::put_json(url, body).await
 }
 
 async fn delete(url: &str) -> Result<gloo_net::http::Response, gloo_net::Error> {
-    let mut req = Request::delete(url);
-    if let Some(auth) = get_auth_header() {
-        req = req.header("Authorization", &auth);
-    }
-    let resp = req.send().await?;
-    check_auth(&resp);
-    Ok(resp)
+    auth::delete(url).await
 }
 
 #[derive(Debug, Clone)]
@@ -94,7 +41,9 @@ where
 {
     resp.json::<ApiResponse<T>>()
         .await
-        .map_err(|e| ApiError { message: e.to_string() })
+        .map_err(|e| ApiError {
+            message: e.to_string(),
+        })
         .and_then(|r| r.data.ok_or(ApiError { message: r.message }))
 }
 
@@ -114,7 +63,9 @@ pub async fn fetch_exec_policies() -> Result<Vec<serde_json::Value>, ApiError> {
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -122,19 +73,28 @@ pub async fn create_exec_policy(policy: &serde_json::Value) -> Result<serde_json
     let url = format!("{}/exec-policies", BASE);
     match post_json(&url, policy).await {
         Ok(resp) if resp.status() == 200 || resp.status() == 201 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: parse_error_message(resp, "Create failed").await }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: parse_error_message(resp, "Create failed").await,
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
-pub async fn update_exec_policy(id: &str, policy: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+pub async fn update_exec_policy(
+    id: &str,
+    policy: &serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
     let url = format!("{}/exec-policies/{}", BASE, id);
     match put_json(&url, policy).await {
         Ok(resp) if resp.status() == 200 => parse_json(resp).await,
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -145,7 +105,9 @@ pub async fn delete_exec_policy(id: &str) -> Result<(), ApiError> {
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -158,27 +120,40 @@ pub async fn fetch_web_terminal_policies() -> Result<Vec<serde_json::Value>, Api
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
-pub async fn create_web_terminal_policy(policy: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+pub async fn create_web_terminal_policy(
+    policy: &serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
     let url = format!("{}/web-terminal-policies", BASE);
     match post_json(&url, policy).await {
         Ok(resp) if resp.status() == 200 || resp.status() == 201 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: parse_error_message(resp, "Create failed").await }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: parse_error_message(resp, "Create failed").await,
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
-pub async fn update_web_terminal_policy(id: &str, policy: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+pub async fn update_web_terminal_policy(
+    id: &str,
+    policy: &serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
     let url = format!("{}/web-terminal-policies/{}", BASE, id);
     match put_json(&url, policy).await {
         Ok(resp) if resp.status() == 200 => parse_json(resp).await,
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -189,7 +164,9 @@ pub async fn delete_web_terminal_policy(id: &str) -> Result<(), ApiError> {
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -202,7 +179,9 @@ pub async fn list_pending_approvals() -> Result<Vec<serde_json::Value>, ApiError
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -213,7 +192,9 @@ pub async fn list_my_approvals() -> Result<Vec<serde_json::Value>, ApiError> {
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -224,11 +205,16 @@ pub async fn approve_request(id: &str) -> Result<serde_json::Value, ApiError> {
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
-pub async fn reject_request(id: &str, reason: Option<String>) -> Result<serde_json::Value, ApiError> {
+pub async fn reject_request(
+    id: &str,
+    reason: Option<String>,
+) -> Result<serde_json::Value, ApiError> {
     let url = format!("{}/pending-approvals/{}/reject", BASE, id);
     let body = serde_json::json!({ "reason": reason.unwrap_or_default() });
     match post_json(&url, &body).await {
@@ -236,7 +222,9 @@ pub async fn reject_request(id: &str, reason: Option<String>) -> Result<serde_js
         Ok(resp) => Err(ApiError {
             message: format!("HTTP {}", resp.status()),
         }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -244,8 +232,12 @@ pub async fn fetch_permission_overview() -> Result<PermissionOverviewResponse, A
     let url = format!("{}/overview", BASE);
     match get(&url).await {
         Ok(resp) if resp.status() == 200 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: format!("HTTP {}", resp.status()) }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: format!("HTTP {}", resp.status()),
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -253,26 +245,43 @@ pub async fn fetch_permission_rules() -> Result<Vec<serde_json::Value>, ApiError
     let url = format!("{}/rules", BASE);
     match get(&url).await {
         Ok(resp) if resp.status() == 200 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: format!("HTTP {}", resp.status()) }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: format!("HTTP {}", resp.status()),
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
-pub async fn create_permission_rule(rule: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+pub async fn create_permission_rule(
+    rule: &serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
     let url = format!("{}/rules", BASE);
     match post_json(&url, rule).await {
         Ok(resp) if resp.status() == 200 || resp.status() == 201 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: parse_error_message(resp, "Create failed").await }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: parse_error_message(resp, "Create failed").await,
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
-pub async fn update_permission_rule(id: &str, rule: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+pub async fn update_permission_rule(
+    id: &str,
+    rule: &serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
     let url = format!("{}/rules/{}", BASE, id);
     match put_json(&url, rule).await {
         Ok(resp) if resp.status() == 200 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: parse_error_message(resp, "Update failed").await }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: parse_error_message(resp, "Update failed").await,
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -280,8 +289,12 @@ pub async fn delete_permission_rule(id: &str) -> Result<(), ApiError> {
     let url = format!("{}/rules/{}", BASE, id);
     match delete(&url).await {
         Ok(resp) if resp.status() == 200 => Ok(()),
-        Ok(resp) => Err(ApiError { message: parse_error_message(resp, "Delete failed").await }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: parse_error_message(resp, "Delete failed").await,
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -289,26 +302,43 @@ pub async fn fetch_permission_groups() -> Result<Vec<serde_json::Value>, ApiErro
     let url = format!("{}/groups", BASE);
     match get(&url).await {
         Ok(resp) if resp.status() == 200 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: format!("HTTP {}", resp.status()) }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: format!("HTTP {}", resp.status()),
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
-pub async fn create_permission_group(group: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+pub async fn create_permission_group(
+    group: &serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
     let url = format!("{}/groups", BASE);
     match post_json(&url, group).await {
         Ok(resp) if resp.status() == 200 || resp.status() == 201 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: parse_error_message(resp, "Create failed").await }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: parse_error_message(resp, "Create failed").await,
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
-pub async fn update_permission_group(id: &str, group: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+pub async fn update_permission_group(
+    id: &str,
+    group: &serde_json::Value,
+) -> Result<serde_json::Value, ApiError> {
     let url = format!("{}/groups/{}", BASE, id);
     match put_json(&url, group).await {
         Ok(resp) if resp.status() == 200 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: parse_error_message(resp, "Update failed").await }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: parse_error_message(resp, "Update failed").await,
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -316,8 +346,12 @@ pub async fn delete_permission_group(id: &str) -> Result<(), ApiError> {
     let url = format!("{}/groups/{}", BASE, id);
     match delete(&url).await {
         Ok(resp) if resp.status() == 200 => Ok(()),
-        Ok(resp) => Err(ApiError { message: parse_error_message(resp, "Delete failed").await }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: parse_error_message(resp, "Delete failed").await,
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -325,8 +359,12 @@ pub async fn fetch_approval_summary() -> Result<ApprovalSummaryResponse, ApiErro
     let url = format!("{}/approval-summary", BASE);
     match get(&url).await {
         Ok(resp) if resp.status() == 200 => parse_json(resp).await,
-        Ok(resp) => Err(ApiError { message: format!("HTTP {}", resp.status()) }),
-        Err(e) => Err(ApiError { message: e.to_string() }),
+        Ok(resp) => Err(ApiError {
+            message: format!("HTTP {}", resp.status()),
+        }),
+        Err(e) => Err(ApiError {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -336,11 +374,18 @@ pub fn fetch_exec_policies_cb(cb: Callback<Result<Vec<serde_json::Value>, ApiErr
     spawn_local(async move { cb.emit(fetch_exec_policies().await) });
 }
 
-pub fn create_exec_policy_cb(policy: serde_json::Value, cb: Callback<Result<serde_json::Value, ApiError>>) {
+pub fn create_exec_policy_cb(
+    policy: serde_json::Value,
+    cb: Callback<Result<serde_json::Value, ApiError>>,
+) {
     spawn_local(async move { cb.emit(create_exec_policy(&policy).await) });
 }
 
-pub fn update_exec_policy_cb(id: String, policy: serde_json::Value, cb: Callback<Result<serde_json::Value, ApiError>>) {
+pub fn update_exec_policy_cb(
+    id: String,
+    policy: serde_json::Value,
+    cb: Callback<Result<serde_json::Value, ApiError>>,
+) {
     spawn_local(async move { cb.emit(update_exec_policy(&id, &policy).await) });
 }
 
@@ -352,11 +397,18 @@ pub fn fetch_web_terminal_policies_cb(cb: Callback<Result<Vec<serde_json::Value>
     spawn_local(async move { cb.emit(fetch_web_terminal_policies().await) });
 }
 
-pub fn create_web_terminal_policy_cb(policy: serde_json::Value, cb: Callback<Result<serde_json::Value, ApiError>>) {
+pub fn create_web_terminal_policy_cb(
+    policy: serde_json::Value,
+    cb: Callback<Result<serde_json::Value, ApiError>>,
+) {
     spawn_local(async move { cb.emit(create_web_terminal_policy(&policy).await) });
 }
 
-pub fn update_web_terminal_policy_cb(id: String, policy: serde_json::Value, cb: Callback<Result<serde_json::Value, ApiError>>) {
+pub fn update_web_terminal_policy_cb(
+    id: String,
+    policy: serde_json::Value,
+    cb: Callback<Result<serde_json::Value, ApiError>>,
+) {
     spawn_local(async move { cb.emit(update_web_terminal_policy(&id, &policy).await) });
 }
 
@@ -376,6 +428,10 @@ pub fn approve_request_cb(id: String, cb: Callback<Result<serde_json::Value, Api
     spawn_local(async move { cb.emit(approve_request(&id).await) });
 }
 
-pub fn reject_request_cb(id: String, reason: Option<String>, cb: Callback<Result<serde_json::Value, ApiError>>) {
+pub fn reject_request_cb(
+    id: String,
+    reason: Option<String>,
+    cb: Callback<Result<serde_json::Value, ApiError>>,
+) {
     spawn_local(async move { cb.emit(reject_request(&id, reason).await) });
 }

@@ -13,7 +13,7 @@ use common::models::{
     CpuStats, DetailedStats, FilterOptions, GpuStats, MemoryStats, NetworkStats, OsStats,
     ServerStats, StatItem, StorageStats,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::info;
 
@@ -55,16 +55,32 @@ impl StatsService {
     }
 
     /// Get overall statistics with optional category filter
+    #[allow(dead_code)]
     pub async fn get_overall_stats(
         &self,
         category_filter: Option<&str>,
     ) -> Result<OverallStats, String> {
+        self.get_overall_stats_for_client_ids(category_filter, None)
+            .await
+    }
+
+    /// Get overall statistics restricted to the supplied client IDs. Scoped
+    /// requests deliberately bypass the global cache so one user's aggregate
+    /// cannot be served to another user.
+    pub async fn get_overall_stats_for_client_ids(
+        &self,
+        category_filter: Option<&str>,
+        allowed_client_ids: Option<&HashSet<String>>,
+    ) -> Result<OverallStats, String> {
         // Build cache key
-        let cache_key =
-            key_builder::stats(&format!("overall:{}", category_filter.unwrap_or("all")));
+        let cache_key = allowed_client_ids
+            .is_none()
+            .then(|| key_builder::stats(&format!("overall:{}", category_filter.unwrap_or("all"))));
 
         // Try cache first
-        if let Some(cached) = self.stats_cache.get(&cache_key).await {
+        if let Some(cache_key) = &cache_key
+            && let Some(cached) = self.stats_cache.get(cache_key).await
+        {
             info!("Cache hit for overall stats");
             if let Ok(stats) = serde_json::from_value::<OverallStats>(cached) {
                 return Ok(stats);
@@ -73,11 +89,14 @@ impl StatsService {
 
         info!("Cache miss for overall stats, computing...");
 
-        let clients = self
+        let mut clients = self
             .client_repo
             .list_all()
             .await
             .map_err(|e| e.to_string())?;
+        if let Some(allowed_client_ids) = allowed_client_ids {
+            clients.retain(|client| allowed_client_ids.contains(&client.id));
+        }
         let client_hardware_map = self.build_client_hardware_map(&clients).await;
 
         let total_clients = clients.len();
@@ -95,7 +114,9 @@ impl StatsService {
         };
 
         // Cache the result
-        if let Ok(json) = serde_json::to_value(&result) {
+        if let Some(cache_key) = cache_key
+            && let Ok(json) = serde_json::to_value(&result)
+        {
             self.stats_cache.insert(cache_key, json).await;
         }
 
@@ -103,12 +124,25 @@ impl StatsService {
     }
 
     /// Get detailed statistics across all categories
+    #[allow(dead_code)]
     pub async fn get_detailed_stats(&self) -> Result<DetailedStats, String> {
+        self.get_detailed_stats_for_client_ids(None).await
+    }
+
+    /// Get detailed statistics restricted to the supplied client IDs.
+    pub async fn get_detailed_stats_for_client_ids(
+        &self,
+        allowed_client_ids: Option<&HashSet<String>>,
+    ) -> Result<DetailedStats, String> {
         // Build cache key
-        let cache_key = key_builder::stats("detailed");
+        let cache_key = allowed_client_ids
+            .is_none()
+            .then(|| key_builder::stats("detailed"));
 
         // Try cache first
-        if let Some(cached) = self.stats_cache.get(&cache_key).await {
+        if let Some(cache_key) = &cache_key
+            && let Some(cached) = self.stats_cache.get(cache_key).await
+        {
             info!("Cache hit for detailed stats");
             if let Ok(stats) = serde_json::from_value::<DetailedStats>(cached) {
                 return Ok(stats);
@@ -117,11 +151,14 @@ impl StatsService {
 
         info!("Cache miss for detailed stats, computing...");
 
-        let clients = self
+        let mut clients = self
             .client_repo
             .list_all()
             .await
             .map_err(|e| e.to_string())?;
+        if let Some(allowed_client_ids) = allowed_client_ids {
+            clients.retain(|client| allowed_client_ids.contains(&client.id));
+        }
         let client_hardware_map = self.build_client_hardware_map(&clients).await;
 
         let total_clients = clients.len();
@@ -142,7 +179,9 @@ impl StatsService {
         };
 
         // Cache the result
-        if let Ok(json) = serde_json::to_value(&result) {
+        if let Some(cache_key) = cache_key
+            && let Ok(json) = serde_json::to_value(&result)
+        {
             self.stats_cache.insert(cache_key, json).await;
         }
 
@@ -150,23 +189,39 @@ impl StatsService {
     }
 
     /// Get filter options from actual database data
+    #[allow(dead_code)]
     pub async fn get_filter_options(&self) -> Result<FilterOptions, String> {
+        self.get_filter_options_for_client_ids(None).await
+    }
+
+    /// Get filter options restricted to the supplied client IDs.
+    pub async fn get_filter_options_for_client_ids(
+        &self,
+        allowed_client_ids: Option<&HashSet<String>>,
+    ) -> Result<FilterOptions, String> {
         // Build cache key
-        let cache_key = key_builder::stats("filter_options");
+        let cache_key = allowed_client_ids
+            .is_none()
+            .then(|| key_builder::stats("filter_options"));
 
         // Try cache first
-        if let Some(cached) = self.filter_options_cache.get(&cache_key).await {
+        if let Some(cache_key) = &cache_key
+            && let Some(cached) = self.filter_options_cache.get(cache_key).await
+        {
             info!("Cache hit for filter options");
             return Ok(cached);
         }
 
         info!("Cache miss for filter options, computing...");
 
-        let clients = self
+        let mut clients = self
             .client_repo
             .list_all()
             .await
             .map_err(|e| e.to_string())?;
+        if let Some(allowed_client_ids) = allowed_client_ids {
+            clients.retain(|client| allowed_client_ids.contains(&client.id));
+        }
 
         let mut cpu_vendors = std::collections::HashSet::new();
         let mut cpu_models = std::collections::HashSet::new();
@@ -264,9 +319,11 @@ impl StatsService {
         filter_options.network_models.sort();
 
         // Cache the result
-        self.filter_options_cache
-            .insert(cache_key, filter_options.clone())
-            .await;
+        if let Some(cache_key) = cache_key {
+            self.filter_options_cache
+                .insert(cache_key, filter_options.clone())
+                .await;
+        }
 
         info!("Generated filter options");
         Ok(filter_options)
@@ -1030,7 +1087,10 @@ mod tests {
         client_repo.save(&client).await.unwrap();
 
         let hw = create_test_hardware_info(&client.id);
-        hardware_repo.save_hardware(&client.id, &hw, false).await.unwrap();
+        hardware_repo
+            .save_hardware(&client.id, &hw, false)
+            .await
+            .unwrap();
 
         let svc = StatsService::new(client_repo, hardware_repo);
         let stats = svc.get_overall_stats(None).await.unwrap();

@@ -4,7 +4,9 @@ use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardBody, CardHeader};
 use crate::components::ui::checkbox::Checkbox;
 use crate::components::ui::input::Input;
-use crate::components::ui::modal::{Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle};
+use crate::components::ui::modal::{
+    Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle,
+};
 use crate::components::ui::select::{Select, SelectOption};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::hooks::use_trans::use_trans;
@@ -114,7 +116,11 @@ fn constraint_summary(rule: &serde_json::Value, t: &I18n) -> String {
             return if names.is_empty() {
                 t.t("permissions.manage.constraint.project_scope")
             } else {
-                format!("{}: {}", t.t("permissions.manage.constraint.project_list"), names.join(", "))
+                format!(
+                    "{}: {}",
+                    t.t("permissions.manage.constraint.project_list"),
+                    names.join(", ")
+                )
             };
         }
         if let Some(tags) = obj.get("Tag").and_then(|value| value.as_array()) {
@@ -125,7 +131,11 @@ fn constraint_summary(rule: &serde_json::Value, t: &I18n) -> String {
             return if names.is_empty() {
                 t.t("permissions.manage.constraint.tag_scope")
             } else {
-                format!("{}: {}", t.t("permissions.manage.constraint.tag_list"), names.join(", "))
+                format!(
+                    "{}: {}",
+                    t.t("permissions.manage.constraint.tag_list"),
+                    names.join(", ")
+                )
             };
         }
         if obj.get("None").is_some() {
@@ -194,7 +204,8 @@ fn build_constraint_json(preset: &str, values: &str) -> serde_json::Value {
                 serde_json::json!({ "Tag": items })
             }
         }
-        _ => serde_json::from_str::<serde_json::Value>(values).unwrap_or_else(|_| serde_json::json!({ "All": null })),
+        _ => serde_json::from_str::<serde_json::Value>(values)
+            .unwrap_or_else(|_| serde_json::json!({ "All": null })),
     }
 }
 
@@ -214,7 +225,14 @@ pub fn permission_manage_page() -> Html {
     let rule_subject_type = use_state(|| "Role".to_string());
     let rule_subject_id = use_state(|| "Admin".to_string());
     let rule_resource_type = use_state(|| "Command".to_string());
-    let rule_actions = use_state(|| vec!["View".to_string(), "Create".to_string(), "Update".to_string(), "Delete".to_string()]);
+    let rule_actions = use_state(|| {
+        vec![
+            "View".to_string(),
+            "Create".to_string(),
+            "Update".to_string(),
+            "Delete".to_string(),
+        ]
+    });
     let rule_constraint_preset = use_state(|| "All".to_string());
     let rule_constraint_values = use_state(String::new);
     let rule_priority = use_state(|| "0".to_string());
@@ -270,15 +288,34 @@ pub fn permission_manage_page() -> Html {
     };
 
     let rule_subject_options = vec![
-        SelectOption { value: "Role".into(), label: t.t("permissions.manage.subject.role") },
-        SelectOption { value: "User".into(), label: t.t("permissions.manage.subject.user") },
-        SelectOption { value: "Group".into(), label: t.t("permissions.manage.subject.group") },
+        SelectOption {
+            value: "Role".into(),
+            label: t.t("permissions.manage.subject.role"),
+        },
+        SelectOption {
+            value: "User".into(),
+            label: t.t("permissions.manage.subject.user"),
+        },
+        SelectOption {
+            value: "Group".into(),
+            label: t.t("permissions.manage.subject.group"),
+        },
     ];
     let resource_options = vec![
-        "Client", "Component", "Rack", "Person", "Project", "Dictionary", "Command", "User",
+        "Client",
+        "Component",
+        "Rack",
+        "Person",
+        "Project",
+        "Dictionary",
+        "Command",
+        "User",
     ]
     .into_iter()
-    .map(|value| SelectOption { value: value.into(), label: resource_type_label(value, t.as_ref()) })
+    .map(|value| SelectOption {
+        value: value.into(),
+        label: resource_type_label(value, t.as_ref()),
+    })
     .collect::<Vec<_>>();
 
     let close_rule_modal = {
@@ -334,7 +371,8 @@ pub fn permission_manage_page() -> Html {
             let rule_subject_id = (*rule_subject_id).clone();
             let rule_resource_type = (*rule_resource_type).clone();
             let rule_actions = (*rule_actions).clone();
-            let rule_constraint = build_constraint_json(&rule_constraint_preset, &rule_constraint_values);
+            let rule_constraint =
+                build_constraint_json(&rule_constraint_preset, &rule_constraint_values);
             let rule_priority = rule_priority.parse::<i32>().unwrap_or_default();
             let t = t.clone();
             spawn_local(async move {
@@ -354,7 +392,10 @@ pub fn permission_manage_page() -> Html {
                 };
                 match result {
                     Ok(_) => {
-                        notification.set(Some((NotificationType::Success, t.t("permissions.manage.messages.rule_saved"))));
+                        notification.set(Some((
+                            NotificationType::Success,
+                            t.t("permissions.manage.messages.rule_saved"),
+                        )));
                         show_rule_form.set(false);
                         editing_rule_id.set(None);
                         reload_all.emit(());
@@ -397,7 +438,10 @@ pub fn permission_manage_page() -> Html {
                 };
                 match result {
                     Ok(_) => {
-                        notification.set(Some((NotificationType::Success, t.t("permissions.manage.messages.group_saved"))));
+                        notification.set(Some((
+                            NotificationType::Success,
+                            t.t("permissions.manage.messages.group_saved"),
+                        )));
                         show_group_form.set(false);
                         editing_group_id.set(None);
                         reload_all.emit(());

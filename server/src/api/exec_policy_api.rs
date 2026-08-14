@@ -1,12 +1,7 @@
 use crate::repository::exec_policy_repository::ExecPolicyRepository;
 use axum::extract::Path;
 use axum::extract::rejection::JsonRejection;
-use axum::{
-    extract::Extension,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use axum_macros::debug_handler;
 use common::entity::permission::ExecPolicy;
 use common::models::ApiResponse;
@@ -139,32 +134,30 @@ pub async fn update_exec_policy(
         return (StatusCode::BAD_REQUEST, Json(response));
     }
     match repo.get(&id).await {
-        Ok(Some(_)) => {
-            match repo.save(&policy).await {
-                Ok(_) => {
-                    info!("Updated exec policy: {}", id);
-                    let response = ApiResponse {
-                        status: 200,
-                        message: "Exec policy updated successfully".to_string(),
-                        data: Some(policy),
-                    };
-                    (StatusCode::OK, Json(response))
-                }
-                Err(e) => {
-                    error!("Failed to update exec policy {}: {}", id, e);
-                    let response = ApiResponse::<ExecPolicy> {
-                        status: e.status_code(),
-                        message: e.log_and_user_message(),
-                        data: None,
-                    };
-                    (
-                        StatusCode::from_u16(e.status_code())
-                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                        Json(response),
-                    )
-                }
+        Ok(Some(_)) => match repo.save(&policy).await {
+            Ok(_) => {
+                info!("Updated exec policy: {}", id);
+                let response = ApiResponse {
+                    status: 200,
+                    message: "Exec policy updated successfully".to_string(),
+                    data: Some(policy),
+                };
+                (StatusCode::OK, Json(response))
             }
-        }
+            Err(e) => {
+                error!("Failed to update exec policy {}: {}", id, e);
+                let response = ApiResponse::<ExecPolicy> {
+                    status: e.status_code(),
+                    message: e.log_and_user_message(),
+                    data: None,
+                };
+                (
+                    StatusCode::from_u16(e.status_code())
+                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                    Json(response),
+                )
+            }
+        },
         Ok(None) => {
             let response = ApiResponse::<ExecPolicy> {
                 status: 404,
@@ -195,32 +188,30 @@ pub async fn delete_exec_policy(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match repo.get(&id).await {
-        Ok(Some(_)) => {
-            match repo.delete(&id).await {
-                Ok(_) => {
-                    info!("Deleted exec policy: {}", id);
-                    let response = ApiResponse::<()> {
-                        status: 200,
-                        message: format!("Exec policy {} deleted", id),
-                        data: None,
-                    };
-                    (StatusCode::OK, Json(response))
-                }
-                Err(e) => {
-                    error!("Failed to delete exec policy {}: {}", id, e);
-                    let response = ApiResponse::<()> {
-                        status: e.status_code(),
-                        message: e.log_and_user_message(),
-                        data: None,
-                    };
-                    (
-                        StatusCode::from_u16(e.status_code())
-                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                        Json(response),
-                    )
-                }
+        Ok(Some(_)) => match repo.delete(&id).await {
+            Ok(_) => {
+                info!("Deleted exec policy: {}", id);
+                let response = ApiResponse::<()> {
+                    status: 200,
+                    message: format!("Exec policy {} deleted", id),
+                    data: None,
+                };
+                (StatusCode::OK, Json(response))
             }
-        }
+            Err(e) => {
+                error!("Failed to delete exec policy {}: {}", id, e);
+                let response = ApiResponse::<()> {
+                    status: e.status_code(),
+                    message: e.log_and_user_message(),
+                    data: None,
+                };
+                (
+                    StatusCode::from_u16(e.status_code())
+                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                    Json(response),
+                )
+            }
+        },
         Ok(None) => {
             let response = ApiResponse::<()> {
                 status: 404,

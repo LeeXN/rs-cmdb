@@ -7,8 +7,8 @@ use axum::{
     response::IntoResponse,
 };
 use common::command::{AuditAction, AuditLogEntry};
-use common::entity::user::{UpdateUserRequest, UserResponse};
 use common::entity::user::User;
+use common::entity::user::{UpdateUserRequest, UserResponse};
 use common::models::ApiResponse;
 use std::sync::Arc;
 use tracing::{error, info};
@@ -102,17 +102,25 @@ pub async fn update_user(
     match user_repo.save(&user).await {
         Ok(_) => {
             if user.role != old_role {
-                let audit = AuditLogEntry::new(AuditAction::UserRoleChanged, &operator.username, &format!("User {} role changed from {:?} to {:?}", user.username, old_role, user.role));
+                let audit = AuditLogEntry::new(
+                    AuditAction::UserRoleChanged,
+                    &operator.username,
+                    &format!(
+                        "User {} role changed from {:?} to {:?}",
+                        user.username, old_role, user.role
+                    ),
+                );
                 let _ = message_queue.send_message(Message::AuditLog(audit));
             }
             (
-            StatusCode::OK,
-            Json(ApiResponse {
-                status: 200,
-                message: "User updated successfully".to_string(),
-                data: Some(user.into()),
-            }),
-        )},
+                StatusCode::OK,
+                Json(ApiResponse {
+                    status: 200,
+                    message: "User updated successfully".to_string(),
+                    data: Some(user.into()),
+                }),
+            )
+        }
         Err(e) => {
             error!("Failed to save user: {}", e);
             (
@@ -137,7 +145,11 @@ pub async fn delete_user(
     info!("Deleting user: {}", id);
     match user_repo.delete(&id).await {
         Ok(_) => {
-            let audit = AuditLogEntry::new(AuditAction::UserDeleted, &operator.username, &format!("Deleted user {}", id));
+            let audit = AuditLogEntry::new(
+                AuditAction::UserDeleted,
+                &operator.username,
+                &format!("Deleted user {}", id),
+            );
             let _ = message_queue.send_message(Message::AuditLog(audit));
             let response = ApiResponse::<()> {
                 status: 200,
@@ -169,7 +181,11 @@ mod tests {
     use serde_json::json;
     use tower::ServiceExt;
 
-    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+    async fn make_get(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder().method(Method::GET).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
@@ -179,13 +195,19 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap(),
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
         )
         .unwrap_or(serde_json::Value::Null);
         (status, body)
     }
 
-    async fn make_delete(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+    async fn make_delete(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder().method(Method::DELETE).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
@@ -195,7 +217,9 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap(),
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
         )
         .unwrap_or(serde_json::Value::Null);
         (status, body)
@@ -221,7 +245,9 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap(),
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
         )
         .unwrap_or(serde_json::Value::Null);
         (status, body)

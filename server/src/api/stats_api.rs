@@ -3,6 +3,7 @@
 //! This module provides HTTP endpoints for hardware and client statistics.
 //! Business logic has been moved to the StatsService.
 
+use crate::middleware::permission::PermissionContext;
 use crate::repository::client_repository::ClientRepository;
 use crate::service::{
     client_filter_service::{ClientFilterService, HardwareFilterQuery},
@@ -18,12 +19,13 @@ use axum::{
     response::IntoResponse,
 };
 use axum_macros::debug_handler;
+use common::entity::permission::{PermissionAction, ResourceType, ScopeConstraint};
 use common::models::{
     ApiResponse, Client, ClientHardwareExport, DetailedStats, FilterCriteria, FilterOptions,
     StatItem,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{error, info, instrument};
 
@@ -75,13 +77,27 @@ impl From<ServiceOverallStats> for OverallStats {
 
 /// Get hardware statistics
 #[debug_handler]
-#[instrument(skip(stats_service))]
+#[instrument(skip(stats_service, client_repo, perm_ctx))]
 pub async fn get_hardware_stats(
     Query(params): Query<StatsQuery>,
     Extension(stats_service): Extension<Arc<StatsService>>,
+    Extension(client_repo): Extension<Arc<ClientRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
+    let allowed_client_ids = match authorized_client_ids(&client_repo, &perm_ctx).await {
+        Ok(ids) => ids,
+        Err(err) => {
+            error!("Failed to resolve client permissions: {}", err);
+            let response = ApiResponse::<OverallStats> {
+                status: 500,
+                message: "Failed to resolve client permissions".to_string(),
+                data: None,
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+    };
     match stats_service
-        .get_overall_stats(params.category.as_deref())
+        .get_overall_stats_for_client_ids(params.category.as_deref(), allowed_client_ids.as_ref())
         .await
     {
         Ok(stats) => {
@@ -113,11 +129,28 @@ pub async fn get_hardware_stats(
 
 /// Get detailed hardware statistics
 #[debug_handler]
-#[instrument(skip(stats_service))]
+#[instrument(skip(stats_service, client_repo, perm_ctx))]
 pub async fn get_detailed_stats(
     Extension(stats_service): Extension<Arc<StatsService>>,
+    Extension(client_repo): Extension<Arc<ClientRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
-    match stats_service.get_detailed_stats().await {
+    let allowed_client_ids = match authorized_client_ids(&client_repo, &perm_ctx).await {
+        Ok(ids) => ids,
+        Err(err) => {
+            error!("Failed to resolve client permissions: {}", err);
+            let response = ApiResponse::<DetailedStats> {
+                status: 500,
+                message: "Failed to resolve client permissions".to_string(),
+                data: None,
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+    };
+    match stats_service
+        .get_detailed_stats_for_client_ids(allowed_client_ids.as_ref())
+        .await
+    {
         Ok(stats) => {
             info!(
                 "Generated detailed stats for {} clients",
@@ -146,11 +179,28 @@ pub async fn get_detailed_stats(
 
 /// Get filter options from actual database data
 #[debug_handler]
-#[instrument(skip(stats_service))]
+#[instrument(skip(stats_service, client_repo, perm_ctx))]
 pub async fn get_filter_options(
     Extension(stats_service): Extension<Arc<StatsService>>,
+    Extension(client_repo): Extension<Arc<ClientRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
-    match stats_service.get_filter_options().await {
+    let allowed_client_ids = match authorized_client_ids(&client_repo, &perm_ctx).await {
+        Ok(ids) => ids,
+        Err(err) => {
+            error!("Failed to resolve client permissions: {}", err);
+            let response = ApiResponse::<FilterOptions> {
+                status: 500,
+                message: "Failed to resolve client permissions".to_string(),
+                data: None,
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+    };
+    match stats_service
+        .get_filter_options_for_client_ids(allowed_client_ids.as_ref())
+        .await
+    {
         Ok(options) => {
             info!("Generated filter options");
 
@@ -180,6 +230,7 @@ pub async fn get_filter_options(
 pub async fn get_clients_by_criteria(
     Query(params): Query<HashMap<String, String>>,
     Extension(client_repo): Extension<Arc<ClientRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
     let clients = match client_repo.list_all().await {
         Ok(clients) => clients,
@@ -208,6 +259,7 @@ pub async fn get_clients_by_criteria(
     } else {
         clients
     };
+    let filtered_clients = filter_clients_by_view_scope(filtered_clients, &perm_ctx);
 
     info!("Retrieved {} clients by criteria", filtered_clients.len());
 
@@ -225,6 +277,7 @@ pub async fn get_clients_by_criteria(
 #[instrument(skip(client_filter_service))]
 pub async fn filter_clients(
     Extension(client_filter_service): Extension<Arc<ClientFilterService>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
     Json(filter): Json<FilterCriteria>,
 ) -> impl IntoResponse {
     // Convert FilterCriteria to HardwareFilterQuery
@@ -257,6 +310,7 @@ pub async fn filter_clients(
         .await
     {
         Ok(filtered_clients) => {
+            let filtered_clients = filter_clients_by_view_scope(filtered_clients, &perm_ctx);
             info!("Filtered clients: {} matches found", filtered_clients.len());
             let response = ApiResponse {
                 status: 200,
@@ -279,11 +333,28 @@ pub async fn filter_clients(
 
 /// Export detailed client and hardware data
 #[debug_handler]
-#[instrument(skip(export_service))]
+#[instrument(skip(export_service, client_repo, perm_ctx))]
 pub async fn export_client_hardware_data(
     Extension(export_service): Extension<Arc<ExportService>>,
+    Extension(client_repo): Extension<Arc<ClientRepository>>,
+    Extension(perm_ctx): Extension<PermissionContext>,
 ) -> impl IntoResponse {
-    match export_service.export_client_hardware_data().await {
+    let allowed_client_ids = match authorized_client_ids(&client_repo, &perm_ctx).await {
+        Ok(ids) => ids,
+        Err(err) => {
+            error!("Failed to resolve client permissions: {}", err);
+            let response = ApiResponse::<Vec<ClientHardwareExport>> {
+                status: 500,
+                message: "Failed to resolve client permissions".to_string(),
+                data: None,
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+    };
+    match export_service
+        .export_client_hardware_data_for_client_ids(allowed_client_ids.as_ref())
+        .await
+    {
         Ok(export_data) => {
             let response = ApiResponse {
                 status: 200,
@@ -304,18 +375,67 @@ pub async fn export_client_hardware_data(
     }
 }
 
+fn filter_clients_by_view_scope(clients: Vec<Client>, perm_ctx: &PermissionContext) -> Vec<Client> {
+    if perm_ctx.is_admin() {
+        return clients;
+    }
+    let scope = perm_ctx
+        .evaluate(&ResourceType::Client, &PermissionAction::View)
+        .unwrap_or(ScopeConstraint::None);
+    clients
+        .into_iter()
+        .filter(|client| {
+            PermissionContext::matches_scope(
+                &scope,
+                &perm_ctx.user_id,
+                client.created_by.as_deref(),
+                client.project_id.as_deref(),
+                &PermissionContext::client_tags(client),
+            )
+        })
+        .collect()
+}
+
+async fn authorized_client_ids(
+    client_repo: &ClientRepository,
+    perm_ctx: &PermissionContext,
+) -> Result<Option<HashSet<String>>, String> {
+    if perm_ctx.is_admin() {
+        return Ok(None);
+    }
+    let scope = perm_ctx
+        .evaluate(&ResourceType::Client, &PermissionAction::View)
+        .unwrap_or(ScopeConstraint::None);
+    if matches!(scope, ScopeConstraint::All) {
+        return Ok(None);
+    }
+    let clients = client_repo
+        .list_all()
+        .await
+        .map_err(|err| err.to_string())?;
+    Ok(Some(
+        filter_clients_by_view_scope(clients, perm_ctx)
+            .into_iter()
+            .map(|client| client.id)
+            .collect(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tests::fixtures::{TestAppBuilder, auth_headers};
     use axum::{
         body::Body,
         extract::Request,
-        http::{Method, StatusCode, header},
+        http::{Method, StatusCode},
     };
-    use serde_json::json;
     use tower::ServiceExt;
 
-    async fn make_get(app: &axum::Router, path: &str, token: Option<&str>) -> (StatusCode, serde_json::Value) {
+    async fn make_get(
+        app: &axum::Router,
+        path: &str,
+        token: Option<&str>,
+    ) -> (StatusCode, serde_json::Value) {
         let mut req = Request::builder().method(Method::GET).uri(path);
         if let Some(t) = token {
             let (k, v) = auth_headers(t);
@@ -325,7 +445,9 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let body: serde_json::Value = serde_json::from_slice(
-            &axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap(),
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
         )
         .unwrap();
         (status, body)
@@ -334,8 +456,12 @@ mod tests {
     #[tokio::test]
     async fn test_hardware_stats() {
         let app = TestAppBuilder::new().build().await;
-        let (status, body) =
-            make_get(&app.router, "/api/v1/stats/hardware", Some(&app.admin_token)).await;
+        let (status, body) = make_get(
+            &app.router,
+            "/api/v1/stats/hardware",
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
         assert!(body["data"].is_object());
     }
@@ -343,16 +469,24 @@ mod tests {
     #[tokio::test]
     async fn test_detailed_stats() {
         let app = TestAppBuilder::new().build().await;
-        let (status, _body) =
-            make_get(&app.router, "/api/v1/stats/detailed", Some(&app.admin_token)).await;
+        let (status, _body) = make_get(
+            &app.router,
+            "/api/v1/stats/detailed",
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
     }
 
     #[tokio::test]
     async fn test_filter_options() {
         let app = TestAppBuilder::new().build().await;
-        let (status, _body) =
-            make_get(&app.router, "/api/v1/filter_options", Some(&app.admin_token)).await;
+        let (status, _body) = make_get(
+            &app.router,
+            "/api/v1/filter_options",
+            Some(&app.admin_token),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
     }
 }

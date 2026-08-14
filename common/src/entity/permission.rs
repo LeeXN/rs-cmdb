@@ -156,6 +156,16 @@ pub struct PendingApproval {
     pub reviewed_at: Option<String>,
     #[serde(default)]
     pub executed_task_id: Option<String>,
+    /// Set when an approved request is being materialized into a command.
+    /// This makes approval retries idempotent and distinguishes a failed
+    /// materialization from a request that was never approved.
+    #[serde(default)]
+    pub execution_started_at: Option<String>,
+    /// Unique owner of the current task-materialization claim. Cleanup and
+    /// task attachment must present the same claim so an expired worker
+    /// cannot roll back a newer retry.
+    #[serde(default)]
+    pub execution_claim_id: Option<String>,
 }
 
 // ── ExecPolicy structures ──────────────────────────────────────────────────
@@ -243,7 +253,10 @@ impl CommandRules {
     }
 
     pub fn listed_commands(&self) -> Vec<String> {
-        self.overrides.iter().map(|rule| rule.pattern.clone()).collect()
+        self.overrides
+            .iter()
+            .map(|rule| rule.pattern.clone())
+            .collect()
     }
 
     pub fn is_allow_all(&self) -> bool {

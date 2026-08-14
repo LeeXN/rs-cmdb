@@ -2,6 +2,7 @@ use crate::db::Database;
 use common::entity::execution::{ExecutionSession, SessionStatus};
 use common::error::{CmdbError, CmdbResult};
 use common::models::{CommandQuery, PaginatedResult};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 pub struct ExecutionSessionRepository {
@@ -24,8 +25,8 @@ impl ExecutionSessionRepository {
 
     pub async fn save(&self, session: &ExecutionSession) -> CmdbResult<()> {
         let key = format!("{}{}", PREFIX, session.session_id);
-        let value = serde_json::to_vec(session)
-            .map_err(|e| CmdbError::Serialization(e.to_string()))?;
+        let value =
+            serde_json::to_vec(session).map_err(|e| CmdbError::Serialization(e.to_string()))?;
         self.db.set(&key, &value).await?;
 
         let idx_key = format!(
@@ -50,10 +51,41 @@ impl ExecutionSessionRepository {
         }
     }
 
+    pub async fn delete(&self, session_id: &str) -> CmdbResult<()> {
+        let Some(session) = self.get(session_id).await? else {
+            return Ok(());
+        };
+        self.db.delete(&format!("{}{}", PREFIX, session_id)).await?;
+        let index_key = format!(
+            "{}{}:{}:{}",
+            USER_IDX_PREFIX, session.user_id, session.start_time, session.session_id
+        );
+        self.db.delete(&index_key).await
+    }
+
     pub async fn list_by_user(
         &self,
         user_id: &str,
         query: &CommandQuery,
+    ) -> CmdbResult<PaginatedResult<ExecutionSession>> {
+        self.list_by_user_filtered(user_id, query, None).await
+    }
+
+    pub async fn list_by_user_scoped(
+        &self,
+        user_id: &str,
+        query: &CommandQuery,
+        allowed_client_ids: &HashSet<String>,
+    ) -> CmdbResult<PaginatedResult<ExecutionSession>> {
+        self.list_by_user_filtered(user_id, query, Some(allowed_client_ids))
+            .await
+    }
+
+    async fn list_by_user_filtered(
+        &self,
+        user_id: &str,
+        query: &CommandQuery,
+        allowed_client_ids: Option<&HashSet<String>>,
     ) -> CmdbResult<PaginatedResult<ExecutionSession>> {
         let prefix = format!("{}{}:", USER_IDX_PREFIX, user_id);
         let idx_keys = self.db.list_keys(&prefix).await?;
@@ -65,7 +97,17 @@ impl ExecutionSessionRepository {
             let parts: Vec<&str> = idx_key.split(':').collect();
             if let Some(session_id) = parts.last() {
                 if let Ok(Some(session)) = self.get(session_id).await {
-                    sessions.push(session);
+                    let visible = allowed_client_ids
+                        .map(|allowed| {
+                            session
+                                .client_ids
+                                .iter()
+                                .all(|client_id| allowed.contains(client_id))
+                        })
+                        .unwrap_or(true);
+                    if visible {
+                        sessions.push(session);
+                    }
                 }
             }
         }
@@ -73,7 +115,10 @@ impl ExecutionSessionRepository {
         Ok(self.filter_and_paginate(sessions, query))
     }
 
-    pub async fn list_all(&self, query: &CommandQuery) -> CmdbResult<PaginatedResult<ExecutionSession>> {
+    pub async fn list_all(
+        &self,
+        query: &CommandQuery,
+    ) -> CmdbResult<PaginatedResult<ExecutionSession>> {
         let keys = self.db.list_keys(PREFIX).await?;
         let mut keys = keys;
         keys.sort_by(|a, b| b.cmp(a));
@@ -106,11 +151,7 @@ impl ExecutionSessionRepository {
         Ok(())
     }
 
-    pub async fn update_cast_path(
-        &self,
-        session_id: &str,
-        cast_file_path: &str,
-    ) -> CmdbResult<()> {
+    pub async fn update_cast_path(&self, session_id: &str, cast_file_path: &str) -> CmdbResult<()> {
         if let Some(mut session) = self.get(session_id).await? {
             session.cast_file_path = Some(cast_file_path.to_string());
             self.save(&session).await?;
@@ -135,8 +176,17 @@ impl ExecutionSessionRepository {
             sessions.retain(|session| session.status.to_string().eq_ignore_ascii_case(status));
         }
 
-        if let Some(execution_type) = query.execution_type.as_deref().filter(|value| !value.is_empty()) {
-            sessions.retain(|session| session.execution_type.to_string().eq_ignore_ascii_case(execution_type));
+        if let Some(execution_type) = query
+            .execution_type
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            sessions.retain(|session| {
+                session
+                    .execution_type
+                    .to_string()
+                    .eq_ignore_ascii_case(execution_type)
+            });
         }
 
         if let Some(from) = query.from.as_deref().filter(|value| !value.is_empty()) {
@@ -147,13 +197,21 @@ impl ExecutionSessionRepository {
             sessions.retain(|session| session.start_time.as_str() <= to);
         }
 
-        if let Some(search) = query.search.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(search) = query
+            .search
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
             let needle = search.to_lowercase();
             sessions.retain(|session| {
                 session.session_id.to_lowercase().contains(&needle)
                     || session.username.to_lowercase().contains(&needle)
                     || session.command.to_lowercase().contains(&needle)
-                    || session.client_ids.iter().any(|id| id.to_lowercase().contains(&needle))
+                    || session
+                        .client_ids
+                        .iter()
+                        .any(|id| id.to_lowercase().contains(&needle))
             });
         }
 
@@ -192,7 +250,10 @@ mod tests {
     #[async_trait]
     impl Database for MockDatabase {
         async fn set(&self, key: &str, value: &[u8]) -> CmdbResult<()> {
-            self.data.lock().unwrap().insert(key.to_string(), value.to_vec());
+            self.data
+                .lock()
+                .unwrap()
+                .insert(key.to_string(), value.to_vec());
             Ok(())
         }
 

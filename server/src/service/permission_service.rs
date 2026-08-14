@@ -30,17 +30,19 @@ impl PermissionService {
     /// Load all rules from DB into cache
     pub async fn refresh_cache(&self) -> CmdbResult<()> {
         let rules = self.repo.list_rules().await?;
-        let mut cache = self.rules_cache.write().map_err(|e| {
-            CmdbError::Internal(format!("Permission cache lock error: {}", e))
-        })?;
+        let mut cache = self
+            .rules_cache
+            .write()
+            .map_err(|e| CmdbError::Internal(format!("Permission cache lock error: {}", e)))?;
         *cache = rules;
         Ok(())
     }
 
     fn get_cached_rules(&self) -> CmdbResult<Vec<PermissionRule>> {
-        let cache = self.rules_cache.read().map_err(|e| {
-            CmdbError::Internal(format!("Permission cache lock error: {}", e))
-        })?;
+        let cache = self
+            .rules_cache
+            .read()
+            .map_err(|e| CmdbError::Internal(format!("Permission cache lock error: {}", e)))?;
         Ok(cache.clone())
     }
 
@@ -102,6 +104,17 @@ impl PermissionService {
         self.repo.list_groups().await
     }
 
+    pub async fn group_ids_for_user(&self, user_id: &str) -> CmdbResult<Vec<String>> {
+        Ok(self
+            .repo
+            .list_groups()
+            .await?
+            .into_iter()
+            .filter(|group| group.member_ids.iter().any(|member| member == user_id))
+            .map(|group| group.id)
+            .collect())
+    }
+
     // ── Permission Matching ──────────────────────────────────────────────────
 
     /// Find the effective scope constraint for a given user + resource type + action
@@ -124,11 +137,11 @@ impl PermissionService {
                 continue;
             }
             let subject_match = match &rule.subject_type {
-                SubjectType::User => &rule.subject_id == user_id,
+                SubjectType::User => rule.subject_id == user_id,
                 SubjectType::Group => group_ids.contains(&rule.subject_id),
                 SubjectType::Role => {
                     let role_str = role.to_string();
-                    &rule.subject_id == &role_str
+                    rule.subject_id == role_str
                 }
             };
             if subject_match {
@@ -174,12 +187,8 @@ impl PermissionService {
         match scope {
             ScopeConstraint::None => Ok(false),
             ScopeConstraint::All => Ok(true),
-            ScopeConstraint::Owned => {
-                Ok(resource_owner_id.as_deref() == Some(user_id))
-            }
-            ScopeConstraint::Project(_) | ScopeConstraint::Tag(_) => {
-                Ok(true)
-            }
+            ScopeConstraint::Owned => Ok(resource_owner_id.as_deref() == Some(user_id)),
+            ScopeConstraint::Project(_) | ScopeConstraint::Tag(_) => Ok(false),
         }
     }
 

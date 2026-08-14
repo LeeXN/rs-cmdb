@@ -6,13 +6,18 @@
 use crate::dao::{ClientDao, RackDao};
 use crate::queue::{Message, MessageQueue};
 use crate::repository::hardware_repository::HardwareRepository;
-use crate::service::auth_service::{hash_token, generate_client_token};
+use crate::service::auth_service::{
+    client_token_matches_id, generate_client_token, hash_token, verify_token,
+};
 use crate::validation::validate_ip_address;
 use common::command::{AuditAction, AuditLogEntry};
 use common::error::{CmdbError, CmdbResult};
 use common::models::Client;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{info, instrument, warn};
+
+const REMOTE_SERVICE_STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[cfg(test)]
 use crate::tests::fixtures::*;
@@ -140,6 +145,16 @@ impl ClientService {
         // Create a new client with given or generated ID
         let mut client = Client::new(hostname.to_string(), ip_address.to_string());
         client.primary_ip = primary_ip.clone();
+        client.sys_vendor = Some(sys_vendor.to_string());
+        client.product_name = Some(product_name.to_string());
+        client.serial_number = Some(serial_number.to_string());
+        client.os = Some(os.to_string());
+
+        // Treat an empty or whitespace-only ID as absent. This prevents any
+        // caller from persisting the reserved database key `client:`.
+        let client_id = client_id
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty());
 
         // Use provided client ID if available
         if let Some(id) = client_id {
@@ -278,64 +293,72 @@ impl ClientService {
         let validated_ip = validate_ip_address(&client.ip_address)?;
         info!("Validated IP address for SSH: {}", validated_ip);
 
-        let commands = vec![
-            "systemctl stop rs-cmdb-client",
-            "systemctl disable rs-cmdb-client",
-        ];
-
         let config = crate::config::get_config();
         let known_hosts_file = config.ssh_known_hosts_file.as_deref();
 
-        for cmd in commands {
-            info!("Executing on {}: {}", client.hostname, cmd);
+        let command = "systemctl stop rs-cmdb-client; systemctl disable rs-cmdb-client";
+        info!("Executing on {}: {}", client.hostname, command);
 
-            let mut ssh_cmd = tokio::process::Command::new("ssh");
+        let mut ssh_cmd = tokio::process::Command::new("ssh");
+        ssh_cmd
+            .kill_on_drop(true)
+            .arg("-o")
+            .arg("ConnectTimeout=3")
+            .arg("-o")
+            .arg("ConnectionAttempts=1")
+            .arg("-o")
+            .arg("BatchMode=yes")
+            .arg("-o")
+            .arg("StrictHostKeyChecking=yes");
+
+        if let Some(known_hosts) = known_hosts_file {
             ssh_cmd
                 .arg("-o")
-                .arg("ConnectTimeout=30")
-                .arg("-o")
-                .arg("BatchMode=yes")
-                .arg("-o")
-                .arg("StrictHostKeyChecking=yes");
+                .arg(format!("UserKnownHostsFile={}", known_hosts));
+        }
 
-            if let Some(known_hosts) = known_hosts_file {
-                ssh_cmd
-                    .arg("-o")
-                    .arg(format!("UserKnownHostsFile={}", known_hosts));
+        // Use validated IP address. Keep remote cleanup best-effort and tightly
+        // bounded so an offline client cannot make the DELETE API time out.
+        ssh_cmd.arg(&validated_ip).arg(command);
+
+        let output = tokio::time::timeout(REMOTE_SERVICE_STOP_TIMEOUT, ssh_cmd.output())
+            .await
+            .map_err(|_| {
+                CmdbError::Internal(format!(
+                    "Timed out stopping service on {} after {} seconds",
+                    client.hostname,
+                    REMOTE_SERVICE_STOP_TIMEOUT.as_secs()
+                ))
+            })?;
+
+        match output {
+            Ok(result) if result.status.success() => {
+                info!("Service stopped successfully on {}", client.hostname);
             }
+            Ok(result) => {
+                let stderr = String::from_utf8_lossy(&result.stderr).trim().to_string();
+                warn!("Command failed on {}: {}", client.hostname, stderr);
 
-            // Use validated IP address
-            ssh_cmd.arg(&validated_ip).arg(cmd);
-
-            let output = ssh_cmd.output().await;
-
-            match output {
-                Ok(result) => {
-                    if result.status.success() {
-                        info!("Command executed successfully on {}", client.hostname);
-                    } else {
-                        let stderr = String::from_utf8_lossy(&result.stderr);
-                        warn!("Command failed on {}: {}", client.hostname, stderr);
-
-                        if stderr.contains("Host key verification failed")
-                            || stderr.contains("Could not resolve hostname")
-                        {
-                            return Err(CmdbError::Validation(format!(
-                                "SSH host key verification failed for {}. Please add the host to your known_hosts file.",
-                                client.hostname
-                            )));
-                        }
-                    }
+                if stderr.contains("Host key verification failed") {
+                    return Err(CmdbError::Validation(format!(
+                        "SSH host key verification failed for {}. Please add the host to your known_hosts file.",
+                        client.hostname
+                    )));
                 }
-                Err(e) => {
-                    let error_msg = format!("SSH connection failed to {}: {}", client.hostname, e);
-                    warn!("{}", error_msg);
 
-                    if e.kind() == std::io::ErrorKind::NotFound {
-                        return Err(CmdbError::Validation("SSH command not found. Please ensure OpenSSH client is installed to manage remote services.".to_string()));
-                    }
-                    return Err(CmdbError::Internal(error_msg));
+                return Err(CmdbError::Internal(format!(
+                    "Failed to stop service on {}: {}",
+                    client.hostname, stderr
+                )));
+            }
+            Err(e) => {
+                let error_msg = format!("SSH connection failed to {}: {}", client.hostname, e);
+                warn!("{}", error_msg);
+
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    return Err(CmdbError::Validation("SSH command not found. Please ensure OpenSSH client is installed to manage remote services.".to_string()));
                 }
+                return Err(CmdbError::Internal(error_msg));
             }
         }
 
@@ -356,6 +379,46 @@ impl ClientService {
     #[allow(dead_code)]
     pub async fn get_client(&self, client_id: &str) -> CmdbResult<Option<Client>> {
         self.client_dao.get(client_id).await
+    }
+
+    /// Find a client by machine serial number.
+    pub async fn get_by_serial(&self, serial: &str) -> CmdbResult<Option<Client>> {
+        self.client_dao.get_by_serial(serial).await
+    }
+
+    /// Identify the canonical record that originally received a valid token.
+    /// This supports releases that persisted the credential as
+    /// `agent_token_unknown` before they persisted the server-returned ID.
+    pub async fn get_by_issued_agent_token(&self, token: &str) -> CmdbResult<Option<Client>> {
+        if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Ok(None);
+        }
+        for client in self.client_dao.list_all().await? {
+            if client_token_matches_id(token, &client.id)
+                && client
+                    .agent_token
+                    .as_deref()
+                    .is_some_and(|hash| verify_token(token, hash).unwrap_or(false))
+            {
+                return Ok(Some(client));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Re-issue the credential for an existing Agent. This is intentionally
+    /// exposed only through an admin-protected API; normal registration must
+    /// continue proving possession of the current token.
+    pub async fn recover_agent_token(&self, client_id: &str) -> CmdbResult<String> {
+        let mut client = self
+            .client_dao
+            .get(client_id)
+            .await?
+            .ok_or_else(|| CmdbError::NotFound(format!("Client {} not found", client_id)))?;
+        let token = generate_client_token(client_id);
+        client.agent_token = Some(hash_token(&token)?);
+        self.client_dao.save(&client).await?;
+        Ok(token)
     }
 
     /// List all clients
@@ -539,6 +602,10 @@ mod tests {
         let (client, _token) = client.unwrap();
         assert_eq!(client.hostname, "test-host");
         assert_eq!(client.ip_address, "192.168.1.1");
+        assert_eq!(client.sys_vendor.as_deref(), Some("Dell"));
+        assert_eq!(client.product_name.as_deref(), Some("PowerEdge"));
+        assert_eq!(client.serial_number.as_deref(), Some("SN12345"));
+        assert_eq!(client.os.as_deref(), Some("Linux"));
     }
 
     #[tokio::test]
@@ -563,6 +630,36 @@ mod tests {
 
         assert!(client.is_ok());
         assert_eq!(client.unwrap().0.id, custom_id);
+    }
+
+    #[tokio::test]
+    async fn test_register_client_treats_blank_id_as_absent() {
+        let db = setup_test_db().unwrap();
+        let db_arc: Arc<dyn crate::db::Database> = Arc::new(db);
+        let service = create_service(db_arc.clone());
+
+        let (client, _token) = service
+            .register_client(
+                "blank-id-host",
+                "192.168.1.2",
+                "Dell",
+                "PowerEdge",
+                "SN-BLANK-ID",
+                "Linux",
+                Some("   ".to_string()),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(!client.id.is_empty());
+        assert!(
+            ClientRepository::new(db_arc)
+                .get("")
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[tokio::test]

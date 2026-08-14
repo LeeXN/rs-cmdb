@@ -5,7 +5,9 @@ use crate::components::ui::card::{Card, CardBody, CardHeader};
 use crate::components::ui::checkbox::Checkbox;
 use crate::components::ui::confirm_modal::ConfirmModal;
 use crate::components::ui::input::Input;
-use crate::components::ui::modal::{Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle};
+use crate::components::ui::modal::{
+    Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle,
+};
 use crate::components::ui::select::{Select, SelectOption};
 use crate::components::ui::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use crate::services::permission::{
@@ -77,8 +79,14 @@ fn rule_mode_help(mode: &str) -> (&'static str, &'static str) {
     match mode {
         "deny_all" => ("全部禁止", "默认阻止所有命令，适合逐步开放前的强限制场景。"),
         "allow_list" => ("白名单", "仅允许列表中的命令执行，未列出的命令全部拒绝。"),
-        "deny_list" => ("黑名单", "默认允许命令执行，但会阻止列表中列出的高风险命令。"),
-        _ => ("全部允许", "默认允许所有命令，仅依赖后续审批或其他外围控制。"),
+        "deny_list" => (
+            "黑名单",
+            "默认允许命令执行，但会阻止列表中列出的高风险命令。",
+        ),
+        _ => (
+            "全部允许",
+            "默认允许所有命令，仅依赖后续审批或其他外围控制。",
+        ),
     }
 }
 
@@ -111,7 +119,11 @@ fn form_commands_from_policy(p: &serde_json::Value) -> String {
         .cloned()
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|item| item.get("pattern").and_then(|value| value.as_str()).map(str::to_string))
+        .filter_map(|item| {
+            item.get("pattern")
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -164,17 +176,41 @@ pub fn exec_policies_page() -> Html {
     };
 
     let subject_options = vec![
-        SelectOption { value: "Role:Admin".into(), label: "所有管理员".into() },
-        SelectOption { value: "Role:User".into(), label: "所有用户".into() },
-        SelectOption { value: "Role:Viewer".into(), label: "所有只读用户".into() },
-        SelectOption { value: "__custom__".into(), label: "指定用户...".into() },
+        SelectOption {
+            value: "Role:Admin".into(),
+            label: "所有管理员".into(),
+        },
+        SelectOption {
+            value: "Role:User".into(),
+            label: "所有用户".into(),
+        },
+        SelectOption {
+            value: "Role:Viewer".into(),
+            label: "所有只读用户".into(),
+        },
+        SelectOption {
+            value: "__custom__".into(),
+            label: "指定用户...".into(),
+        },
     ];
 
     let action_options = vec![
-        SelectOption { value: "allow_all".into(), label: "全部允许".into() },
-        SelectOption { value: "deny_all".into(), label: "全部禁止".into() },
-        SelectOption { value: "allow_list".into(), label: "白名单".into() },
-        SelectOption { value: "deny_list".into(), label: "黑名单".into() },
+        SelectOption {
+            value: "allow_all".into(),
+            label: "全部允许".into(),
+        },
+        SelectOption {
+            value: "deny_all".into(),
+            label: "全部禁止".into(),
+        },
+        SelectOption {
+            value: "allow_list".into(),
+            label: "白名单".into(),
+        },
+        SelectOption {
+            value: "deny_list".into(),
+            label: "黑名单".into(),
+        },
     ];
 
     let open_create = {
@@ -269,7 +305,11 @@ pub fn exec_policies_page() -> Html {
                     Ok(_) => {
                         notification.set(Some((
                             NotificationType::Success,
-                            if editing_id.is_some() { "更新成功".into() } else { "创建成功".into() },
+                            if editing_id.is_some() {
+                                "更新成功".into()
+                            } else {
+                                "创建成功".into()
+                            },
                         )));
                         editing_id.set(None);
                         form_id.set(String::new());
@@ -331,11 +371,34 @@ pub fn exec_policies_page() -> Html {
         let form_commands = form_commands.clone();
         let form_require_approval = form_require_approval.clone();
         Callback::from(move |policy: serde_json::Value| {
-            editing_id.set(policy.get("id").and_then(|v| v.as_str()).map(str::to_string));
-            form_id.set(policy.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string());
-            form_name.set(policy.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string());
-            let subject_type = policy.get("subject_type").and_then(|v| v.as_str()).unwrap_or("Role");
-            let subject_id = policy.get("subject_id").and_then(|v| v.as_str()).unwrap_or("Admin");
+            editing_id.set(
+                policy
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string),
+            );
+            form_id.set(
+                policy
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+            );
+            form_name.set(
+                policy
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+            );
+            let subject_type = policy
+                .get("subject_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Role");
+            let subject_id = policy
+                .get("subject_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Admin");
             if subject_type == "User" {
                 form_subject.set("__custom__".to_string());
                 form_subject_custom.set(subject_id.to_string());
@@ -345,7 +408,12 @@ pub fn exec_policies_page() -> Html {
             }
             form_rule_mode.set(form_rule_mode_from_policy(&policy));
             form_commands.set(form_commands_from_policy(&policy));
-            form_require_approval.set(policy.get("require_approval").and_then(|v| v.as_bool()).unwrap_or(false));
+            form_require_approval.set(
+                policy
+                    .get("require_approval")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            );
             show_form.set(true);
         })
     };

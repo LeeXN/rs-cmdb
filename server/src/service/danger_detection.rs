@@ -39,7 +39,9 @@ fn rule_rm_rf(cmd: &str, args: &[String]) -> bool {
     if cmd != "rm" {
         return false;
     }
-    let has_recursive = args.iter().any(|a| a == "-rf" || a == "-fr" || a == "--no-preserve-root")
+    let has_recursive = args
+        .iter()
+        .any(|a| a == "-rf" || a == "-fr" || a == "--no-preserve-root")
         || (args.contains(&"-r".to_string()) && args.contains(&"-f".to_string()));
     let has_root = args.iter().any(|a| a == "/" || a == "/*");
     has_recursive && has_root
@@ -74,7 +76,11 @@ fn rule_passwd_root(cmd: &str, args: &[String]) -> bool {
 }
 
 fn rule_chmod_777_root(cmd: &str, args: &[String]) -> bool {
-    cmd == "chmod" && args.contains(&"777".to_string()) && args.iter().any(|a| a == "/" || a.starts_with("/*") || a.starts_with("--"))
+    cmd == "chmod"
+        && args.contains(&"777".to_string())
+        && args
+            .iter()
+            .any(|a| a == "/" || a.starts_with("/*") || a.starts_with("--"))
 }
 
 // ─── WARNING rules ────────────────────────────────────────────────────────────
@@ -88,7 +94,8 @@ fn rule_su_root(cmd: &str, args: &[String]) -> bool {
 }
 
 fn rule_systemctl_stop(cmd: &str, args: &[String]) -> bool {
-    cmd == "systemctl" && (args.contains(&"stop".to_string()) || args.contains(&"disable".to_string()))
+    cmd == "systemctl"
+        && (args.contains(&"stop".to_string()) || args.contains(&"disable".to_string()))
 }
 
 fn rule_service_stop(cmd: &str, args: &[String]) -> bool {
@@ -114,26 +121,94 @@ fn rule_chown_root(cmd: &str, args: &[String]) -> bool {
 // ─── rule table ───────────────────────────────────────────────────────────────
 
 static BLOCKED_RULES: &[DangerRule] = &[
-    DangerRule { name: "rm-rf-root", level: DangerLevel::Blocked, matcher: rule_rm_rf },
-    DangerRule { name: "mkfs", level: DangerLevel::Blocked, matcher: rule_mkfs },
-    DangerRule { name: "dd-overwrite-device", level: DangerLevel::Blocked, matcher: rule_dd_dev },
-    DangerRule { name: "shred-device", level: DangerLevel::Blocked, matcher: rule_shred_dev },
-    DangerRule { name: "wipefs", level: DangerLevel::Blocked, matcher: rule_wipefs },
-    DangerRule { name: "shutdown-halt", level: DangerLevel::Blocked, matcher: rule_shutdown_halt },
-    DangerRule { name: "reboot", level: DangerLevel::Blocked, matcher: rule_reboot },
-    DangerRule { name: "passwd-root", level: DangerLevel::Blocked, matcher: rule_passwd_root },
-    DangerRule { name: "chmod-777-root", level: DangerLevel::Blocked, matcher: rule_chmod_777_root },
+    DangerRule {
+        name: "rm-rf-root",
+        level: DangerLevel::Blocked,
+        matcher: rule_rm_rf,
+    },
+    DangerRule {
+        name: "mkfs",
+        level: DangerLevel::Blocked,
+        matcher: rule_mkfs,
+    },
+    DangerRule {
+        name: "dd-overwrite-device",
+        level: DangerLevel::Blocked,
+        matcher: rule_dd_dev,
+    },
+    DangerRule {
+        name: "shred-device",
+        level: DangerLevel::Blocked,
+        matcher: rule_shred_dev,
+    },
+    DangerRule {
+        name: "wipefs",
+        level: DangerLevel::Blocked,
+        matcher: rule_wipefs,
+    },
+    DangerRule {
+        name: "shutdown-halt",
+        level: DangerLevel::Blocked,
+        matcher: rule_shutdown_halt,
+    },
+    DangerRule {
+        name: "reboot",
+        level: DangerLevel::Blocked,
+        matcher: rule_reboot,
+    },
+    DangerRule {
+        name: "passwd-root",
+        level: DangerLevel::Blocked,
+        matcher: rule_passwd_root,
+    },
+    DangerRule {
+        name: "chmod-777-root",
+        level: DangerLevel::Blocked,
+        matcher: rule_chmod_777_root,
+    },
 ];
 
 static WARNING_RULES: &[DangerRule] = &[
-    DangerRule { name: "sudo", level: DangerLevel::Warning, matcher: rule_sudo },
-    DangerRule { name: "su-root", level: DangerLevel::Warning, matcher: rule_su_root },
-    DangerRule { name: "systemctl-stop", level: DangerLevel::Warning, matcher: rule_systemctl_stop },
-    DangerRule { name: "service-stop", level: DangerLevel::Warning, matcher: rule_service_stop },
-    DangerRule { name: "killall-pkill", level: DangerLevel::Warning, matcher: rule_kill_all },
-    DangerRule { name: "crontab-remove", level: DangerLevel::Warning, matcher: rule_crontab_r },
-    DangerRule { name: "chmod-suid", level: DangerLevel::Warning, matcher: rule_chmod_suid },
-    DangerRule { name: "chown-root", level: DangerLevel::Warning, matcher: rule_chown_root },
+    DangerRule {
+        name: "sudo",
+        level: DangerLevel::Warning,
+        matcher: rule_sudo,
+    },
+    DangerRule {
+        name: "su-root",
+        level: DangerLevel::Warning,
+        matcher: rule_su_root,
+    },
+    DangerRule {
+        name: "systemctl-stop",
+        level: DangerLevel::Warning,
+        matcher: rule_systemctl_stop,
+    },
+    DangerRule {
+        name: "service-stop",
+        level: DangerLevel::Warning,
+        matcher: rule_service_stop,
+    },
+    DangerRule {
+        name: "killall-pkill",
+        level: DangerLevel::Warning,
+        matcher: rule_kill_all,
+    },
+    DangerRule {
+        name: "crontab-remove",
+        level: DangerLevel::Warning,
+        matcher: rule_crontab_r,
+    },
+    DangerRule {
+        name: "chmod-suid",
+        level: DangerLevel::Warning,
+        matcher: rule_chmod_suid,
+    },
+    DangerRule {
+        name: "chown-root",
+        level: DangerLevel::Warning,
+        matcher: rule_chown_root,
+    },
 ];
 
 // ─── public API ───────────────────────────────────────────────────────────────
@@ -275,9 +350,21 @@ mod tests {
     #[test]
     fn test_safe_commands_not_over_blocked() {
         assert_eq!(svc().analyse("df", &["-h".into()]).level, DangerLevel::Safe);
-        assert_eq!(svc().analyse("free", &["-m".into()]).level, DangerLevel::Safe);
-        assert_eq!(svc().analyse("ps", &["aux".into()]).level, DangerLevel::Safe);
-        assert_eq!(svc().analyse("cat", &["/etc/os-release".into()]).level, DangerLevel::Safe);
-        assert_eq!(svc().analyse("uptime", &[] as &[String]).level, DangerLevel::Safe);
+        assert_eq!(
+            svc().analyse("free", &["-m".into()]).level,
+            DangerLevel::Safe
+        );
+        assert_eq!(
+            svc().analyse("ps", &["aux".into()]).level,
+            DangerLevel::Safe
+        );
+        assert_eq!(
+            svc().analyse("cat", &["/etc/os-release".into()]).level,
+            DangerLevel::Safe
+        );
+        assert_eq!(
+            svc().analyse("uptime", &[] as &[String]).level,
+            DangerLevel::Safe
+        );
     }
 }

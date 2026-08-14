@@ -7,6 +7,7 @@ use crate::repository::{
     client_repository::ClientRepository, hardware_repository::HardwareRepository,
 };
 use common::models::ClientHardwareExport;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::info;
 
@@ -23,13 +24,25 @@ impl ExportService {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn export_client_hardware_data(&self) -> Result<Vec<ClientHardwareExport>, String> {
+        self.export_client_hardware_data_for_client_ids(None).await
+    }
+
+    /// Export hardware data restricted to the supplied client IDs.
+    pub async fn export_client_hardware_data_for_client_ids(
+        &self,
+        allowed_client_ids: Option<&HashSet<String>>,
+    ) -> Result<Vec<ClientHardwareExport>, String> {
         // Get all clients
-        let clients = self
+        let mut clients = self
             .client_repo
             .list_all()
             .await
             .map_err(|e| e.to_string())?;
+        if let Some(allowed_client_ids) = allowed_client_ids {
+            clients.retain(|client| allowed_client_ids.contains(&client.id));
+        }
 
         let mut export_data = Vec::new();
 
@@ -253,7 +266,10 @@ mod tests {
         client_repo.save(&client).await.unwrap();
 
         let hw = create_test_hardware_info(&client.id);
-        hardware_repo.save_hardware(&client.id, &hw, false).await.unwrap();
+        hardware_repo
+            .save_hardware(&client.id, &hw, false)
+            .await
+            .unwrap();
 
         let svc = ExportService::new(client_repo, hardware_repo);
         let data = svc.export_client_hardware_data().await.unwrap();

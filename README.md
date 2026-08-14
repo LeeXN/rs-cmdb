@@ -2,6 +2,9 @@
 
 [English](README.md) | [中文](README_CN.md)
 
+[![CI/CD Pipeline](https://github.com/LeeXN/rs-cmdb/actions/workflows/ci.yml/badge.svg)](https://github.com/LeeXN/rs-cmdb/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/LeeXN/rs-cmdb?label=release)](https://github.com/LeeXN/rs-cmdb/releases/latest)
+
 **rs-cmdb** is a lightweight Configuration Management Database (CMDB) system built entirely in Rust.
 
 ## 🚀 Features
@@ -25,11 +28,13 @@
 
 ---
 
-## ✨ What's New
+## ✨ What's New in 0.1.0
 
 ### Permission System & Remote Command Execution
 
 This release introduces a complete permission system and a secure remote command execution framework.
+
+It also delivers a unified execution history and replay experience, complete batch output views, resilient access-token refresh, secure Agent token migration/recovery, and preserved terminal output formatting.
 
 #### Permission System
 
@@ -138,27 +143,31 @@ All security-relevant operations are written to the audit log with the real oper
 ```bash
 mkdir -p /opt/rs-cmdb
 cd /opt/rs-cmdb
-export RSCMDB_VERSION="0.0.1"
+export RSCMDB_VERSION="0.1.0"
 
-mkdir -p binaires/linux/{x86_64,aarch64}
-curl -L -o ./binaires/linux/x86_64/rs-cmdb-client \
+mkdir -p binaries/linux/{x86_64,aarch64}
+curl -L -o ./binaries/linux/x86_64/rs-cmdb-client \
   https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-x86_64-linux-musl
-curl -L -o ./binaires/linux/aarch64/rs-cmdb-client \
+curl -L -o ./binaries/linux/aarch64/rs-cmdb-client \
   https://github.com/LeeXN/rs-cmdb/releases/download/${RSCMDB_VERSION}/rs-cmdb-client-aarch64-linux-musl
-chmod +x ./binaires/linux/x86_64/rs-cmdb-client
-chmod +x ./binaires/linux/aarch64/rs-cmdb-client
+chmod +x ./binaries/linux/x86_64/rs-cmdb-client
+chmod +x ./binaries/linux/aarch64/rs-cmdb-client
 
 docker run -itd \
   --name rs-cmdb \
   -p 8080:8080 \
   -v $(pwd)/data:/app/data \
-  -v $(pwd)/binaires:/app/binaires \
+  -v $(pwd)/binaries:/app/binaries \
   -e CMDB_JWT_SECRET="$(openssl rand -base64 32)" \
   -e CMDB_ADMIN_PASSWORD="YourSecureP@ssword123" \
   leex2019/rs-cmdb:${RSCMDB_VERSION}
 ```
 
 Access the UI at `http://localhost:8080`. Default admin username is `admin`.
+
+### Release workflow
+
+Pull requests to `master` must pass formatting, workspace checks, Clippy, tests, and the production frontend build. After merge, creating a tag that matches every crate version (for this release, `0.1.0`) builds both musl architectures, publishes the multi-architecture Docker image, and creates a GitHub Release containing server/client binaries, the frontend bundle, and SHA-256 checksums.
 
 ## 🏗️ Architecture
 
