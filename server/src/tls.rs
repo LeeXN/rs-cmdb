@@ -6,7 +6,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::fs;
 use std::io;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsAcceptor;
@@ -26,8 +26,11 @@ fn default_key_path() -> PathBuf {
 }
 
 pub fn generate_self_signed_cert() -> Result<(String, String)> {
-    let cert_dir = default_cert_dir();
-    fs::create_dir_all(&cert_dir)?;
+    generate_self_signed_cert_in(&default_cert_dir())
+}
+
+fn generate_self_signed_cert_in(cert_dir: &Path) -> Result<(String, String)> {
+    fs::create_dir_all(cert_dir)?;
 
     let mut params =
         CertificateParams::new(vec!["localhost".to_string(), "127.0.0.1".to_string()])?;
@@ -42,8 +45,8 @@ pub fn generate_self_signed_cert() -> Result<(String, String)> {
     let cert_pem = cert.pem();
     let key_pem = key_pair.serialize_pem();
 
-    let cert_path = default_cert_path();
-    let key_path = default_key_path();
+    let cert_path = cert_dir.join("server.crt");
+    let key_path = cert_dir.join("server.key");
 
     fs::write(&cert_path, &cert_pem)?;
     fs::write(&key_path, &key_pem)?;
@@ -159,13 +162,13 @@ mod tests {
 
     #[test]
     fn test_generate_self_signed_cert() {
-        let (cert, key) = generate_self_signed_cert().unwrap();
+        let cert_dir = std::env::temp_dir().join(format!("rs-cmdb-tls-{}", uuid::Uuid::new_v4()));
+        let (cert, key) = generate_self_signed_cert_in(&cert_dir).unwrap();
         assert!(cert.contains("BEGIN CERTIFICATE"));
         assert!(key.contains("BEGIN PRIVATE KEY"));
-        let cert_path = default_cert_path();
-        let key_path = default_key_path();
-        let _ = fs::remove_file(&cert_path);
-        let _ = fs::remove_file(&key_path);
+        assert!(cert_dir.join("server.crt").exists());
+        assert!(cert_dir.join("server.key").exists());
+        let _ = fs::remove_dir_all(cert_dir);
     }
 
     #[test]

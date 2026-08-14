@@ -24,7 +24,7 @@ jobs:
     name: Quality Gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -55,7 +55,7 @@ jobs:
     needs: quality
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -63,7 +63,7 @@ jobs:
         with:
           key: frontend
       - uses: jetli/trunk-action@v0.5.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
@@ -77,7 +77,7 @@ jobs:
           trunk build --release
       - name: Upload frontend artifact
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
           path: front/dist/
@@ -97,7 +97,7 @@ jobs:
           - target: aarch64-unknown-linux-musl
             arch-name: arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -105,14 +105,14 @@ jobs:
       - name: Create Python requirements
         run: echo "ziglang" > requirements.txt
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements.txt
       - name: Cache cargo-zigbuild
         id: cache-zigbuild
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-zigbuild
           key: ${{ runner.os }}-cargo-zigbuild-v1
@@ -138,7 +138,7 @@ jobs:
           cp target/${{ matrix.target }}/release/rs-cmdb-server bin/${{ matrix.arch-name }}/
           cp target/${{ matrix.target }}/release/rs-cmdb-client bin/${{ matrix.arch-name }}/
       - name: Upload backend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-${{ matrix.arch-name }}
           path: bin
@@ -152,12 +152,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: backend-*
           merge-multiple: true
           path: release-dist
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: frontend-dist
@@ -184,16 +184,16 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: dist
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: backend-amd64
           path: bin
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: backend-arm64
           path: bin

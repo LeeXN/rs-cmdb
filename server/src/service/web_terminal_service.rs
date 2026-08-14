@@ -113,7 +113,7 @@ impl WebTerminalService {
             .matching_policies(&policies, user_id, role, group_ids, client_id)
             .await;
 
-        matched.sort_by(|a, b| b.priority.cmp(&a.priority));
+        matched.sort_by_key(|policy| std::cmp::Reverse(policy.priority));
 
         let policy = match matched.first() {
             Some(p) => *p,
@@ -145,7 +145,7 @@ impl WebTerminalService {
         let mut matched = self
             .matching_policies(&policies, user_id, role, group_ids, client_id)
             .await;
-        matched.sort_by(|a, b| b.priority.cmp(&a.priority));
+        matched.sort_by_key(|policy| std::cmp::Reverse(policy.priority));
         let policy = matched.first().copied().ok_or_else(|| {
             CmdbError::Forbidden("No terminal policy grants access to this client".into())
         })?;

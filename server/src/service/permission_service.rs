@@ -150,7 +150,7 @@ impl PermissionService {
         }
 
         // Sort by priority descending: highest priority wins
-        matched_rules.sort_by(|a, b| b.priority.cmp(&a.priority));
+        matched_rules.sort_by_key(|rule| std::cmp::Reverse(rule.priority));
 
         match matched_rules.first() {
             Some(rule) => Ok(rule.constraint.clone()),

@@ -263,10 +263,11 @@ fn is_display_controller(path: &Path) -> bool {
 // 修改 get_gpu_sn 函数使用缓存
 fn get_gpu_sn(gpu_vendor_name: &str, original_pci_bus_id: &str) -> Option<String> {
     let cache = get_cache();
-    let output = match cache.lock().ok()?.get_smi_output(gpu_vendor_name) {
-        Some(output) => output.clone(),
-        None => return None,
-    };
+    let output = cache
+        .lock()
+        .ok()?
+        .get_smi_output(gpu_vendor_name)
+        .cloned()?;
 
     let lines: Vec<&str> = output.lines().collect();
     if !lines.is_empty() {
@@ -310,10 +311,11 @@ fn get_gpu_sn(gpu_vendor_name: &str, original_pci_bus_id: &str) -> Option<String
 // 修改 get_driver_version 函数使用缓存
 fn get_driver_version(gpu_vendor_name: &str) -> Option<String> {
     let cache = get_cache();
-    let output = match cache.lock().ok()?.get_driver_output(gpu_vendor_name) {
-        Some(output) => output.clone(),
-        None => return None,
-    };
+    let output = cache
+        .lock()
+        .ok()?
+        .get_driver_output(gpu_vendor_name)
+        .cloned()?;
 
     let lines: Vec<&str> = output.lines().collect();
     if !lines.is_empty() {

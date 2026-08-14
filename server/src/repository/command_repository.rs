@@ -603,7 +603,7 @@ impl CommandRepository {
                 }
             }
         }
-        entries.sort_by(|a, b| b.id.cmp(&a.id));
+        entries.sort_by_key(|entry| std::cmp::Reverse(entry.id));
         let start = (page - 1) * page_size;
         let end = start + page_size;
         Ok(entries

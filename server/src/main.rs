@@ -831,7 +831,7 @@ async fn run_history_cleanup(
 
     // Sort each client's entries newest-first
     let mut to_delete = Vec::new();
-    for (_client_id, entries) in buckets.iter_mut() {
+    for entries in buckets.values_mut() {
         entries.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         if entries.len() > keep_last {
             for (key, _) in entries.iter().skip(keep_last) {

@@ -213,6 +213,7 @@ pub async fn fetch_command_logs(task_id: &str) -> Result<Vec<CommandLogLine>, Ap
 const SESSION_BASE: &str = "/api/v1/sessions";
 const TERMINAL_BASE: &str = "/api/v1/remote-exec/terminal-sessions";
 
+#[allow(clippy::too_many_arguments)]
 pub async fn fetch_sessions(
     search: Option<&str>,
     client_id: Option<&str>,

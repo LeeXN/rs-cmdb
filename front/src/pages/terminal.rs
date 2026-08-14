@@ -34,24 +34,13 @@ const TERMINAL_STATUS_CONNECTED: &str = "connected";
 const TERMINAL_STATUS_DISCONNECTED: &str = "disconnected";
 const INPUT_FLUSH_DELAY_MS: i32 = 40;
 
+#[derive(Default)]
 struct TerminalBindings {
     on_data: Option<Closure<dyn FnMut(String)>>,
     on_message: Option<Closure<dyn FnMut(MessageEvent)>>,
     on_open: Option<Closure<dyn FnMut(Event)>>,
     on_close: Option<Closure<dyn FnMut(CloseEvent)>>,
     on_error: Option<Closure<dyn FnMut(Event)>>,
-}
-
-impl Default for TerminalBindings {
-    fn default() -> Self {
-        Self {
-            on_data: None,
-            on_message: None,
-            on_open: None,
-            on_close: None,
-            on_error: None,
-        }
-    }
 }
 
 impl TerminalBindings {

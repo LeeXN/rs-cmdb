@@ -57,7 +57,7 @@ impl ExecPolicyEngine {
             return PolicyDecision::Denied("No execution policy matches this user".into());
         }
 
-        matched.sort_by(|a, b| b.priority.cmp(&a.priority));
+        matched.sort_by_key(|policy| std::cmp::Reverse(policy.priority));
 
         if let Some(policy) = matched.into_iter().next() {
             return apply_policy(policy, command);
