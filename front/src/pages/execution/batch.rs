@@ -181,7 +181,7 @@ fn task_logs_panel(task: &CommandTask, logs: &BatchLogsState, t: &I18n, compact:
                         common::command::LogStream::Stderr => "text-red-300",
                     };
                     html! {
-                        <div class={classes!("whitespace-pre-wrap", color)}>{line.line.clone()}</div>
+                        <div style="min-height: 1lh" class={classes!("whitespace-pre-wrap", color)}>{line.line.clone()}</div>
                     }
                 }) }
             }

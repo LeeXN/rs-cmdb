@@ -205,7 +205,7 @@ pub fn execution_detail_view(props: &ExecutionDetailViewProps) -> Html {
                                 <span>{format_datetime_with_ago(&log.timestamp)}</span>
                                 <span>{format!("#{}", log.seq)}</span>
                             </div>
-                            <pre class={classes!("whitespace-pre-wrap", "break-all", match log.stream {
+                            <pre style="min-height: 1lh" class={classes!("whitespace-pre-wrap", "break-all", match log.stream {
                                 LogStream::Stdout => "text-green-300",
                                 LogStream::Stderr => "text-amber-300",
                             })}>{log.line.clone()}</pre>

@@ -126,10 +126,14 @@ fn stream_reader_lines<R: Read>(
         match reader.read_line(&mut buf) {
             Ok(0) => break,
             Ok(_) => {
-                let line = buf.trim_end_matches(&['\r', '\n'][..]);
-                if !line.is_empty() {
-                    emit_output_line(line_tx, &seq, line.to_string(), stream.clone());
-                }
+                // Empty lines are output too; replay adds the line ending back.
+                // Strip only the delimiter so trailing carriage returns survive.
+                let line = if let Some(line) = buf.strip_suffix('\n') {
+                    line.strip_suffix('\r').unwrap_or(line)
+                } else {
+                    &buf
+                };
+                emit_output_line(line_tx, &seq, line.to_string(), stream.clone());
             }
             Err(e) => {
                 warn!("{:?} read error: {}", stream, e);
@@ -597,6 +601,66 @@ mod tests {
         assert_eq!(LOG_BATCH_SIZE, 20);
         assert_eq!(POLL_RETRY_DELAY, Duration::from_secs(5));
         assert_eq!(TOKEN_WAIT_DELAY, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_stream_reader_preserves_blank_lines_and_sequence_across_streams() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let seq = Arc::new(AtomicU64::new(0));
+        stream_reader_lines(
+            &b"\nfirst\r\n\r\n\nlast\n\n"[..],
+            &tx,
+            seq.clone(),
+            LogStream::Stdout,
+        );
+        stream_reader_lines(&b"\nerror\n\n"[..], &tx, seq, LogStream::Stderr);
+        drop(tx);
+
+        let expected = ["", "first", "", "", "last", "", "", "error", ""];
+        for (index, expected_line) in expected.iter().enumerate() {
+            let log = rx.try_recv().expect("every output line must be retained");
+            assert_eq!(log.seq, index as u64);
+            assert_eq!(log.line, *expected_line);
+            assert_eq!(
+                log.stream,
+                if index < 6 {
+                    LogStream::Stdout
+                } else {
+                    LogStream::Stderr
+                }
+            );
+        }
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn test_stream_reader_preserves_carriage_returns_and_unterminated_tail() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        stream_reader_lines(
+            &b"progress\r\r\nlast\r"[..],
+            &tx,
+            Arc::new(AtomicU64::new(0)),
+            LogStream::Stdout,
+        );
+        drop(tx);
+
+        assert_eq!(rx.try_recv().unwrap().line, "progress\r");
+        assert_eq!(rx.try_recv().unwrap().line, "last\r");
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn test_stream_reader_does_not_emit_output_for_an_empty_stream() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        stream_reader_lines(
+            &b""[..],
+            &tx,
+            Arc::new(AtomicU64::new(0)),
+            LogStream::Stdout,
+        );
+        drop(tx);
+
+        assert!(rx.try_recv().is_err());
     }
 
     // ── validate_task: whitelist ──────────────────────────────────────────────
