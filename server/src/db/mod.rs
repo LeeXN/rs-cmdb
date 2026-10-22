@@ -7,6 +7,10 @@ use common::error::CmdbResult;
 ///
 /// This trait defines the operations that any storage implementation must support.
 /// Using a trait allows us to easily swap storage implementations in the future.
+#[allow(
+    clippy::double_must_use,
+    reason = "async_trait adds must_use to methods returning an already must_use Future"
+)]
 #[async_trait]
 pub trait Database: Send + Sync + 'static {
     /// Store a value for a given key
